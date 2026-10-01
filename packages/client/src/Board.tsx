@@ -1,15 +1,17 @@
 /* The board, drawn as SVG strings like the prototype, with click targets for legal spots. */
 
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { geometryFor, type Board as BoardData, type Geometry, type PlayerView } from '@settlers/engine';
 import {
   GLYPH,
   K,
   PCOL,
+  PEDGE,
   RES_LABEL,
   TILE_COLOR,
   TRACK_COLOR,
   cityPath,
+  edgeOf,
   f1,
   hexPts,
   settlementPath,
@@ -183,7 +185,7 @@ function shipSVG(g: Geometry, e: number, color: string, isFresh: boolean, lifted
   const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
   const u = 0.11 * K;
   return `<g class="piece${isFresh ? ' fresh' : ''}" data-ship="${e}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})"${lifted ? ' opacity=".45"' : ''}>
-    <path d="M${f1(-2.6 * u)} ${f1(-0.2 * u)}L${f1(2.6 * u)} ${f1(-0.2 * u)}L${f1(1.7 * u)} ${f1(1.1 * u)}L${f1(-1.7 * u)} ${f1(1.1 * u)}Z" fill="${color}" stroke="#0b1418" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M${f1(-2.6 * u)} ${f1(-0.2 * u)}L${f1(2.6 * u)} ${f1(-0.2 * u)}L${f1(1.7 * u)} ${f1(1.1 * u)}L${f1(-1.7 * u)} ${f1(1.1 * u)}Z" fill="${color}" stroke="${edgeOf(color)}" stroke-width="2.2" stroke-linejoin="round"/>
     <path d="M${f1(-0.1 * u)} ${f1(-0.3 * u)}V${f1(-2.4 * u)}L${f1(1.5 * u)} ${f1(-0.6 * u)}Z" fill="#f4ecd6" stroke="#0b1418" stroke-width="1.6" stroke-linejoin="round"/>
   </g>`;
 }
@@ -219,9 +221,9 @@ function knightSVG(
   let pips = '';
   for (let i = 0; i < lvl; i++) {
     const px = x + (i - (lvl - 1) / 2) * 0.1 * K;
-    pips += `<circle cx="${f1(px)}" cy="${f1(y + 0.02 * K)}" r="${f1(0.035 * K)}" fill="#0b1418"/>`;
+    pips += `<circle cx="${f1(px)}" cy="${f1(y + 0.02 * K)}" r="${f1(0.035 * K)}" fill="${color === PCOL.black ? '#e8eaec' : '#0b1418'}"/>`;
   }
-  return `<g class="piece knight${isFresh ? ' fresh' : ''}" data-knight="${v}" data-owner="${owner}" data-lvl="${lvl}" data-on="${on ? 1 : 0}"${lifted ? ' opacity=".45"' : on ? '' : ' opacity=".8"'}>${on ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 0.07 * K)}" fill="none" stroke="#ffd54a" stroke-width="${f1(0.05 * K)}"/>` : ''}<path d="M${f1(x - r)} ${f1(y - r * 0.75)}Q${f1(x)} ${f1(y - r * 1.15)} ${f1(x + r)} ${f1(y - r * 0.75)}V${f1(y + r * 0.1)}Q${f1(x + r)} ${f1(y + r * 0.9)} ${f1(x)} ${f1(y + r * 1.15)}Q${f1(x - r)} ${f1(y + r * 0.9)} ${f1(x - r)} ${f1(y + r * 0.1)}Z" fill="${color}" stroke="${on ? '#3b2a00' : '#0b1418'}" stroke-width="2.2"/>${pips}</g>`;
+  return `<g class="piece knight${isFresh ? ' fresh' : ''}" data-knight="${v}" data-owner="${owner}" data-lvl="${lvl}" data-on="${on ? 1 : 0}"${lifted ? ' opacity=".45"' : on ? '' : ' opacity=".8"'}>${on ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 0.07 * K)}" fill="none" stroke="#ffd54a" stroke-width="${f1(0.05 * K)}"/>` : ''}<path d="M${f1(x - r)} ${f1(y - r * 0.75)}Q${f1(x)} ${f1(y - r * 1.15)} ${f1(x + r)} ${f1(y - r * 0.75)}V${f1(y + r * 0.1)}Q${f1(x + r)} ${f1(y + r * 0.9)} ${f1(x)} ${f1(y + r * 1.15)}Q${f1(x - r)} ${f1(y + r * 0.9)} ${f1(x - r)} ${f1(y + r * 0.1)}Z" fill="${color}" stroke="${on ? '#3b2a00' : edgeOf(color)}" stroke-width="2.2"/>${pips}</g>`;
 }
 
 /** The merchant: a small figure in the owner's colour on its tile. */
@@ -230,7 +232,7 @@ function merchantSVG(g: Geometry, h: number, color: string): string {
   const x = (H.x + 0.5) * K;
   const y = (H.y - 0.05) * K;
   const u = 0.1 * K;
-  return `<g class="piece" data-merchant="${h}"><ellipse cx="${f1(x)}" cy="${f1(y + 2.6 * u)}" rx="${f1(1.6 * u)}" ry="${f1(0.5 * u)}" fill="rgba(0,0,0,.3)"/><path d="M${f1(x - 1.4 * u)} ${f1(y + 2.5 * u)}L${f1(x)} ${f1(y - 1.2 * u)}L${f1(x + 1.4 * u)} ${f1(y + 2.5 * u)}Z" fill="${color}" stroke="#0b1418" stroke-width="2"/><circle cx="${f1(x)}" cy="${f1(y - 1.6 * u)}" r="${f1(0.8 * u)}" fill="#f4ecd6" stroke="#0b1418" stroke-width="1.6"/><path d="M${f1(x - 1.3 * u)} ${f1(y - 2.2 * u)}h${f1(2.6 * u)}" stroke="#0b1418" stroke-width="2.4" stroke-linecap="round"/></g>`;
+  return `<g class="piece" data-merchant="${h}"><ellipse cx="${f1(x)}" cy="${f1(y + 2.6 * u)}" rx="${f1(1.6 * u)}" ry="${f1(0.5 * u)}" fill="rgba(0,0,0,.3)"/><path d="M${f1(x - 1.4 * u)} ${f1(y + 2.5 * u)}L${f1(x)} ${f1(y - 1.2 * u)}L${f1(x + 1.4 * u)} ${f1(y + 2.5 * u)}Z" fill="${color}" stroke="${edgeOf(color)}" stroke-width="2"/><circle cx="${f1(x)}" cy="${f1(y - 1.6 * u)}" r="${f1(0.8 * u)}" fill="#f4ecd6" stroke="#0b1418" stroke-width="1.6"/><path d="M${f1(x - 1.3 * u)} ${f1(y - 2.2 * u)}h${f1(2.6 * u)}" stroke="#0b1418" stroke-width="2.4" stroke-linecap="round"/></g>`;
 }
 
 function roadLine(g: Geometry, e: number, inset: number) {
@@ -245,15 +247,97 @@ function roadLine(g: Geometry, e: number, inset: number) {
   };
 }
 
+/** A see-through preview of a piece before it's placed (SPEC 4.3). */
+export interface Ghost {
+  kind:
+    | 'settlement'
+    | 'city'
+    | 'road'
+    | 'ship'
+    | 'knight'
+    | 'wall'
+    | 'robber'
+    | 'pirate'
+    | 'merchant'
+    /* A pick that places nothing new: a corner, an edge or a tile. */
+    | 'mark'
+    | 'markEdge'
+    | 'markHex';
+  at: number;
+}
+
+function ghostSVG(g: Geometry, gh: Ghost, color: string, waiting: boolean): string {
+  const V = g.verts[gh.at];
+  let inner = '';
+  switch (gh.kind) {
+    case 'settlement':
+    case 'city': {
+      const d = gh.kind === 'city' ? cityPath(V!.x * K, V!.y * K) : settlementPath(V!.x * K, V!.y * K);
+      inner = `<path d="${d}" fill="${color}" stroke="#fff6dc" stroke-width="2.6" stroke-linejoin="round"/>`;
+      break;
+    }
+    case 'road': {
+      const l = roadLine(g, gh.at, 0.16);
+      inner = `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#fff6dc" stroke-width="${0.22 * K}" stroke-linecap="round"/><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${color}" stroke-width="${0.13 * K}" stroke-linecap="round"/>`;
+      break;
+    }
+    case 'ship':
+      inner = shipSVG(g, gh.at, color, false, false);
+      break;
+    case 'knight':
+      inner = knightSVG(g, gh.at, color, 1, false, -1, false, false);
+      break;
+    case 'wall':
+      inner = `<rect x="${f1(V!.x * K - 0.34 * K)}" y="${f1(V!.y * K + 0.08 * K)}" width="${f1(0.68 * K)}" height="${f1(0.16 * K)}" rx="${f1(0.03 * K)}" fill="#8b8172" stroke="#fff6dc" stroke-width="2"/>`;
+      break;
+    case 'robber':
+      inner = robberSVG(g, gh.at);
+      break;
+    case 'pirate':
+      inner = pirateSVG(g, gh.at);
+      break;
+    case 'merchant':
+      inner = merchantSVG(g, gh.at, color);
+      break;
+    case 'mark':
+      inner = `<circle cx="${f1(V!.x * K)}" cy="${f1(V!.y * K)}" r="${f1(0.27 * K)}" fill="none" stroke="#fff6dc" stroke-width="${f1(0.07 * K)}"/>`;
+      break;
+    case 'markEdge': {
+      const l = roadLine(g, gh.at, 0.16);
+      inner = `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#fff6dc" stroke-width="${0.3 * K}" stroke-linecap="round" fill="none"/><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${color}" stroke-width="${0.16 * K}" stroke-linecap="round"/>`;
+      break;
+    }
+    case 'markHex': {
+      const H = g.hexes[gh.at]!;
+      inner = `<polygon points="${hexPts(H.x * K, H.y * K, 0.86 * K)}" fill="none" stroke="#fff6dc" stroke-width="${f1(0.08 * K)}"/><polygon points="${hexPts(H.x * K, H.y * K, 0.78 * K)}" fill="none" stroke="${color}" stroke-width="${f1(0.06 * K)}"/>`;
+      break;
+    }
+  }
+  // No data-* inside, so the hit test never mistakes a preview for a piece.
+  return `<g class="ghost${waiting ? ' waiting' : ''}" data-ghost="${gh.kind}" data-ghost-at="${gh.at}" opacity=".62" pointer-events="none">${inner.replace(/ data-[a-z]+="[^"]*"/g, '')}</g>`;
+}
+
+/** Was this tap from a finger or pen rather than a mouse? */
+export function isTouch(ev: React.MouseEvent): boolean {
+  const t = (ev.nativeEvent as PointerEvent).pointerType;
+  if (t) return t !== 'mouse';
+  return window.matchMedia?.('(hover: none)').matches ?? false;
+}
+
 export function Board(props: {
   view: PlayerView;
   targets: Targets;
   myColor: string | null;
-  onVert: (v: number) => void;
-  onEdge: (e: number) => void;
-  onHex: (h: number) => void;
+  onVert: (v: number, touch: boolean) => void;
+  onEdge: (e: number, touch: boolean) => void;
+  onHex: (h: number, touch: boolean) => void;
+  /** What pointing at a spot would place there, drawn as a see-through preview. */
+  preview?: (t: 'v' | 'e' | 'h', id: number) => Ghost[];
+  /** Pieces waiting for Confirm. */
+  pending?: Ghost[];
 }) {
   const { view, targets } = props;
+  const [hover, setHover] = useState<string | null>(null);
   const g = geometryFor(view.board.hexes);
   const vb = useMemo(() => viewBox(g), [g]);
   // Hexes change when fog is discovered, so the key includes their terrain.
@@ -279,7 +363,7 @@ export function Board(props: {
     const l = roadLine(g, e, 0.16);
     const col = PCOL[view.players[p]!.color];
     parts.push(
-      `<g class="piece${fresh(`e${e}:${p}`) ? ' fresh' : ''}" data-road="${e}" data-owner="${p}"><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#0b1418" stroke-width="${0.22 * K}" stroke-linecap="round"/><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${col}" stroke-width="${0.13 * K}" stroke-linecap="round"/></g>`,
+      `<g class="piece${fresh(`e${e}:${p}`) ? ' fresh' : ''}" data-road="${e}" data-owner="${p}"><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${edgeOf(col)}" stroke-width="${0.22 * K}" stroke-linecap="round"/><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${col}" stroke-width="${0.13 * K}" stroke-linecap="round"/></g>`,
     );
   });
   const ships = view.sea?.ships ?? [];
@@ -305,7 +389,7 @@ export function Board(props: {
     const V = g.verts[v]!;
     const d = b[1] === 2 ? cityPath(V.x * K, V.y * K) : settlementPath(V.x * K, V.y * K);
     parts.push(
-      `<path class="piece${fresh(`v${v}:${b.join(',')}`) ? ' fresh' : ''}" data-building="${v}" data-owner="${b[0]}" data-kind="${b[1] === 2 ? 'city' : 'settlement'}" d="${d}" fill="${PCOL[view.players[b[0]]!.color]}" stroke="#0b1418" stroke-width="2.6" stroke-linejoin="round"/>`,
+      `<path class="piece${fresh(`v${v}:${b.join(',')}`) ? ' fresh' : ''}" data-building="${v}" data-owner="${b[0]}" data-kind="${b[1] === 2 ? 'city' : 'settlement'}" d="${d}" fill="${PCOL[view.players[b[0]]!.color]}" stroke="${PEDGE(view.players[b[0]]!.color)}" stroke-width="2.6" stroke-linejoin="round"/>`,
     );
   });
   if (ck) {
@@ -343,6 +427,17 @@ export function Board(props: {
       `<path class="ghost" d="${settlementPath(V.x * K, V.y * K)}" fill="${props.myColor}" stroke="#fff6dc" stroke-width="2.6" stroke-linejoin="round"/>`,
     );
   }
+  // Previews: where the mouse points, and whatever waits for Confirm.
+  const ghostColor = props.myColor ?? '#f4ecd6';
+  const waiting = props.pending ?? [];
+  for (const gh of waiting) parts.push(ghostSVG(g, gh, ghostColor, true));
+  if (hover && props.preview && !waiting.length) {
+    const [t, id] = hover.split(':') as ['v' | 'e' | 'h', string];
+    const ok = t === 'v' ? targets.verts : t === 'e' ? targets.edges : targets.hexes;
+    if (ok.includes(Number(id)))
+      for (const gh of props.preview(t, Number(id))) parts.push(ghostSVG(g, gh, ghostColor, false));
+  }
+
   for (const h of targets.hexes) {
     const H = g.hexes[h]!;
     parts.push(
@@ -362,14 +457,26 @@ export function Board(props: {
     );
   }
 
-  const onClick = (ev: React.MouseEvent) => {
+  const targetOf = (ev: React.MouseEvent): string | null => {
     const el = (ev.target as Element).closest('[data-v],[data-e],[data-h]') as
       HTMLElement | SVGElement | null;
-    if (!el) return;
+    if (!el) return null;
     const d = el.dataset;
-    if (d.v != null) props.onVert(Number(d.v));
-    else if (d.e != null) props.onEdge(Number(d.e));
-    else if (d.h != null) props.onHex(Number(d.h));
+    return d.v != null ? `v:${d.v}` : d.e != null ? `e:${d.e}` : `h:${d.h}`;
+  };
+  const onClick = (ev: React.MouseEvent) => {
+    const key = targetOf(ev);
+    if (!key) return;
+    const id = Number(key.slice(2));
+    const touch = isTouch(ev);
+    if (key[0] === 'v') props.onVert(id, touch);
+    else if (key[0] === 'e') props.onEdge(id, touch);
+    else props.onHex(id, touch);
+  };
+  const onMove = (ev: React.PointerEvent) => {
+    if (ev.pointerType !== 'mouse') return;
+    const key = targetOf(ev);
+    if (key !== hover) setHover(key);
   };
 
   return (
@@ -383,6 +490,8 @@ export function Board(props: {
         boardRef.geo = g;
       }}
       onClick={onClick}
+      onPointerMove={onMove}
+      onPointerLeave={() => setHover(null)}
     >
       <g dangerouslySetInnerHTML={{ __html: staticHtml }} />
       <g dangerouslySetInnerHTML={{ __html: parts.join('') }} />

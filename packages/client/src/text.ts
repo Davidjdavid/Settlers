@@ -1,6 +1,14 @@
 /* Turning events into short sentences for the log. Wording follows the prototype. */
 
-import { COMS, RES, type Cards, type GameEvent, type PlayerView, type Seat } from '@settlers/engine';
+import {
+  COMS,
+  RES,
+  type Cards,
+  type GameEvent,
+  type PlayerView,
+  type RuleKey,
+  type Seat,
+} from '@settlers/engine';
 import { DEV_LABEL, PROGRESS_LABEL, TRACK_LABEL } from './art';
 
 export function nameOf(v: PlayerView, p: Seat | null): string {
@@ -226,5 +234,35 @@ export function eventText(
       };
     case 'owe':
       return null;
+    case 'askBack':
+      return { text: `${who(e.p)} asked for the dice back`, big: true };
+    case 'handBack':
+      return {
+        text: `${who(e.p)} handed the dice back to ${who(e.to) === 'You' ? 'you' : who(e.to)}`,
+        big: true,
+      };
+    case 'refuseBack':
+      return { text: `${who(e.p)} kept the dice` };
+    case 'rule':
+      return { text: `${who(e.p)} ${ruleText(e.rule, e.value)}`, big: true };
   }
+}
+
+/** Names for game rules, as switches and in the log. */
+export const RULE_LABEL: Record<RuleKey, string> = {
+  winVP: 'Points to win',
+  no7FirstRound: 'No 7s in the first round',
+  bank3to1: '3:1 bank trades for everyone',
+  freeShipMoves: 'Move ships as often as you like',
+  rerollBeforeAttack: 'Re-roll 7s until the barbarians have attacked',
+  noDiscardBeforeAttack: 'No discards on a 7 until the barbarians have attacked',
+  barbarianDelay: 'Barbarians and progress cards start after round',
+  handBack: 'Players can hand the dice back',
+  handBackSetup: 'Hand the dice back during setup too',
+};
+
+function ruleText(rule: RuleKey, value: boolean | number): string {
+  if (rule === 'winVP') return `set points to win to ${value}`;
+  if (rule === 'barbarianDelay') return `set the barbarians to start after round ${value}`;
+  return `turned ${value ? 'on' : 'off'} “${RULE_LABEL[rule]}”`;
 }

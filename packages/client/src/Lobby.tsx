@@ -1,9 +1,11 @@
 /* Login, home and lobby screens. */
 
 import { useEffect, useState } from 'react';
-import { COLORS, SCENARIOS, type Color } from '@settlers/engine';
+import { COLORS, PLAYER_COLORS, SCENARIOS, type Color } from '@settlers/engine';
 import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
-import { BRAND_SVG, PCOL, PNAME } from './art';
+import { BRAND_SVG, PCOL, PEDGE, PNAME, K, cityPath, settlementPath } from './art';
+import { Help, RULE_HELP } from './help';
+import { RULE_LABEL } from './text';
 import { client, getStored } from './net';
 
 function Brand() {
@@ -100,12 +102,16 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const taken = new Set(room.seats.map((s) => s.color));
   const [nick, setNick] = useState(getStored('settlers.nick') ?? '');
   const [color, setColor] = useState<Color | null>(null);
-  const free = COLORS.filter((c) => !taken.has(c));
+  const free = PLAYER_COLORS.filter((c) => !taken.has(c));
   const pick = color && !taken.has(color) ? color : (free[0] ?? null);
   const link = `${location.origin}/r/${room.code}`;
-  const scenario = SCENARIOS[room.options.scenario]!;
   const allowed = playersFor(room.options);
   const fits = allowed.includes(room.seats.length);
+  const mode = modeOf(room.options);
+  // A nickname already at the table rejoins that seat (SPEC 4.6).
+  const rejoining = room.seats.some(
+    (s) => !s.cpu && !s.connected && s.nick.trim().toLowerCase() === nick.trim().toLowerCase(),
+  );
   return (
     <div className="center">
       <div className="card" data-testid="lobby">
@@ -152,19 +158,12 @@ export function Lobby({ room }: { room: RoomInfo }) {
           <>
             <div className="field">
               <label>Your color</label>
-              <div className="swatches">
-                {COLORS.map((c) => (
-                  <button
-                    key={c}
-                    className="swatch"
-                    style={{ background: PCOL[c] }}
-                    aria-label={PNAME[c]}
-                    aria-pressed={mine.color === c}
-                    disabled={taken.has(c) && mine.color !== c}
-                    onClick={() => client.setColor(c)}
-                  />
-                ))}
-              </div>
+              <ColorPicker
+                colors={PLAYER_COLORS}
+                value={mine.color}
+                taken={taken}
+                onPick={(c) => client.setColor(c)}
+              />
             </div>
             <Options room={room} editable />
             {room.seats.length < 4 ? (
@@ -193,14 +192,14 @@ export function Lobby({ room }: { room: RoomInfo }) {
             <p className="hint">
               {fits
                 ? 'Anyone seated can start when everyone is here.'
-                : `${scenario.name}${room.options.ck ? ' with Cities & Knights' : ''} needs ${allowed.join(' or ')} players.`}
+                : `${MODES[mode].label} needs ${allowed.join(' or ')} players.`}
             </p>
           </>
-        ) : room.seats.length < 4 ? (
+        ) : (
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (nick.trim() && pick) client.join(nick.trim(), pick);
+              if (nick.trim() && (pick || rejoining)) client.join(nick.trim(), pick ?? 'red');
             }}
           >
             <Options room={room} editable={false} />
@@ -215,31 +214,103 @@ export function Lobby({ room }: { room: RoomInfo }) {
                 data-testid="nick"
               />
             </div>
-            <div className="field">
-              <label>Color</label>
-              <div className="swatches">
-                {COLORS.map((c) => (
-                  <button
-                    type="button"
-                    key={c}
-                    className="swatch"
-                    style={{ background: PCOL[c] }}
-                    aria-label={PNAME[c]}
-                    aria-pressed={pick === c}
-                    disabled={taken.has(c)}
-                    onClick={() => setColor(c)}
-                  />
-                ))}
+            {rejoining ? (
+              <p className="hint">That name is at this table: you’ll get your seat back.</p>
+            ) : room.seats.length < 4 ? (
+              <div className="field">
+                <label>Color</label>
+                <ColorPicker colors={PLAYER_COLORS} value={pick} taken={taken} onPick={setColor} />
               </div>
-            </div>
-            <button className="btn primary" disabled={!nick.trim() || !pick} data-testid="sit">
-              Take a seat
+            ) : (
+              <p className="hint">The table is full. Enter your nickname if you were sitting here.</p>
+            )}
+            <button
+              className="btn primary"
+              disabled={!nick.trim() || (!rejoining && (!pick || room.seats.length >= 4))}
+              data-testid="sit"
+            >
+              {rejoining ? 'Rejoin' : 'Take a seat'}
             </button>
           </form>
-        ) : (
-          <p className="hint">The table is full.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+/** A small road, settlement and city in a colour (SPEC 4.2). */
+export function PiecePreview({ color, size = 1 }: { color: Color; size?: number }) {
+  const fill = PCOL[color];
+  const edge = PEDGE(color);
+  const u = K * 0.55;
+  return (
+    <svg
+      className="preview"
+      viewBox={`${-0.3 * u} ${-0.62 * u} ${3.3 * u} ${1.05 * u}`}
+      width={66 * size}
+      height={21 * size}
+      aria-hidden="true"
+    >
+      <line
+        x1={0}
+        y1={0.15 * u}
+        x2={0.85 * u}
+        y2={-0.3 * u}
+        stroke={edge}
+        strokeWidth={0.26 * u}
+        strokeLinecap="round"
+      />
+      <line
+        x1={0}
+        y1={0.15 * u}
+        x2={0.85 * u}
+        y2={-0.3 * u}
+        stroke={fill}
+        strokeWidth={0.15 * u}
+        strokeLinecap="round"
+      />
+      <path
+        d={settlementPath(1.45 * u, 0, 1.5)}
+        fill={fill}
+        stroke={edge}
+        strokeWidth="5"
+        strokeLinejoin="round"
+      />
+      <path
+        d={cityPath(2.45 * u, 0.02 * u)}
+        fill={fill}
+        stroke={edge}
+        strokeWidth="5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Colour choices, each with a preview of its pieces. Taken colours are disabled. */
+function ColorPicker(props: {
+  colors: readonly Color[];
+  value: Color | null;
+  taken: Set<Color>;
+  onPick: (c: Color) => void;
+}) {
+  return (
+    <div className="colorpick">
+      {props.colors.map((c) => (
+        <button
+          type="button"
+          key={c}
+          className="colorbtn"
+          aria-label={PNAME[c]}
+          aria-pressed={props.value === c}
+          disabled={props.taken.has(c) && props.value !== c}
+          data-color={c}
+          onClick={() => props.onPick(c)}
+        >
+          <PiecePreview color={c} />
+          <span>{PNAME[c]}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -296,23 +367,33 @@ function CpuSeat({ seat, taken }: { seat: RoomInfo['seats'][number]; taken: Set<
             </option>
           ))}
         </select>
+        <PiecePreview color={seat.color} size={0.8} />
       </span>
     </div>
   );
 }
 
-const SCENARIO_LIST: { id: RoomOptions['scenario']; label: string }[] = [
-  { id: 'classic', label: 'Classic' },
-  { id: 'heading-for-new-shores', label: 'Seafarers: Heading for New Shores' },
-];
+/* ---------- Game mode and options ---------- */
 
-type Flag = 'no7FirstRound' | 'bank3to1' | 'freeShipMoves' | 'rerollBeforeAttack' | 'noDiscardBeforeAttack';
-const HOUSE_RULES: { k: Flag; label: string; seafarers?: boolean; ck?: boolean }[] = [
-  { k: 'no7FirstRound', label: 'No 7s in the first round' },
-  { k: 'bank3to1', label: '3:1 bank trades for everyone' },
-  { k: 'freeShipMoves', label: 'Move ships as often as you like', seafarers: true },
-  { k: 'rerollBeforeAttack', label: 'Re-roll 7s until the barbarians have attacked', ck: true },
-  { k: 'noDiscardBeforeAttack', label: 'No discards on a 7 until the barbarians have attacked', ck: true },
+type Mode = 'base' | 'seafarers' | 'knights' | 'full';
+const MODES: Record<Mode, { label: string; sub: string; scenario: RoomOptions['scenario']; ck: boolean }> = {
+  base: { label: 'Base game', sub: 'The classic island', scenario: 'classic', ck: false },
+  seafarers: { label: 'Seafarers', sub: 'Heading for New Shores: ships and islands', scenario: 'heading-for-new-shores', ck: false },
+  knights: { label: 'Knights', sub: 'Cities & Knights on the classic island', scenario: 'classic', ck: true },
+  full: { label: 'Full game', sub: 'Seafarers and Cities & Knights together', scenario: 'heading-for-new-shores', ck: true },
+}; // prettier-ignore
+const modeOf = (o: RoomOptions): Mode =>
+  o.scenario === 'classic' ? (o.ck ? 'knights' : 'base') : o.ck ? 'full' : 'seafarers';
+
+type Flag = 'no7FirstRound' | 'bank3to1' | 'freeShipMoves' | 'rerollBeforeAttack' | 'noDiscardBeforeAttack' | 'handBack' | 'handBackSetup'; // prettier-ignore
+const HOUSE_RULES: { k: Flag; seafarers?: boolean; ck?: boolean; defaultOn?: boolean }[] = [
+  { k: 'no7FirstRound' },
+  { k: 'bank3to1' },
+  { k: 'freeShipMoves', seafarers: true },
+  { k: 'rerollBeforeAttack', ck: true },
+  { k: 'noDiscardBeforeAttack', ck: true },
+  { k: 'handBack', defaultOn: true },
+  { k: 'handBackSetup' },
 ];
 
 /** Cities & Knights adds 3 points to a scenario's target and needs 3 or 4 players. */
@@ -323,50 +404,49 @@ export function playersFor(o: RoomOptions): number[] {
   return o.ck ? players.filter((n) => n >= 3) : players;
 }
 
-/** Scenario, points to win and house rules. Seated players edit; everyone sees them. */
+/** Game mode, points to win and house rules. Seated players edit; everyone sees them. */
 function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
   const o = room.options;
-  const scenario = SCENARIOS[o.scenario]!;
-  const sea = scenario.modules.includes('seafarers');
+  const mode = modeOf(o);
+  const sea = o.scenario !== 'classic';
   const set = (next: RoomOptions) => client.setOptions(next);
   const check = { display: 'flex', gap: 8, alignItems: 'center', textTransform: 'none', letterSpacing: 0, fontSize: 14, color: 'var(--ink)', fontWeight: 500 } as const; // prettier-ignore
+  const on = (h: (typeof HOUSE_RULES)[number]) =>
+    h.defaultOn ? o.houseRules[h.k] !== false : !!o.houseRules[h.k];
   return (
     <div className="field" data-testid="options">
       <label>Game</label>
-      <div className="row">
-        {SCENARIO_LIST.map((x) => (
-          <button
-            key={x.id}
-            type="button"
-            className={`btn small${o.scenario === x.id ? ' on' : ''}`}
-            disabled={!editable}
-            data-testid={`scenario-${x.id}`}
-            onClick={() => set({ ...o, scenario: x.id, winVP: defaultVP({ ...o, scenario: x.id }) })}
-          >
-            {x.label}
-          </button>
-        ))}
+      <div className="modes">
+        {(Object.keys(MODES) as Mode[]).map((m) => {
+          const x = MODES[m];
+          const next = { ...o, scenario: x.scenario, ck: x.ck };
+          return (
+            <button
+              key={m}
+              type="button"
+              className={`modebtn${mode === m ? ' on' : ''}`}
+              aria-pressed={mode === m}
+              disabled={!editable}
+              data-testid={`mode-${m}`}
+              onClick={() => set({ ...next, winVP: defaultVP(next) })}
+            >
+              <b>{x.label}</b>
+              <span>{x.sub}</span>
+              <small>
+                {playersFor(next).join(' or ')} players · {defaultVP(next)} points
+              </small>
+            </button>
+          );
+        })}
       </div>
-      <label style={check}>
-        <input
-          type="checkbox"
-          checked={!!o.ck}
-          disabled={!editable}
-          data-testid="ck"
-          onChange={(e) => {
-            const next = { ...o, ck: e.target.checked };
-            set({ ...next, winVP: defaultVP(next) });
-          }}
-        />
-        Cities &amp; Knights
+      {sea && SCENARIOS[o.scenario]!.specialVP?.newIsland ? (
+        <p className="hint" style={{ margin: '2px 0 6px' }}>
+          {SCENARIOS[o.scenario]!.specialVP!.newIsland} points for each new island you settle
+        </p>
+      ) : null}
+      <label>
+        Points to win <Help text={RULE_HELP.winVP} />
       </label>
-      <p className="hint" style={{ margin: '2px 0 6px' }}>
-        {playersFor(o).join(' or ')} players
-        {sea && scenario.specialVP?.newIsland
-          ? ` · ${scenario.specialVP.newIsland} points for each new island you settle`
-          : ''}
-      </p>
-      <label>Points to win</label>
       <div className="ctl" style={{ marginBottom: 8 }}>
         <button
           type="button"
@@ -392,17 +472,20 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
           <label key={h.k} style={check}>
             <input
               type="checkbox"
-              checked={!!o.houseRules[h.k]}
-              disabled={!editable}
+              checked={on(h)}
+              disabled={!editable || (h.k === 'handBackSetup' && o.houseRules.handBack === false)}
               data-testid={`rule-${h.k}`}
               onChange={(e) => set({ ...o, houseRules: { ...o.houseRules, [h.k]: e.target.checked } })}
             />
-            {h.label}
+            {RULE_LABEL[h.k]}
+            <Help text={RULE_HELP[h.k]} />
           </label>
         ))}
         {o.ck ? (
           <div style={{ ...check, justifyContent: 'space-between' }}>
-            <span>Barbarians and progress cards start after round</span>
+            <span>
+              {RULE_LABEL.barbarianDelay} <Help text={RULE_HELP.barbarianDelay} />
+            </span>
             <div className="ctl">
               <button
                 type="button"

@@ -73,6 +73,10 @@ test('three players play a full game, surviving a reload and a server crash', as
     const first = await turnPage();
     await first.locator('#board [data-v]').first().click();
     await first.locator('#board [data-e]').first().click();
+    // Nothing is placed until Confirm.
+    await expect(first.locator('#board .ghost.waiting')).toHaveCount(2);
+    expect((await view(a)).seq).toBe(0);
+    await first.getByTestId('confirm-place').click();
     await expect.poll(async () => (await view(a)).seq).toBe(1);
 
     // Bots play until `until` is true; fails if nothing moves for a while.
@@ -103,6 +107,7 @@ test('three players play a full game, surviving a reload and a server crash', as
     await playUntil(async () => (await view(a)).stage === 'main');
     p = await turnPage();
     await p.getByTestId('end').click();
+    await p.getByTestId('ask-yes').click();
     await expect.poll(async () => (await view(a)).stage).toBe('preroll');
 
     // Play a while, then B reloads the page and must land back in the same seat.

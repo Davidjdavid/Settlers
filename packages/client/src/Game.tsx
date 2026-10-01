@@ -7,12 +7,14 @@ import {
 } from '@settlers/engine'; // prettier-ignore
 import type { LogItem, RoomInfo } from '@settlers/server/protocol';
 import {
-  BRAND_SVG, CARD_COLOR, CARD_LABEL, DEV_HELP, DEV_LABEL, PCOL, PROGRESS_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR,
+  BRAND_SVG, CARD_COLOR, CARD_LABEL, DEV_HELP, DEV_LABEL, PCOL, PROGRESS_HELP, PROGRESS_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR,
   TRACK_LABEL, cardIcon,
 } from './art'; // prettier-ignore
-import { Board, NO_TARGETS, type Targets } from './Board';
+import { Board, NO_TARGETS, type Ghost, type Targets } from './Board';
+import { settingOn } from './help';
+import { AskSheet, RulesSheet, SettingsSheet } from './settings';
 import { Dice } from './anim';
-import { client, type Status } from './net';
+import { client, getStored, type Status } from './net';
 import {
   Chips, ConfirmTwice, DiscardSheet, GoldSheet, MenuSheet, MonoSheet, PieceSheet, PlentySheet, TradeSheet,
   VictimSheet,
@@ -53,7 +55,60 @@ type SheetState =
   | { k: 'gold' }
   | { k: 'menu' }
   | { k: 'endGame' }
-  | { k: 'claim'; seat: number; nick: string };
+  | { k: 'claim'; seat: number; nick: string }
+  | { k: 'ask'; title: string; sub?: string; yes: string; onYes: () => void; body?: React.ReactNode }
+  | { k: 'settings' }
+  | { k: 'rules' };
+
+/** The see-through pieces that show what an action would place (SPEC 4.3). */
+function ghostsOf(a: Action): Ghost[] {
+  switch (a.type) {
+    case 'setup':
+      return [
+        { kind: 'settlement', at: a.v },
+        { kind: a.ship ? 'ship' : 'road', at: a.e },
+      ];
+    case 'settlement':
+    case 'city':
+    case 'knight':
+    case 'wall':
+      return [{ kind: a.type, at: a.v }];
+    case 'road':
+    case 'freeRoad':
+      return [{ kind: 'road', at: a.e }];
+    case 'ship':
+    case 'freeShip':
+      return [{ kind: 'ship', at: a.e }];
+    case 'moveShip':
+      return [{ kind: 'ship', at: a.to }];
+    case 'moveKnight':
+      return [{ kind: 'knight', at: a.to }];
+    case 'robber':
+    case 'chase':
+      return [{ kind: 'robber', at: a.hex }];
+    case 'pirate':
+      return [{ kind: 'pirate', at: a.hex }];
+    case 'improve':
+      return a.v != null ? [{ kind: 'mark', at: a.v }] : [];
+    case 'choose':
+      return a.v != null ? [{ kind: 'mark', at: a.v }] : a.e != null ? [{ kind: 'markEdge', at: a.e }] : [];
+    case 'progress': {
+      const out: Ghost[] = [];
+      if (a.v != null) out.push({ kind: 'mark', at: a.v });
+      for (const x of a.vs ?? []) out.push({ kind: 'mark', at: x });
+      if (a.e != null) out.push({ kind: 'markEdge', at: a.e });
+      for (const h of [a.h, a.h2])
+        if (h != null)
+          out.push({
+            kind: a.card === 'bishop' ? 'robber' : a.card === 'merchant' ? 'merchant' : 'markHex',
+            at: h,
+          });
+      return out;
+    }
+    default:
+      return [];
+  }
+}
 
 const MODE_TEXT: Record<Exclude<Mode, null>, [string, string]> = {
   ship: ['Choose where to build a ship', 'Ships sail from your settlements and other ships.'],
@@ -95,6 +150,8 @@ export function Game({
   const [card, setCard] = useState<{ card: Progress; plays: Play[]; picks: number[] } | null>(null);
   const [metroOpts, setMetroOpts] = useState<Action[]>([]);
   const [hideOver, setHideOver] = useState(false);
+  // A piece waiting for Confirm (SPEC 4.3).
+  const [placing, setPlacing] = useState<{ a: Action; ghosts: Ghost[]; after?: () => void } | null>(null);
   const me = v.me;
   const mine = me != null && v.turn === me && v.phase === 'play';
   const s = stateFromView(v);
@@ -105,7 +162,9 @@ export function Game({
     if (!mine || v.stage !== 'main') setMode(null);
     if (!mine || v.stage !== 'setup') setSel(null);
     setMoveFrom(null);
+    setPlacing(null);
   }, [mine, v.stage, v.seq]);
+  useEffect(() => setPlacing(null), [mode, sel, moveFrom, kFrom]);
   useEffect(() => {
     if (mode !== 'kmove' && mode !== 'chase') setKFrom(null);
     if (mode !== 'card') setCard(null);
@@ -262,48 +321,64 @@ export function Game({
   }
 
   const doAct = (a: Action, after?: () => void) => void client.act(a).then((r) => r.ok && after?.());
+  const my = room.mySettings;
+  /** Place a piece: at once, or after Confirm if that setting is on for this kind of pointer. */
+  const place = (a: Action, touch: boolean, after?: () => void) => {
+    if (settingOn(my, touch ? 'confirmPlaceTouch' : 'confirmPlace'))
+      setPlacing({ a, ghosts: ghostsOf(a), after });
+    else doAct(a, after);
+  };
+  /** Ask first if this confirmation setting is on. */
+  const ask = (
+    k: 'confirmEnd' | 'confirmCard' | 'confirmTrade',
+    q: { title: string; sub?: string; yes: string; body?: React.ReactNode },
+    go: () => void,
+  ) => (settingOn(my, k) ? setSheet({ k: 'ask', ...q, onYes: go }) : go());
   /** Play a progress card once its targets are picked (or show which picks remain). */
-  const cardPick = (x: number) => {
+  const cardPick = (x: number, touch: boolean) => {
     if (!card) return;
     const kind = paramOf(card.plays);
     const picks = [...card.picks, x];
     const done = () => setMode(null);
-    if (kind === 'v') return doAct({ type: 'progress', card: card.card, v: x }, done);
-    if (kind === 'h') return doAct({ type: 'progress', card: card.card, h: x }, done);
-    if (kind === 'e') return doAct({ type: 'progress', card: card.card, e: x }, done);
+    if (kind === 'v') return place({ type: 'progress', card: card.card, v: x }, touch, done);
+    if (kind === 'h') return place({ type: 'progress', card: card.card, h: x }, touch, done);
+    if (kind === 'e') return place({ type: 'progress', card: card.card, e: x }, touch, done);
     if (kind === 'hh') {
       if (picks.length < 2) return setCard({ ...card, picks });
       const a = card.plays.find(
         (p) => (p.h === picks[0] && p.h2 === picks[1]) || (p.h === picks[1] && p.h2 === picks[0]),
       );
-      if (a) doAct(a, done);
+      if (a) place(a, touch, done);
       return;
     }
     if (kind === 'vs') {
       const full = card.plays.find((p) => p.vs!.length === 2 && picks.every((y) => p.vs!.includes(y)));
-      if (picks.length === 2 && full) return doAct(full, done);
+      if (picks.length === 2 && full) return place(full, touch, done);
       return setCard({ ...card, picks });
     }
   };
-  const onVert = (x: number) => {
-    if (owe && BOARD_OWES.has(owe.k)) return doAct({ type: 'choose', v: x });
+  const onVert = (x: number, touch: boolean) => {
+    setPlacing(null);
+    if (owe && BOARD_OWES.has(owe.k)) return place({ type: 'choose', v: x }, touch);
     if (!mine) return;
+    const done = () => setMode(null);
     if (v.stage === 'setup') setSel(x);
-    else if (mode === 'settlement') doAct({ type: 'settlement', v: x }, () => setMode(null));
-    else if (mode === 'city') doAct({ type: 'city', v: x }, () => setMode(null));
-    else if (mode === 'knight') doAct({ type: 'knight', v: x }, () => setMode(null));
-    else if (mode === 'wall') doAct({ type: 'wall', v: x }, () => setMode(null));
+    else if (mode === 'settlement') place({ type: 'settlement', v: x }, touch, done);
+    else if (mode === 'city') place({ type: 'city', v: x }, touch, done);
+    else if (mode === 'knight') place({ type: 'knight', v: x }, touch, done);
+    else if (mode === 'wall') place({ type: 'wall', v: x }, touch, done);
     else if (mode === 'metro') {
       const a = metroOpts.find((m) => m.type === 'improve' && m.v === x);
-      if (a) doAct(a, () => setMode(null));
+      if (a) place(a, touch, done);
     } else if (mode === 'knights') setSheet({ k: 'knightAct', at: x });
     else if (mode === 'kmove' && kFrom != null)
-      doAct({ type: 'moveKnight', from: kFrom, to: x }, () => setMode(null));
-    else if (mode === 'card') cardPick(x);
+      place({ type: 'moveKnight', from: kFrom, to: x }, touch, done);
+    else if (mode === 'card') cardPick(x, touch);
   };
-  const onEdge = (e: number) => {
-    if (owe && BOARD_OWES.has(owe.k)) return doAct({ type: 'choose', e });
-    if (mode === 'card') return cardPick(e);
+  const onEdge = (e: number, touch: boolean) => {
+    setPlacing(null);
+    if (owe && BOARD_OWES.has(owe.k)) return place({ type: 'choose', e }, touch);
+    if (mode === 'card') return cardPick(e, touch);
     if (!mine) return;
     if (mode === 'move' && moveFrom == null) return setMoveFrom(e);
     const options = edgeActs(e);
@@ -311,11 +386,12 @@ export function Game({
       setSel(null);
       if (v.stage === 'main') setMode(null);
     };
-    if (options.length === 1) doAct(options[0]!, done);
+    if (options.length === 1) place(options[0]!, touch, done);
     else if (options.length > 1) setSheet({ k: 'piece', options });
   };
-  const onHex = (h: number) => {
-    if (mine && mode === 'card') return cardPick(h);
+  const onHex = (h: number, touch: boolean) => {
+    setPlacing(null);
+    if (mine && mode === 'card') return cardPick(h, touch);
     if (mine && mode === 'chase' && kFrom != null) {
       const here = acts.filter(
         (a): a is Extract<Action, { type: 'chase' }> => a.type === 'chase' && a.v === kFrom && a.hex === h,
@@ -329,7 +405,7 @@ export function Game({
           kind: 'robber',
           make: (p) => ({ type: 'chase', v: kFrom, hex: h, victim: p }),
         });
-      else if (here[0]) doAct(here[0], () => setMode(null));
+      else if (here[0]) place(here[0], touch, () => setMode(null));
       return;
     }
     if (!mine || v.stage !== 'robber') return;
@@ -341,7 +417,38 @@ export function Game({
       ),
     );
     if (victims.length > 1) setSheet({ k: 'victim', hex: h, victims, kind });
-    else if (here[0]) doAct(here[0]);
+    else if (here[0]) place(here[0], touch);
+  };
+
+  /** What tapping a spot would place, for the preview under the mouse. */
+  const previewAt = (t: 'v' | 'e' | 'h', id: number): Ghost[] => {
+    if (owe && BOARD_OWES.has(owe.k)) return [{ kind: t === 'v' ? 'mark' : 'markEdge', at: id }];
+    if (!mine) return [];
+    if (mode === 'card' && card) {
+      if (t === 'v') return [{ kind: 'mark', at: id }];
+      if (t === 'e') return [{ kind: 'markEdge', at: id }];
+      return [
+        {
+          kind: card.card === 'bishop' ? 'robber' : card.card === 'merchant' ? 'merchant' : 'markHex',
+          at: id,
+        },
+      ];
+    }
+    if (t === 'v') {
+      if (v.stage === 'setup') return [{ kind: 'settlement', at: id }];
+      if (mode === 'settlement' || mode === 'city' || mode === 'knight' || mode === 'wall')
+        return [{ kind: mode, at: id }];
+      if (mode === 'kmove') return [{ kind: 'knight', at: id }];
+      return [{ kind: 'mark', at: id }];
+    }
+    if (t === 'e') {
+      if (mode === 'move' && moveFrom == null) return [{ kind: 'markEdge', at: id }];
+      const a = edgeActs(id)[0];
+      return a ? ghostsOf(a).filter((x) => x.kind !== 'settlement') : [];
+    }
+    if (mode === 'chase') return [{ kind: 'robber', at: id }];
+    const a = acts.find((x) => (x.type === 'robber' || x.type === 'pirate') && x.hex === id);
+    return a ? ghostsOf(a) : [];
   };
 
   const canPlay = (c: DevPlayable) =>
@@ -352,7 +459,12 @@ export function Game({
   /** Start playing a progress card: at once, in a sheet, or by picking on the board. */
   const playProgress = (c: Progress, plays: Play[]) => {
     const kind = paramOf(plays);
-    if (kind === 'none') return void client.act(plays[0]!);
+    if (kind === 'none')
+      return ask(
+        'confirmCard',
+        { title: `Play ${PROGRESS_LABEL[c]}?`, sub: PROGRESS_HELP[c], yes: 'Play it' },
+        () => void client.act(plays[0]!),
+      );
     if (kind === 'to' || kind === 'r' || kind === 'd') return setSheet({ k: 'cardParam', card: c, plays });
     setCard({ card: c, plays, picks: [] });
     setMode('card');
@@ -363,11 +475,30 @@ export function Game({
     setMode('metro');
   };
   const play = (c: DevPlayable) => {
-    if (c === 'knight') void client.act({ type: 'playKnight' });
-    if (c === 'road') void client.act({ type: 'playRoads' });
+    const now = (a: Action) =>
+      ask(
+        'confirmCard',
+        { title: `Play ${DEV_LABEL[c]}?`, sub: DEV_HELP[c], yes: 'Play it' },
+        () => void client.act(a),
+      );
+    if (c === 'knight') now({ type: 'playKnight' });
+    if (c === 'road') now({ type: 'playRoads' });
     if (c === 'plenty') setSheet({ k: 'plenty' });
     if (c === 'mono') setSheet({ k: 'mono' });
   };
+
+  const endTurn = () =>
+    ask(
+      'confirmEnd',
+      {
+        title: 'End your turn?',
+        sub: v.rules.houseRules.handBack
+          ? 'If you end too soon, you can ask for the dice back until the next player does anything.'
+          : undefined,
+        yes: 'End turn',
+      },
+      () => void client.act({ type: 'end' }),
+    );
 
   /* ---------- Prompt ---------- */
   const cur = nameOf(v, v.turn);
@@ -508,7 +639,7 @@ export function Game({
           mine: true,
           buttons: [
             { label: 'Trade', on: () => setSheet({ k: 'trade' }), testid: 'trade' },
-            { label: 'End turn', on: () => void client.act({ type: 'end' }), primary: true, testid: 'end' },
+            { label: 'End turn', on: endTurn, primary: true, testid: 'end' },
           ],
         };
   } else {
@@ -520,6 +651,58 @@ export function Game({
       buttons: tradable ? [{ label: 'Offer a trade', on: () => setSheet({ k: 'trade' }) }] : [],
     };
   }
+
+  // Hand the dice back (SPEC 4.4).
+  const canAskBack = myActs.some((a) => a.type === 'askBack');
+  const canHandBack = myActs.some((a) => a.type === 'handBack');
+  const backFrom = v.back ? nameOf(v, v.back.from) : '';
+  if (canAskBack)
+    pm = {
+      ...pm,
+      buttons: [
+        ...(pm.buttons ?? []),
+        {
+          label: 'Wait, give the dice back',
+          on: () => void client.act({ type: 'askBack' }),
+          testid: 'ask-back',
+        },
+      ],
+    };
+  else if (v.back && v.back.from === me && v.back.asked && !v.back.refused)
+    pm = { ...pm, sub: `You asked ${cur} for the dice back.` };
+  else if (v.back && v.back.from === me && v.back.refused) pm = { ...pm, sub: `${cur} kept the dice.` };
+  if (canHandBack && !v.back?.asked)
+    pm = {
+      ...pm,
+      buttons: [
+        ...(pm.buttons ?? []),
+        {
+          label: `Hand the dice back to ${backFrom}`,
+          on: () => void client.act({ type: 'handBack' }),
+          testid: 'hand-back',
+        },
+      ],
+    };
+  // A piece waiting for Confirm takes over the prompt.
+  if (placing)
+    pm = {
+      title: 'Place it here?',
+      sub: 'Nothing is placed until you confirm. Tap another spot to move it.',
+      mine: true,
+      buttons: [
+        {
+          label: 'Confirm',
+          primary: true,
+          testid: 'confirm-place',
+          on: () => {
+            const p = placing;
+            setPlacing(null);
+            doAct(p.a, p.after);
+          },
+        },
+        { label: 'Cancel', on: () => setPlacing(null), testid: 'cancel-place' },
+      ],
+    };
 
   const connected = (p: Seat) => room.seats.find((x) => x.pid === v.players[p]!.pid)?.connected ?? false;
   const pr = room.pendingReset;
@@ -608,12 +791,40 @@ export function Game({
             )}
           </div>
         ) : null}
+        {canHandBack && v.back?.asked ? (
+          <div className="banner" data-testid="back-banner">
+            <span>{backFrom} asks for the dice back. Their turn would come back exactly as it was.</span>
+            <span className="acts">
+              <button
+                className="btn small primary"
+                disabled={busy}
+                data-testid="hand-back"
+                onClick={() => void client.act({ type: 'handBack' })}
+              >
+                Hand them back
+              </button>
+              {myActs.some((a) => a.type === 'refuseBack') ? (
+                <button
+                  className="btn small"
+                  disabled={busy}
+                  data-testid="refuse-back"
+                  onClick={() => void client.act({ type: 'refuseBack' })}
+                >
+                  Keep them
+                </button>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
         {me == null && v.phase === 'play' ? (
           <div className="banner">
             <span>
-              You’re watching.{disconnected.length ? ' Lost your seat? Take over a disconnected one:' : ''}
+              You’re watching.
+              {disconnected.length ? ' Left the game? Enter the same name to get your seat back.' : ''}
             </span>
+            {disconnected.length ? <RejoinForm /> : null}
             <span className="acts">
+              {disconnected.length ? <span className="hint">Or take over a seat:</span> : null}
               {disconnected.map((x) => (
                 <button
                   key={x.pid}
@@ -634,6 +845,8 @@ export function Game({
             onVert={onVert}
             onEdge={onEdge}
             onHex={onHex}
+            preview={previewAt}
+            pending={placing?.ghosts}
           />
           {v.phase === 'over' && !hideOver ? (
             <div className="overlay">
@@ -665,7 +878,7 @@ export function Game({
       </main>
 
       <section className="dock-wrap" aria-label="Your cards and actions">
-        <Offers v={v} busy={busy} />
+        <Offers v={v} busy={busy} ask={(q, go) => ask('confirmTrade', q, go)} />
         {me != null && v.hand ? (
           <Tray
             v={v}
@@ -847,7 +1060,24 @@ export function Game({
           code={room.code}
           onClose={() => setSheet(null)}
           onEndGame={() => setSheet({ k: 'endGame' })}
+          onSettings={me != null ? () => setSheet({ k: 'settings' }) : undefined}
+          onRules={() => setSheet({ k: 'rules' })}
         />
+      ) : null}
+      {sheet?.k === 'settings' ? (
+        <SettingsSheet mine={room.mySettings} onClose={() => setSheet(null)} />
+      ) : null}
+      {sheet?.k === 'rules' ? <RulesSheet v={v} onClose={() => setSheet(null)} /> : null}
+      {sheet?.k === 'ask' ? (
+        <AskSheet
+          title={sheet.title}
+          sub={sheet.sub}
+          yes={sheet.yes}
+          onYes={sheet.onYes}
+          onClose={() => setSheet(null)}
+        >
+          {sheet.body}
+        </AskSheet>
       ) : null}
       {sheet?.k === 'endGame' ? (
         <ConfirmTwice
@@ -870,6 +1100,33 @@ export function Game({
         />
       ) : null}
     </div>
+  );
+}
+
+/** Rejoin by nickname (SPEC 4.6): the same name gets a disconnected seat straight back. */
+function RejoinForm() {
+  const [nick, setNick] = useState(() => getStored('settlers.nick') ?? '');
+  return (
+    <form
+      className="acts"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (nick.trim()) client.join(nick.trim(), 'red');
+      }}
+    >
+      <input
+        className="text rejoin-nick"
+        value={nick}
+        maxLength={18}
+        placeholder="Your name"
+        aria-label="Your name"
+        data-testid="rejoin-nick"
+        onChange={(e) => setNick(e.target.value)}
+      />
+      <button className="btn small primary" type="submit" data-testid="rejoin">
+        Rejoin
+      </button>
+    </form>
   );
 }
 
@@ -904,7 +1161,15 @@ function GameOver({ v, onHide }: { v: PlayerView; onHide: () => void }) {
   );
 }
 
-function Offers({ v, busy }: { v: PlayerView; busy: boolean }) {
+function Offers({
+  v,
+  busy,
+  ask,
+}: {
+  v: PlayerView;
+  busy: boolean;
+  ask: (q: { title: string; sub?: string; yes: string; body?: React.ReactNode }, go: () => void) => void;
+}) {
   if (v.phase !== 'play' || v.stage !== 'main' || !v.offers.length) return null;
   const me = v.me;
   return (
@@ -948,7 +1213,20 @@ function Offers({ v, busy }: { v: PlayerView; busy: boolean }) {
                           key={w}
                           className="btn small primary"
                           disabled={busy}
-                          onClick={() => void client.act({ type: 'confirm', id: o.id, with: w })}
+                          onClick={() =>
+                            ask(
+                              {
+                                title: `Trade with ${nameOf(v, w)}?`,
+                                yes: 'Trade',
+                                body: (
+                                  <p className="tradeq">
+                                    You give <Chips c={o.give} /> and get <Chips c={o.want} />
+                                  </p>
+                                ),
+                              },
+                              () => void client.act({ type: 'confirm', id: o.id, with: w }),
+                            )
+                          }
                         >
                           Trade with {nameOf(v, w)}
                         </button>
@@ -967,7 +1245,23 @@ function Offers({ v, busy }: { v: PlayerView; busy: boolean }) {
                   <button
                     className="btn small primary"
                     disabled={busy || !myRes || !has(myRes, o.want)}
-                    onClick={() => void client.act({ type: 'respond', id: o.id, yes: true })}
+                    onClick={() =>
+                      ask(
+                        {
+                          title: fromCur
+                            ? `Accept ${nameOf(v, o.from)}’s offer?`
+                            : `Trade with ${nameOf(v, o.from)}?`,
+                          sub: fromCur ? `${nameOf(v, o.from)} still chooses who to trade with.` : undefined,
+                          yes: fromCur ? 'Accept' : 'Trade',
+                          body: (
+                            <p className="tradeq">
+                              You give <Chips c={o.want} /> and get <Chips c={o.give} />
+                            </p>
+                          ),
+                        },
+                        () => void client.act({ type: 'respond', id: o.id, yes: true }),
+                      )
+                    }
                   >
                     {fromCur ? 'Accept' : 'Trade'}
                   </button>
@@ -1142,6 +1436,7 @@ function Tray(props: {
                   className="btn small"
                   disabled={busy || !props.canPlay(d.c)}
                   onClick={() => props.play(d.c as DevPlayable)}
+                  data-testid={`play-${d.c}`}
                 >
                   Play
                 </button>

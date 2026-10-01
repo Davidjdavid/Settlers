@@ -486,11 +486,17 @@ export function MenuSheet({
   code,
   onClose,
   onEndGame,
+  onSettings,
+  onRules,
 }: {
   v: PlayerView | null;
   code: string;
   onClose: () => void;
   onEndGame: () => void;
+  /** "My settings", for a seated player. */
+  onSettings?: () => void;
+  /** The game's rules, changed by whoever has the dice. */
+  onRules?: () => void;
 }) {
   const link = `${location.origin}/r/${code}`;
   const seated = v?.me != null;
@@ -517,6 +523,16 @@ export function MenuSheet({
         >
           Copy invite link
         </button>
+        {onSettings ? (
+          <button className="btn" onClick={onSettings} data-testid="menu-settings">
+            My settings
+          </button>
+        ) : null}
+        {onRules && v ? (
+          <button className="btn" onClick={onRules} data-testid="menu-rules">
+            Table rules
+          </button>
+        ) : null}
         <div className="group">
           <span className="eyebrow">Building costs</span>
           <div className="costs">

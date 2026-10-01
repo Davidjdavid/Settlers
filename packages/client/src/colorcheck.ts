@@ -84,5 +84,16 @@ export function deltaE([L1, a1, b1]: number[], [L2, a2, b2]: number[]): number {
   return Math.sqrt((dL / SL) ** 2 + (dC / SC) ** 2 + (dH / SH) ** 2 + RT * (dC / SC) * (dH / SH));
 }
 
+/** A colour as it looks with a given vision, as #rrggbb (for the colour sheet). */
+export function simulate(hex: string, v: Vision): string {
+  const enc = (c: number) => Math.round(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055));
+  return (
+    '#' +
+    seen(hex, v)
+      .map((c) => enc(c).toString(16).padStart(2, '0'))
+      .join('')
+  );
+}
+
 /** How different two colours look with a given vision. */
 export const diff = (x: string, y: string, v: Vision = 'normal') => deltaE(lab(seen(x, v)), lab(seen(y, v)));

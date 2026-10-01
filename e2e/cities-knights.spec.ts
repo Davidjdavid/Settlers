@@ -12,7 +12,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, playUntil, seatedTable, turnPage, view, type Table } from './table';
+import { checkFrames, confirmPlace, playUntil, seatedTable, turnPage, view, type Table } from './table';
 
 test('three players play a full Cities & Knights game', async ({ browser }) => {
   const server = new TestServer(await freePort(), 'ck passphrase');
@@ -21,8 +21,8 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const t = await seatedTable(browser, server, ['Ann', 'Bob', 'Cat']);
     const [a, b, c] = t.pages as [Page, Page, Page];
 
-    await a.click('[data-testid=ck]');
-    await expect(b.getByTestId('ck')).toBeChecked();
+    await a.click('[data-testid=mode-knights]');
+    await expect(b.getByTestId('mode-knights')).toHaveClass(/on/);
     await expect(c.getByTestId('win-vp')).toHaveText('13');
     for (let i = 0; i < 5; i++) await a.click('[aria-label="Fewer points"]');
     await expect(c.getByTestId('win-vp')).toHaveText('8');
@@ -37,11 +37,13 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const first = await turnPage(t);
     await first.locator('#board [data-v]').first().click();
     await first.locator('#board [data-e]').first().click();
+    await confirmPlace(first);
     await expect.poll(async () => (await view(a)).seq).toBe(1);
 
     const ui = { knight: 0, activate: 0, improve: 0, owed: 0 };
     const clickVert = async (p: Page) => {
       await p.locator('#board [data-v]').first().click();
+      await confirmPlace(p);
     };
 
     /** Make one move through the UI if one of the moves we drive by hand is available. */
@@ -54,8 +56,10 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
         if (!owe || ui.owed >= 25) return false;
         const seq = v.seq;
         if (['loseCity', 'relocate', 'desert', 'deserterPlace'].includes(owe.k)) await clickVert(p);
-        else if (owe.k === 'rebuild') await p.locator('#board [data-e]').first().click();
-        else if (['give', 'discard', 'take'].includes(owe.k)) await fillCount(p);
+        else if (owe.k === 'rebuild') {
+          await p.locator('#board [data-e]').first().click();
+          await confirmPlace(p);
+        } else if (['give', 'discard', 'take'].includes(owe.k)) await fillCount(p);
         else if (owe.k === 'harbor') await p.locator('.sheet .foot button').first().click();
         else await p.locator('.sheet .pick:not([disabled])').first().click();
         await expect.poll(async () => (await view(p)).seq).toBeGreaterThan(seq);

@@ -50,6 +50,12 @@ export async function seatedTable(browser: Browser, server: TestServer, nicks: s
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test hook returns plain JSON
 export const view = (p: Page): Promise<any> => p.evaluate(() => (window as any).__settlers.state().game);
 
+/** Press Confirm if a placement is waiting for it (on by default, SPEC 4.3). */
+export async function confirmPlace(p: Page) {
+  const btn = p.getByTestId('confirm-place');
+  if (await btn.isVisible().catch(() => false)) await btn.click();
+}
+
 /** The page whose turn it is. */
 export async function turnPage(t: Table): Promise<Page> {
   const v = await view(t.pages[0]!);

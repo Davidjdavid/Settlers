@@ -12,7 +12,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, playUntil, seatedTable, turnPage, view } from './table';
+import { checkFrames, confirmPlace, playUntil, seatedTable, turnPage, view } from './table';
 
 test('three players play a full Seafarers game', async ({ browser }) => {
   const server = new TestServer(await freePort(), 'sea passphrase');
@@ -22,8 +22,8 @@ test('three players play a full Seafarers game', async ({ browser }) => {
     const [a, b, c] = t.pages as [Page, Page, Page];
 
     // Options, picked by clicking, are shown to everyone.
-    await a.click('[data-testid=scenario-heading-for-new-shores]');
-    await expect(b.getByTestId('scenario-heading-for-new-shores')).toHaveClass(/on/);
+    await a.click('[data-testid=mode-seafarers]');
+    await expect(b.getByTestId('mode-seafarers')).toHaveClass(/on/);
     await expect(c.getByTestId('win-vp')).toHaveText('14');
     await a.click('[data-testid=rule-freeShipMoves]');
     await expect(b.getByTestId('rule-freeShipMoves')).toBeChecked();
@@ -35,7 +35,7 @@ test('three players play a full Seafarers game', async ({ browser }) => {
     const v0 = await view(a);
     expect(v0.rules.modules).toEqual(['seafarers']);
     expect(v0.winVP).toBe(10);
-    expect(v0.rules.houseRules).toEqual({ freeShipMoves: true });
+    expect(v0.rules.houseRules).toEqual({ freeShipMoves: true, handBack: true });
 
     // The first starting settlement by clicking: a coast corner, then a ship.
     const first = await turnPage(t);
@@ -54,7 +54,9 @@ test('three players play a full Seafarers game', async ({ browser }) => {
           placedShip = true;
           break;
         }
-        // Not a coast edge: it was placed as a road. Stop exploring.
+        // Not a coast edge: it's a road. Confirm it and stop exploring.
+        await confirmPlace(first);
+        await expect.poll(async () => (await view(first)).seq).toBe(1);
         if ((await view(first)).seq > 0) break;
       }
       if ((await view(first)).seq > 0) break;

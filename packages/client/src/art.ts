@@ -39,6 +39,8 @@ export const PCOL: Record<Color, string> = {
 };
 /** Outline for pieces of each colour: dark, except a light one for black pieces. */
 export const PEDGE = (c: Color) => (c === 'black' ? '#d9dde0' : '#0b1418');
+/** The outline for a piece of fill colour `hex`. */
+export const edgeOf = (hex: string) => (hex === PCOL.black ? PEDGE('black') : PEDGE('red'));
 export const PNAME: Record<Color, string> = {
   red: 'Red',
   blue: 'Blue',

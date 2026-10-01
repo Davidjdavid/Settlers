@@ -18,11 +18,13 @@ const rng = seedRng(String(Math.random()));
 Object.assign(window, {
   __settlers: {
     state: () => client.state,
-    botStep: async () => {
+    // `byHand`: move types the test will make through the UI instead (returned as 'skip:<type>').
+    botStep: async (byHand: string[] = []) => {
       const v = client.state.game;
       if (!v || client.state.pending) return 'busy';
       const a = botMove(v, rng);
       if (!a) return 'idle';
+      if (byHand.includes(a.type)) return `skip:${a.type}`;
       const r = await client.act(a);
       return r.ok ? a.type : `rejected:${r.error}`;
     },

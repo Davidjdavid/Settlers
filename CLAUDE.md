@@ -29,7 +29,7 @@ Run all commands from the repo root.
 | Simulator (1,000 each of classic, Heading for New Shores, C&K and C&K + Seafarers, 200 fog-test games, and 1,000 games with CPU players; on all CPU cores; ~12 min) | `npm run sim` |
 | Simulator, one scenario / more games / fixed seed | `npm run sim -- --scenario ck --games 5000 --seed x` (scenarios: `classic`, `heading-for-new-shores`, `fog-test`, `ck`, `ck-sea`, and `cpu-` + any of the first four but fog-test) |
 | Replay a failing game (the seed encodes scenario, players and house rules) | `npm run sim -- --replay <seed>` |
-| End-to-end (3 browsers, real server build: classic, Seafarers, Cities & Knights) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
+| End-to-end (3 browsers, real server build: classic, Seafarers, Cities & Knights, CPU, table polish) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
 | **Everything CI runs** | `npm run check` |
 | Build (client to `packages/client/dist`, server bundle to `packages/server/dist`) | `npm run build` |
 | Deploy | GitHub → Actions → Deploy → Run workflow, or `npm run deploy` (see `deploy/README.md`) |
@@ -55,7 +55,9 @@ Run all commands from the repo root.
 
 - `packages/server/test/rooms.test.ts` drives `Rooms` with fake connections: full games through the server, restart and replay, hidden info in every message sent, failed saves, reset and seat takeover rules. `options.test.ts` covers room options and a full Seafarers game through the server. `cpu.test.ts` covers CPU seats in the lobby and a full game with CPUs on a fake clock, including a restart mid-pause.
 - `e2e/cpu.spec.ts`: two people and a CPU play a full game; the CPU is added, renamed and recoloured in the lobby and declines a trade offered through the UI (the server runs with `CPU_DELAY_MS` to speed it up).
-- `e2e/cities-knights.spec.ts` plays a full C&K game: C&K switched on in the lobby, knights built and activated, improvements bought and owed choices answered through the UI.
+- `e2e/polish.spec.ts` (Milestone 4) plays a full game in two desktop browsers and an emulated phone: mode picker and colours in the lobby, placement ghosts with Confirm/Cancel by mouse and touch, every confirmation setting both on and off, settings surviving a rejoin by name on a new device, table rules changed mid-game, and the dice handed back (in setup, refused, and unasked). The test hook `botStep(['end', …])` returns `skip:<type>` for moves the test makes through the UI. Existing specs press Confirm via `confirmPlace()` in `e2e/table.ts`.
+- `packages/client/test/colors.test.ts` checks every piece colour against every other and every tile (CIEDE2000, with simulated colorblindness). `npx tsx packages/client/scripts/colorsheet.ts out.png` draws the pieces in every colour on every tile for a visual check.
+- `e2e/cities-knights.spec.ts` plays a full C&K game: C&K picked in the lobby (the Knights mode), knights built and activated, improvements bought and owed choices answered through the UI.
 - `e2e/seafarers.spec.ts` plays a full Seafarers game in 3 browsers: options picked in the lobby, a setup ship placed by clicking, gold picked through the gold sheet, a reload mid-game. Shared steps are in `e2e/table.ts`.
 - `e2e/full-game.spec.ts` runs the production build (`packages/server/dist/server.mjs` serving `packages/client/dist`). Three browsers log in and set up a room by clicking. They play setup, a roll and an end turn through the UI, and the rest with `window.__settlers.botStep()`, the engine bot playing from that browser's own view. Mid-game it reloads a page and kills the server with SIGKILL, then checks every WebSocket frame for leaks.
 

@@ -8,7 +8,14 @@
 
 import { useSyncExternalStore } from 'react';
 import type { Action, Color, PlayerView } from '@settlers/engine';
-import type { ClientMsg, LogItem, RoomInfo, RoomOptions, ServerMsg } from '@settlers/server/protocol';
+import type {
+  ClientMsg,
+  LogItem,
+  PlayerSettings,
+  RoomInfo,
+  RoomOptions,
+  ServerMsg,
+} from '@settlers/server/protocol';
 
 export type Status = 'connecting' | 'live' | 'offline';
 
@@ -326,6 +333,9 @@ export class Client {
   }
   resetCancel() {
     this.send({ t: 'resetCancel' });
+  }
+  saveSettings(settings: PlayerSettings) {
+    this.send({ t: 'saveSettings', settings });
   }
   claim(seat: number) {
     this.send({ t: 'claim', seat });
