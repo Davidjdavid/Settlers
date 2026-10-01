@@ -6,7 +6,7 @@
 
 import {
   COST, DEV_TYPES, RES, RULE_KEYS, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
-  PROGRESS, viewFor, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
+  PROGRESS, piecesLeft, stateFromView, viewFor, vpBreakdown, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
 
 export interface SimResult {
@@ -382,6 +382,29 @@ export function perturbHidden(s: GameState, seat: Seat, rng: RngState, decks = t
 }
 
 /** Changing what `seat` can't see must not change their view. */
+/**
+ * What each seat's screen shows (SPEC 5.8, 5.11): for every player, the score breakdown built
+ * from that seat's view adds up to the score the view shows, and pieces left match the engine.
+ */
+export function viewScoreCheck(s: GameState): string[] {
+  const bad: string[] = [];
+  for (let q = -1; q < s.players.length; q++) {
+    const v = viewFor(s, q < 0 ? null : q);
+    const t = stateFromView(v);
+    v.players.forEach((pl, p) => {
+      const shown = p === v.me ? v.hand!.totalVP : pl.publicVP + (pl.vpCards ?? 0);
+      const parts = vpBreakdown(t, p, p === v.me || v.phase === 'over');
+      const sum = parts.reduce((a, x) => a + x.vp, 0);
+      if (sum !== shown) bad.push(`seat ${q} sees player ${p}: breakdown ${sum} != score ${shown}`);
+      if (p !== v.me && v.phase === 'play' && parts.some((x) => x.hidden))
+        bad.push(`seat ${q} sees ${p}'s hidden points`);
+      if (JSON.stringify(piecesLeft(t, p)) !== JSON.stringify(piecesLeft(s, p)))
+        bad.push(`seat ${q} sees player ${p} pieces ${JSON.stringify(piecesLeft(t, p))}`);
+    });
+  }
+  return bad;
+}
+
 function leakCheck(s: GameState, seat: Seat, rng: RngState): string | null {
   const t = perturbHidden(s, seat, rng);
   t.rng = [nextInt(rng, 1e9), 1, 2, 3];
@@ -508,6 +531,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
         if (!listed && applyAction(s, cp, ca).ok)
           fail(`accepted an unlisted action for ${cp}: ${JSON.stringify(ca)}`);
       }
+      for (const b of viewScoreCheck(s)) fail(b);
       const leak = leakCheck(s, nextInt(crng, nPlayers), crng);
       if (leak) fail(leak);
     }
@@ -540,6 +564,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
     if (bad.length) bad.forEach((b) => fail(`after ${JSON.stringify(a)}: ${b}`));
   }
 
+  if (!errors.length) for (const b of viewScoreCheck(s)) fail(`at the end: ${b}`);
   const finished = s.phase === 'over';
   if (!finished && !errors.length) fail(`game did not finish within ${maxTurns} turns`);
 

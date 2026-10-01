@@ -4,7 +4,18 @@
  * A game's modules are listed in config.modules and saved with the game.
  */
 
-import type { Action, Card, GameEvent, GameState, ModuleId, Player, Resource, Seat } from '../types';
+import type {
+  Action,
+  Card,
+  GameEvent,
+  GameState,
+  ModuleId,
+  Player,
+  Resource,
+  Seat,
+  SupplyKind,
+  VPPart,
+} from '../types';
 import type { PlayerView } from '../view';
 
 /** What a module's action handler and flow hooks get to work with. All writes go to `s`. */
@@ -54,6 +65,10 @@ export interface RuleModule {
   /* ---------- Scoring ---------- */
   /** Extra public victory points for p (summed across modules). */
   extraVP?(s: GameState, p: Seat): number;
+  /** The same points, itemised for the score breakdown (SPEC 5.8). Must add up to extraVP. */
+  vpParts?(s: GameState, p: Seat): VPPart[];
+  /** Pieces this module adds to a player's supply, with how many are left (SPEC 5.11). */
+  piecesLeft?(s: GameState, p: Seat): Partial<Record<SupplyKind, number>>;
   /** Replaces the longest-road length (e.g. roads + ships). */
   routeLen?(s: GameState, p: Seat): number;
   /** How many of resource t a building of `size` (1 settlement, 2 city) produces. */

@@ -5,7 +5,18 @@
  */
 
 import { mods } from './modules/api';
-import { BANK_EACH, DEV_COUNTS, PIECES, geo, robberHexOK, routeLen, totalVP } from './queries';
+import {
+  BANK_EACH,
+  DEV_COUNTS,
+  PIECES,
+  geo,
+  piecesLeft,
+  publicVP,
+  robberHexOK,
+  routeLen,
+  totalVP,
+  vpBreakdown,
+} from './queries';
 import { DEV_PLAY, RES, type GameState } from './types';
 
 /** Same pieces on the board (so route lengths can't have changed)? */
@@ -41,6 +52,16 @@ export function checkInvariants(s: GameState, prev?: GameState): string[] {
       if (pl.res[r] < 0) bad.push(`player ${p} ${r} negative`);
     });
   }
+
+  // Score breakdowns add up exactly to the score (SPEC 5.8), and supply counts are never negative.
+  s.players.forEach((_, p) => {
+    const sum = (hidden: boolean) => vpBreakdown(s, p, hidden).reduce((a, x) => a + x.vp, 0);
+    if (sum(false) !== publicVP(s, p))
+      bad.push(`player ${p} public breakdown ${sum(false)} != ${publicVP(s, p)}`);
+    if (sum(true) !== totalVP(s, p)) bad.push(`player ${p} breakdown ${sum(true)} != ${totalVP(s, p)}`);
+    for (const [k, left] of Object.entries(piecesLeft(s, p)))
+      if (!(left! >= 0)) bad.push(`player ${p} has ${left} ${k} left`);
+  });
 
   // Pieces are conserved.
   s.players.forEach((pl, p) => {

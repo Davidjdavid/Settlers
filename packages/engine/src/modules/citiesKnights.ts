@@ -337,6 +337,22 @@ export const citiesKnights: RuleModule = {
     return 7 + 2 * wallsOf(s, p);
   },
   robberAsleep: (s) => ck(s).attacks === 0,
+  vpParts(s, p) {
+    const c = ck(s);
+    const metros = TRACKS.filter((t) => metroOwner(s, t) === p).length;
+    return [
+      { k: 'metropolis', n: metros, vp: 2 * metros },
+      { k: 'defender', n: c.defender[p]!, vp: c.defender[p]! },
+      { k: 'merchant', n: c.merchant?.p === p ? 1 : 0, vp: c.merchant?.p === p ? 1 : 0 },
+      { k: 'progress', n: c.shown[p]!.length, vp: c.shown[p]!.length },
+    ];
+  },
+  piecesLeft: (s, p) => ({
+    knight1: KNIGHTS_EACH - knightsOf(s, p, 1),
+    knight2: KNIGHTS_EACH - knightsOf(s, p, 2),
+    knight3: KNIGHTS_EACH - knightsOf(s, p, 3),
+    wall: WALLS - wallsOf(s, p),
+  }),
   extraVP(s, p) {
     const c = ck(s);
     let vp = c.defender[p]! + c.shown[p]!.length + (c.merchant?.p === p ? 1 : 0);

@@ -326,6 +326,29 @@ export interface GameState {
   back?: HandBack;
 }
 
+/** Where a player's points come from (SPEC 5.8). */
+export type VPSource =
+  | 'settlement'
+  | 'city'
+  | 'longest'
+  | 'largest'
+  | 'vpCards'
+  | 'island'
+  | 'metropolis'
+  | 'defender'
+  | 'merchant'
+  | 'progress';
+/** `n` of something worth `vp` points in all; `hidden` only for the owner's own VP cards. */
+export interface VPPart {
+  k: VPSource;
+  n: number;
+  vp: number;
+  hidden?: true;
+}
+
+/** Pieces a player has in their supply (SPEC 5.11). knight1–3 are basic, strong and mighty. */
+export type SupplyKind = 'road' | 'settlement' | 'city' | 'ship' | 'knight1' | 'knight2' | 'knight3' | 'wall';
+
 /* ---------- Actions (what a seat asks to do) ---------- */
 
 /**

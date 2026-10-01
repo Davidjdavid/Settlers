@@ -319,7 +319,12 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       if (given !== undefined) {
         const ok = (xs: unknown, max: number) =>
           Array.isArray(xs) && xs.length <= max && xs.every((v) => isInt(v) && v >= 1 && v <= 6);
-        if (!given || typeof given !== 'object' || !ok(given.d, 64) || (given.e !== undefined && !ok(given.e, 4)))
+        if (
+          !given ||
+          typeof given !== 'object' ||
+          !ok(given.d, 64) ||
+          (given.e !== undefined && !ok(given.e, 4))
+        )
           return 'Those aren’t dice';
       }
       const fixed = mods(s).reduce<[number, number] | null>((d, m) => d ?? m.fixedDice?.(s) ?? null, null);

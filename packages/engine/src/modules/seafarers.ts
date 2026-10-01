@@ -242,6 +242,8 @@ export const seafarers: RuleModule = {
   robberHexOK: (s, h) => isLand(s.board.hexes[h]!.t),
 
   extraVP: (s, p) => sea(s).specialVP[p] ?? 0,
+  vpParts: (s, p) => [{ k: 'island', n: sea(s).bonus[p]?.length ?? 0, vp: sea(s).specialVP[p] ?? 0 }],
+  piecesLeft: (s, p) => ({ ship: s.players[p]!.pieces.ship ?? 0 }),
   routeLen: tradeRouteLen,
   freePieceSupply: (s, p) => s.players[p]!.pieces.ship ?? 0,
   canPlaceFreePiece: (s, p) => (s.players[p]!.pieces.ship ?? 0) > 0 && legalShips(s, p).length > 0,

@@ -10,10 +10,12 @@ import {
   type Cards,
   type GameState,
   type PartialRes,
+  type SupplyKind,
   type Player,
   type PortType,
   type ResCounts,
   type Seat,
+  type VPPart,
 } from './types';
 
 export const COST = {
@@ -185,6 +187,38 @@ export function publicVP(s: GameState, p: Seat): number {
   if (s.largest === p) vp += 2;
   for (const m of mods(s)) vp += m.extraVP?.(s, p) ?? 0;
   return vp;
+}
+
+/**
+ * What p's score is made of (SPEC 5.8): every public source, plus VP cards when `cards` (the
+ * player's own view, or anyone's once the game is over; marked hidden while it's still on).
+ * Adds up exactly to publicVP, or totalVP with `cards`.
+ */
+export function vpBreakdown(s: GameState, p: Seat, cards: boolean): VPPart[] {
+  const out: VPPart[] = [];
+  let setts = 0;
+  let cities = 0;
+  for (const b of s.verts) if (b && b[0] === p) b[1] === 2 ? cities++ : setts++;
+  if (setts) out.push({ k: 'settlement', n: setts, vp: setts });
+  if (cities) out.push({ k: 'city', n: cities, vp: 2 * cities });
+  if (s.longest === p) out.push({ k: 'longest', n: 1, vp: 2 });
+  if (s.largest === p) out.push({ k: 'largest', n: 1, vp: 2 });
+  for (const m of mods(s)) out.push(...(m.vpParts?.(s, p) ?? []).filter((x) => x.vp));
+  const n = s.players[p]!.vpCards;
+  if (cards && n)
+    out.push(s.phase === 'play' ? { k: 'vpCards', n, vp: n, hidden: true } : { k: 'vpCards', n, vp: n });
+  return out;
+}
+
+/** Pieces p has left to place (SPEC 5.11): the base three, plus ships, knights and walls by module. */
+export function piecesLeft(s: GameState, p: Seat): Partial<Record<SupplyKind, number>> {
+  const pc = s.players[p]!.pieces;
+  let out: Partial<Record<SupplyKind, number>> = { road: pc.road, settlement: pc.settlement, city: pc.city };
+  for (const m of mods(s)) out = { ...out, ...(m.piecesLeft?.(s, p) ?? {}) };
+  // A city lost to the barbarians with no settlement in the supply leaves 6 settlements on the
+  // board for a while (C&K D14); the supply just shows none left.
+  for (const k of Object.keys(out) as SupplyKind[]) out[k] = Math.max(0, out[k]!);
+  return out;
 }
 
 export function totalVP(s: GameState, p: Seat): number {

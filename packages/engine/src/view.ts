@@ -209,7 +209,8 @@ export function stateFromView(v: PlayerView): GameState {
         res: mine ? v.hand!.res : { ...zero, wood: p.resCount },
         dev: mine ? v.hand!.dev : noDev,
         fresh: mine ? v.hand!.fresh : noDev,
-        vpCards: mine ? v.hand!.vpCards : 0,
+        // Others' VP cards are only known once the game is over.
+        vpCards: mine ? v.hand!.vpCards : (p.vpCards ?? 0),
         knights: p.knights,
         played: p.played,
         pieces: p.pieces,
