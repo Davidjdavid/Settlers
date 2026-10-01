@@ -1,8 +1,10 @@
 /* "My settings" (per person) and "Table rules" (per game) sheets, SPEC 4.3 and 4.5. */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { PlayerView, RuleKey } from '@settlers/engine';
-import type { PlayerSettings } from '@settlers/server/protocol';
+import type { PlayerSettings, RoomInfo } from '@settlers/server/protocol';
+import { SIZE_LABEL, applySize, currentSize, type Size } from './display';
+import { askNotifyPermission } from './sound';
 import { Help, RULE_HELP, SETTING_HELP, SETTING_LABEL, settingOn, type SettingKey } from './help';
 import { client } from './net';
 import { Sheet } from './Sheets';
@@ -14,6 +16,10 @@ const SETTINGS: SettingKey[] = [
   'confirmEnd',
   'confirmCard',
   'confirmTrade',
+  'turnSound',
+  'gameSounds',
+  'browserNotify',
+  'showBreakdown',
 ];
 
 function Switch(props: {
@@ -61,16 +67,55 @@ export function SettingsSheet({ mine, onClose }: { mine: PlayerSettings | null; 
             label={SETTING_LABEL[k]}
             help={SETTING_HELP[k]}
             testid={`setting-${k}`}
-            onChange={(on) => client.saveSettings({ ...(mine ?? {}), [k]: on })}
+            onChange={(on) => {
+              // A browser notification needs the browser's permission first.
+              if (k === 'browserNotify' && on)
+                void askNotifyPermission().then((ok) =>
+                  ok
+                    ? client.saveSettings({ ...(mine ?? {}), [k]: true })
+                    : client.toast('Your browser said no'),
+                );
+              else client.saveSettings({ ...(mine ?? {}), [k]: on });
+            }}
           />
         ))}
       </div>
+      <DisplaySize />
     </Sheet>
   );
 }
 
 /** The game's rules, changed by the player whose turn it is; everyone sees each change in the log. */
-export function RulesSheet({ v, onClose }: { v: PlayerView; onClose: () => void }) {
+/** Display size (SPEC 5.12), remembered on this device. */
+function DisplaySize() {
+  const [size, setSize] = useState<Size>(currentSize());
+  return (
+    <div className="switchrow" data-testid="display-size">
+      <span>
+        Display size <small>(this device)</small>
+      </span>
+      <div className="seg">
+        {(Object.keys(SIZE_LABEL) as Size[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={`btn small${size === k ? ' on' : ''}`}
+            aria-pressed={size === k}
+            data-testid={`size-${k}`}
+            onClick={() => {
+              applySize(k);
+              setSize(k);
+            }}
+          >
+            {SIZE_LABEL[k]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function RulesSheet({ v, room, onClose }: { v: PlayerView; room: RoomInfo; onClose: () => void }) {
   const mine = v.me != null && v.turn === v.me && v.phase === 'play';
   const hr = v.rules.houseRules;
   const sea = v.rules.modules.includes('seafarers');
@@ -86,7 +131,10 @@ export function RulesSheet({ v, onClose }: { v: PlayerView; onClose: () => void 
     { k: 'noDiscardBeforeAttack', show: ck },
     { k: 'handBack', show: true },
     { k: 'handBackSetup', show: true },
+    { k: 'undo', show: true },
   ];
+  const seated = v.me != null;
+  const cpus = v.players.some((p) => p.cpu);
   const stepper = (label: ReactNode, value: number, min: number, max: number, rule: RuleKey, id: string) => (
     <div className="switchrow">
       <span>{label}</span>
@@ -162,6 +210,16 @@ export function RulesSheet({ v, onClose }: { v: PlayerView; onClose: () => void 
               'rules-delay',
             )
           : null}
+        {cpus ? (
+          <Switch
+            on={room.options.cpuChat !== false}
+            label="CPU chatter in table talk"
+            help="Now and then a CPU says what it’s looking for, what it has too much of, or how it feels about being robbed. At most once a turn. Anyone at the table can switch it off or on, any time."
+            testid="tablerule-cpuChat"
+            disabled={!seated}
+            onChange={(on) => client.setCpuChat(on)}
+          />
+        ) : null}
       </div>
     </Sheet>
   );

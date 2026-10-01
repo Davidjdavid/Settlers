@@ -1,6 +1,6 @@
 /* The board, drawn as SVG strings like the prototype, with click targets for legal spots. */
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { geometryFor, type Board as BoardData, type Geometry, type PlayerView } from '@settlers/engine';
 import {
   GLYPH,
@@ -223,7 +223,15 @@ function knightSVG(
     const px = x + (i - (lvl - 1) / 2) * 0.1 * K;
     pips += `<circle cx="${f1(px)}" cy="${f1(y + 0.02 * K)}" r="${f1(0.035 * K)}" fill="${color === PCOL.black ? '#e8eaec' : '#0b1418'}"/>`;
   }
-  return `<g class="piece knight${isFresh ? ' fresh' : ''}" data-knight="${v}" data-owner="${owner}" data-lvl="${lvl}" data-on="${on ? 1 : 0}"${lifted ? ' opacity=".45"' : on ? '' : ' opacity=".8"'}>${on ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 0.07 * K)}" fill="none" stroke="#ffd54a" stroke-width="${f1(0.05 * K)}"/>` : ''}<path d="M${f1(x - r)} ${f1(y - r * 0.75)}Q${f1(x)} ${f1(y - r * 1.15)} ${f1(x + r)} ${f1(y - r * 0.75)}V${f1(y + r * 0.1)}Q${f1(x + r)} ${f1(y + r * 0.9)} ${f1(x)} ${f1(y + r * 1.15)}Q${f1(x - r)} ${f1(y + r * 0.9)} ${f1(x - r)} ${f1(y + r * 0.1)}Z" fill="${color}" stroke="${on ? '#3b2a00' : edgeOf(color)}" stroke-width="2.2"/>${pips}</g>`;
+  // Level by shape as well as pips (SPEC 5.11): strong has a crest, mighty a crown.
+  const top = y - r * 1.05;
+  const crest =
+    lvl === 2
+      ? `<path d="M${f1(x - 0.05 * K)} ${f1(top)}Q${f1(x)} ${f1(top - 0.2 * K)} ${f1(x + 0.12 * K)} ${f1(top - 0.12 * K)}Q${f1(x + 0.04 * K)} ${f1(top - 0.06 * K)} ${f1(x + 0.05 * K)} ${f1(top)}Z" fill="${color}" stroke="${edgeOf(color)}" stroke-width="1.6"/>`
+      : lvl === 3
+        ? `<path d="M${f1(x - 0.13 * K)} ${f1(top + 0.02 * K)}L${f1(x - 0.13 * K)} ${f1(top - 0.14 * K)}L${f1(x - 0.065 * K)} ${f1(top - 0.06 * K)}L${f1(x)} ${f1(top - 0.17 * K)}L${f1(x + 0.065 * K)} ${f1(top - 0.06 * K)}L${f1(x + 0.13 * K)} ${f1(top - 0.14 * K)}L${f1(x + 0.13 * K)} ${f1(top + 0.02 * K)}Z" fill="#ffd54a" stroke="#3b2a00" stroke-width="1.6" stroke-linejoin="round"/>`
+        : '';
+  return `<g class="piece knight${isFresh ? ' fresh' : ''}" data-knight="${v}" data-owner="${owner}" data-lvl="${lvl}" data-on="${on ? 1 : 0}"${lifted ? ' opacity=".45"' : on ? '' : ' opacity=".55"'}>${crest}${on ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 0.07 * K)}" fill="none" stroke="#ffd54a" stroke-width="${f1(0.05 * K)}"/>` : ''}<path d="M${f1(x - r)} ${f1(y - r * 0.75)}Q${f1(x)} ${f1(y - r * 1.15)} ${f1(x + r)} ${f1(y - r * 0.75)}V${f1(y + r * 0.1)}Q${f1(x + r)} ${f1(y + r * 0.9)} ${f1(x)} ${f1(y + r * 1.15)}Q${f1(x - r)} ${f1(y + r * 0.9)} ${f1(x - r)} ${f1(y + r * 0.1)}Z" fill="${color}" stroke="${on ? '#3b2a00' : edgeOf(color)}" stroke-width="2.2"/>${pips}</g>`;
 }
 
 /** The merchant: a small figure in the owner's colour on its tile. */
@@ -233,6 +241,21 @@ function merchantSVG(g: Geometry, h: number, color: string): string {
   const y = (H.y - 0.05) * K;
   const u = 0.1 * K;
   return `<g class="piece" data-merchant="${h}"><ellipse cx="${f1(x)}" cy="${f1(y + 2.6 * u)}" rx="${f1(1.6 * u)}" ry="${f1(0.5 * u)}" fill="rgba(0,0,0,.3)"/><path d="M${f1(x - 1.4 * u)} ${f1(y + 2.5 * u)}L${f1(x)} ${f1(y - 1.2 * u)}L${f1(x + 1.4 * u)} ${f1(y + 2.5 * u)}Z" fill="${color}" stroke="${edgeOf(color)}" stroke-width="2"/><circle cx="${f1(x)}" cy="${f1(y - 1.6 * u)}" r="${f1(0.8 * u)}" fill="#f4ecd6" stroke="#0b1418" stroke-width="1.6"/><path d="M${f1(x - 1.3 * u)} ${f1(y - 2.2 * u)}h${f1(2.6 * u)}" stroke="#0b1418" stroke-width="2.4" stroke-linecap="round"/></g>`;
+}
+
+/** A city wall: a thick stone base with crenels, under the city. */
+function wallPath(x: number, y: number): string {
+  const l = x - 0.38 * K;
+  const w = 0.76 * K;
+  const b = y + 0.3 * K;
+  const t = y + 0.1 * K;
+  const c = 0.06 * K;
+  let d = `M${f1(l)} ${f1(b)}V${f1(t)}`;
+  for (let i = 0; i < 5; i++) {
+    const x0 = l + (i * w) / 5;
+    d += `H${f1(x0 + w / 10)}V${f1(t - c)}H${f1(x0 + w / 5)}V${f1(t)}`;
+  }
+  return `${d}V${f1(b)}Z`;
 }
 
 function roadLine(g: Geometry, e: number, inset: number) {
@@ -288,7 +311,7 @@ function ghostSVG(g: Geometry, gh: Ghost, color: string, waiting: boolean): stri
       inner = knightSVG(g, gh.at, color, 1, false, -1, false, false);
       break;
     case 'wall':
-      inner = `<rect x="${f1(V!.x * K - 0.34 * K)}" y="${f1(V!.y * K + 0.08 * K)}" width="${f1(0.68 * K)}" height="${f1(0.16 * K)}" rx="${f1(0.03 * K)}" fill="#8b8172" stroke="#fff6dc" stroke-width="2"/>`;
+      inner = `<path d="${wallPath(V!.x * K, V!.y * K)}" fill="#8b8172" stroke="#fff6dc" stroke-width="2"/>`;
       break;
     case 'robber':
       inner = robberSVG(g, gh.at);
@@ -340,6 +363,7 @@ export function Board(props: {
   const [hover, setHover] = useState<string | null>(null);
   const g = geometryFor(view.board.hexes);
   const vb = useMemo(() => viewBox(g), [g]);
+  const zoom = useZoom(vb);
   // Hexes change when fog is discovered, so the key includes their terrain.
   const hexKey = view.board.hexes.map((h) => `${h.t}${h.n}`).join(',');
   const staticHtml = useMemo(() => staticSVG(view.board, g, vb), [hexKey, view.board.ports, g, vb]);
@@ -381,7 +405,7 @@ export function Board(props: {
     const x = V.x * K;
     const y = V.y * K;
     parts.push(
-      `<rect class="piece" data-wall="${v}" x="${f1(x - 0.34 * K)}" y="${f1(y + 0.08 * K)}" width="${f1(0.68 * K)}" height="${f1(0.16 * K)}" rx="${f1(0.03 * K)}" fill="#8b8172" stroke="#0b1418" stroke-width="2"/>`,
+      `<path class="piece" data-wall="${v}" d="${wallPath(x, y)}" fill="#8b8172" stroke="#0b1418" stroke-width="2" stroke-linejoin="round"/>`,
     );
   }
   view.verts.forEach((b, v) => {
@@ -465,6 +489,11 @@ export function Board(props: {
     return d.v != null ? `v:${d.v}` : d.e != null ? `e:${d.e}` : `h:${d.h}`;
   };
   const onClick = (ev: React.MouseEvent) => {
+    // The end of a drag or pinch isn't a tap.
+    if (zoom.dragged.current) {
+      zoom.dragged.current = false;
+      return;
+    }
     const key = targetOf(ev);
     if (!key) return;
     const id = Number(key.slice(2));
@@ -474,27 +503,177 @@ export function Board(props: {
     else props.onHex(id, touch);
   };
   const onMove = (ev: React.PointerEvent) => {
+    zoom.move(ev);
     if (ev.pointerType !== 'mouse') return;
     const key = targetOf(ev);
     if (key !== hover) setHover(key);
   };
 
   return (
-    <svg
-      id="board"
-      viewBox={vb.join(' ')}
-      role="img"
-      aria-label="Island board"
-      ref={(el) => {
-        boardRef.svg = el;
-        boardRef.geo = g;
-      }}
-      onClick={onClick}
-      onPointerMove={onMove}
-      onPointerLeave={() => setHover(null)}
-    >
-      <g dangerouslySetInnerHTML={{ __html: staticHtml }} />
-      <g dangerouslySetInnerHTML={{ __html: parts.join('') }} />
-    </svg>
+    <div className="boardzoom">
+      <svg
+        id="board"
+        viewBox={zoom.box.join(' ')}
+        role="img"
+        aria-label="Island board"
+        data-zoom={zoom.view.s.toFixed(2)}
+        style={{ touchAction: zoom.view.s > 1 ? 'none' : 'pan-y' }}
+        ref={(el) => {
+          boardRef.svg = el;
+          boardRef.geo = g;
+          zoom.svg.current = el;
+        }}
+        onClick={onClick}
+        onPointerDown={zoom.down}
+        onPointerMove={onMove}
+        onPointerUp={zoom.up}
+        onPointerCancel={zoom.up}
+        onPointerLeave={(ev) => {
+          setHover(null);
+          zoom.up(ev);
+        }}
+      >
+        <g dangerouslySetInnerHTML={{ __html: staticHtml }} />
+        <g dangerouslySetInnerHTML={{ __html: parts.join('') }} />
+      </svg>
+      <div className="zoomctl" aria-label="Zoom">
+        <button
+          type="button"
+          className="iconbtn"
+          aria-label="Zoom in"
+          data-testid="zoom-in"
+          onClick={() => zoom.by(1.4)}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className="iconbtn"
+          aria-label="Zoom out"
+          data-testid="zoom-out"
+          onClick={() => zoom.by(1 / 1.4)}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          className="iconbtn fit"
+          aria-label="Fit board"
+          data-testid="zoom-fit"
+          disabled={zoom.view.s === 1}
+          onClick={zoom.fit}
+        >
+          Fit
+        </button>
+      </div>
+    </div>
   );
+}
+
+const MAX_ZOOM = 4;
+
+/**
+ * Board zoom (SPEC 5.12): buttons, mouse wheel, trackpad pinch, two-finger pinch, drag to move.
+ * Only this screen's view changes. Zooming narrows the SVG viewBox, so every piece, ghost and
+ * tap target stays in board coordinates and taps land where they're aimed at any zoom.
+ */
+function useZoom(vb: number[]) {
+  const [view, setView] = useState({ s: 1, cx: vb[0]! + vb[2]! / 2, cy: vb[1]! + vb[3]! / 2 });
+  const svg = useRef<SVGSVGElement | null>(null);
+  const dragged = useRef(false);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const start = useRef<{ d: number; x: number; y: number; moved: boolean } | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
+  const clamp = (v: { s: number; cx: number; cy: number }) => {
+    const s = Math.min(MAX_ZOOM, Math.max(1, v.s));
+    const w = vb[2]! / s;
+    const h = vb[3]! / s;
+    return {
+      s,
+      cx: Math.min(vb[0]! + vb[2]! - w / 2, Math.max(vb[0]! + w / 2, v.cx)),
+      cy: Math.min(vb[1]! + vb[3]! - h / 2, Math.max(vb[1]! + h / 2, v.cy)),
+    };
+  };
+  /** Screen point → board coordinates. */
+  const toBoard = (x: number, y: number) => {
+    const m = svg.current?.getScreenCTM();
+    if (!m) return null;
+    const p = new DOMPoint(x, y).matrixTransform(m.inverse());
+    return { x: p.x, y: p.y };
+  };
+  /** Zoom by `f` keeping the board point under (x, y) where it is. */
+  const zoomAt = (f: number, x?: number, y?: number) => {
+    const v = viewRef.current;
+    const at = x != null && y != null ? toBoard(x, y) : null;
+    const s = Math.min(MAX_ZOOM, Math.max(1, v.s * f));
+    const k = v.s / s;
+    const next = at ? { s, cx: at.x + (v.cx - at.x) * k, cy: at.y + (v.cy - at.y) * k } : { ...v, s };
+    setView(clamp(next));
+  };
+
+  // Mouse wheel and trackpad pinch (which arrives as a wheel event with ctrlKey).
+  useEffect(() => {
+    const el = svg.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX, e.clientY);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [vb.join(',')]);
+  // A different board (a new game) starts unzoomed.
+  useEffect(() => setView({ s: 1, cx: vb[0]! + vb[2]! / 2, cy: vb[1]! + vb[3]! / 2 }), [vb.join(',')]);
+
+  const down = (ev: React.PointerEvent) => {
+    pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    const ps = [...pointers.current.values()];
+    if (ps.length === 2)
+      start.current = { d: Math.hypot(ps[0]!.x - ps[1]!.x, ps[0]!.y - ps[1]!.y), x: 0, y: 0, moved: true };
+    else if (ps.length === 1) start.current = { d: 0, x: ev.clientX, y: ev.clientY, moved: false };
+  };
+  const move = (ev: React.PointerEvent) => {
+    const prev = pointers.current.get(ev.pointerId);
+    if (!prev) return;
+    pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    const ps = [...pointers.current.values()];
+    const st = start.current;
+    if (!st) return;
+    if (ps.length === 2) {
+      const d = Math.hypot(ps[0]!.x - ps[1]!.x, ps[0]!.y - ps[1]!.y);
+      if (st.d > 0) zoomAt(d / st.d, (ps[0]!.x + ps[1]!.x) / 2, (ps[0]!.y + ps[1]!.y) / 2);
+      st.d = d;
+      dragged.current = true;
+      return;
+    }
+    // One finger or the mouse: drag to move while zoomed in.
+    if (viewRef.current.s <= 1) return;
+    if (!st.moved && Math.hypot(ev.clientX - st.x, ev.clientY - st.y) < 6) return;
+    st.moved = true;
+    dragged.current = true;
+    const a = toBoard(prev.x, prev.y);
+    const b = toBoard(ev.clientX, ev.clientY);
+    if (a && b) setView((v) => clamp({ ...v, cx: v.cx - (b.x - a.x), cy: v.cy - (b.y - a.y) }));
+  };
+  const up = (ev: React.PointerEvent) => {
+    pointers.current.delete(ev.pointerId);
+    if (!pointers.current.size) start.current = null;
+    // A click follows pointerup only if nothing was dragged; clear the flag after it.
+    if (dragged.current) setTimeout(() => (dragged.current = false), 0);
+  };
+  const w = vb[2]! / view.s;
+  const h = vb[3]! / view.s;
+  return {
+    view,
+    box: [view.cx - w / 2, view.cy - h / 2, w, h],
+    svg,
+    dragged,
+    down,
+    move,
+    up,
+    by: (f: number) => zoomAt(f),
+    fit: () => setView(clamp({ s: 1, cx: 0, cy: 0 })),
+  };
 }

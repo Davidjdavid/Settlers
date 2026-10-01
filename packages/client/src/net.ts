@@ -274,6 +274,10 @@ export class Client {
           dice: m.dice ?? null,
           stats: m.stats ?? null,
         });
+        if (this.rematching && !m.game && m.room.me) {
+          this.rematching = false;
+          this.send({ t: 'start' });
+        }
         // Re-send moves that were never acknowledged (safe: ids are applied once).
         for (const [id, w] of this.waiting) this.send({ t: 'act', id, action: w.action });
         return;
@@ -440,6 +444,13 @@ export class Client {
   chat(text: string) {
     this.send({ t: 'chat', text });
   }
+  /** After a game: the same players, the same mode, a new board. */
+  rematch() {
+    this.rematching = true;
+    this.send({ t: 'resetRequest' });
+  }
+  private rematching = false;
+
   resetRequest(kind: 'reset' | 'quit' = 'reset') {
     this.send({ t: 'resetRequest', kind });
   }

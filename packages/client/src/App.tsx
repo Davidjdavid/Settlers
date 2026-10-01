@@ -51,7 +51,18 @@ export function App() {
   else if (!st.roomCode || st.roomError) body = <Home error={st.roomError} />;
   else if (!st.room) body = <div className="center">Joining room {st.roomCode}…</div>;
   else if (!st.game) body = <Lobby room={st.room} />;
-  else body = <Game v={st.game} room={st.room} log={st.log} status={st.status} pending={st.pending} />;
+  else
+    body = (
+      <Game
+        v={st.game}
+        room={st.room}
+        log={st.log}
+        status={st.status}
+        pending={st.pending}
+        dice={st.dice}
+        stats={st.stats}
+      />
+    );
 
   return (
     <>

@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  COMS, COST, DEV_PLAY, KNIGHT_COST, SHIP_COST, WALL_COST, goldDue, has, legalActions, RES, stateFromView,
-  type Action, type DevPlayable, type PlayerView, type Progress, type Seat,
+  COMS, COST, DEV_PLAY, KNIGHT_COST, SHIP_COST, WALL_COST, goldDue, has, legalActions, piecesLeft, RES, stateFromView,
+  vpBreakdown, type Action, type DevPlayable, type GameStats, type PlayerView, type Progress, type Seat, type VPPart,
 } from '@settlers/engine'; // prettier-ignore
-import type { LogItem, RoomInfo } from '@settlers/server/protocol';
+import type { DiceInfo, LogItem, RoomInfo } from '@settlers/server/protocol';
 import {
   BRAND_SVG, CARD_COLOR, CARD_LABEL, DEV_HELP, DEV_LABEL, PCOL, PEDGE, PROGRESS_HELP, PROGRESS_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR,
   TRACK_LABEL, cardIcon,
@@ -13,7 +13,10 @@ import {
 import { Board, NO_TARGETS, type Ghost, type Targets } from './Board';
 import { settingOn } from './help';
 import { AskSheet, RulesSheet, SettingsSheet } from './settings';
-import { Dice } from './anim';
+import { RollDice } from './dice';
+import { DicePanel, GameStatsView } from './stats';
+import { play as playSound, notify } from './sound';
+import { Celebration } from './celebrate';
 import { client, getStored, type Status } from './net';
 import {
   Chips, ConfirmTwice, DiscardSheet, GoldSheet, MenuSheet, MonoSheet, PieceSheet, PlentySheet, TradeSheet,
@@ -58,7 +61,9 @@ type SheetState =
   | { k: 'claim'; seat: number; nick: string }
   | { k: 'ask'; title: string; sub?: string; yes: string; onYes: () => void; body?: React.ReactNode }
   | { k: 'settings' }
-  | { k: 'rules' };
+  | { k: 'rules' }
+  | { k: 'dice' }
+  | { k: 'quit' };
 
 /** The see-through pieces that show what an action would place (SPEC 4.3). */
 function ghostsOf(a: Action): Ghost[] {
@@ -134,12 +139,16 @@ export function Game({
   log,
   status,
   pending,
+  dice,
+  stats,
 }: {
   v: PlayerView;
   room: RoomInfo;
   log: LogItem[];
   status: Status;
   pending: number;
+  dice?: DiceInfo | null;
+  stats?: GameStats | null;
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [sel, setSel] = useState<number | null>(null);
@@ -150,6 +159,16 @@ export function Game({
   const [card, setCard] = useState<{ card: Progress; plays: Play[]; picks: number[] } | null>(null);
   const [metroOpts, setMetroOpts] = useState<Action[]>([]);
   const [hideOver, setHideOver] = useState(false);
+  // The win celebration plays once, when the game ends while you're watching (SPEC 5.13).
+  const [celebrating, setCelebrating] = useState(false);
+  const wasPlaying = useRef(v.phase === 'play');
+  useEffect(() => {
+    if (v.phase === 'over' && wasPlaying.current) {
+      setCelebrating(true);
+      if (settingOn(room.mySettings, 'gameSounds')) playSound('fanfare');
+    }
+    wasPlaying.current = v.phase === 'play';
+  }, [v.phase]);
   // A piece waiting for Confirm (SPEC 4.3).
   const [placing, setPlacing] = useState<{ a: Action; ghosts: Ghost[]; after?: () => void } | null>(null);
   const me = v.me;
@@ -487,6 +506,10 @@ export function Game({
     if (c === 'mono') setSheet({ k: 'mono' });
   };
 
+  // The Roll button and the dice do exactly the same thing (SPEC 5.3).
+  const rollRef = useRef<(() => void) | null>(null);
+  const canRoll = mine && v.stage === 'preroll' && acts.some((a) => a.type === 'roll') && !busy;
+
   const endTurn = () =>
     ask(
       'confirmEnd',
@@ -548,7 +571,7 @@ export function Game({
           buttons: [
             {
               label: 'Roll dice',
-              on: () => void client.act({ type: 'roll' }),
+              on: () => rollRef.current?.(),
               primary: true,
               testid: 'roll',
             },
@@ -683,6 +706,66 @@ export function Game({
         },
       ],
     };
+  // Undo (SPEC 5.10): ask right after your own move; everyone else answers.
+  if (myActs.some((a) => a.type === 'askUndo'))
+    pm = {
+      ...pm,
+      buttons: [
+        ...(pm.buttons ?? []),
+        { label: 'Undo', on: () => void client.act({ type: 'askUndo' }), testid: 'undo' },
+      ],
+    };
+  if (myActs.some((a) => a.type === 'cancelUndo'))
+    pm = {
+      ...pm,
+      sub: `Waiting for everyone to agree to undo your last move${v.undo?.ok.length ? ` (${listNames(v, v.undo.ok)} agreed)` : ''}.`,
+      buttons: [
+        ...(pm.buttons ?? []),
+        { label: 'Withdraw undo', on: () => void client.act({ type: 'cancelUndo' }), testid: 'undo-cancel' },
+      ],
+    };
+  const answerUndo = myActs.some((a) => a.type === 'answerUndo');
+
+  // The turn sound (SPEC 5.9): only for the player the game is waiting on, once per thing to do.
+  const needs: [string, string][] = [];
+  if (me != null && v.phase === 'play') {
+    if (mine && v.stage === 'setup') needs.push([`setup:${v.setupI}`, 'Place your settlement']);
+    if (mine && v.stage === 'preroll') needs.push([`turn:${v.turnN}`, 'Your turn']);
+    if (owes) needs.push([`discard:${v.turnN}`, 'Discard cards']);
+    if (goldOwed) needs.push([`gold:${v.turnN}:${v.seq}`, 'Pick your gold']);
+    if (owe) needs.push([`owe:${oweKey}`, 'A choice is waiting for you']);
+    for (const o of v.offers)
+      if (o.from !== me && o.resp[me] == null && (o.from === v.turn || v.turn === me))
+        needs.push([`offer:${o.id}`, `${nameOf(v, o.from)} offered a trade`]);
+    if (canHandBack && v.back?.asked) needs.push([`back:${v.turnN}`, `${backFrom} asks for the dice back`]);
+    if (answerUndo && v.undo)
+      needs.push([`undo:${v.turnN}:${v.undo.p}`, `${nameOf(v, v.undo.p)} asks to undo`]);
+  }
+  const needKey = needs.map((x) => x[0]).join('|');
+  const heard = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    // Anything already waiting when the page opened doesn't chime.
+    if (!heard.current) {
+      heard.current = new Set(needs.map((x) => x[0]));
+      return;
+    }
+    const fresh = needs.filter(([k]) => !heard.current!.has(k));
+    for (const [k] of fresh) heard.current.add(k);
+    if (!fresh.length) return;
+    if (settingOn(my, 'turnSound')) playSound('turn');
+    if (settingOn(my, 'browserNotify')) notify(fresh[0]![1]);
+  }, [needKey]);
+  // Building sounds for everyone (game sounds switch).
+  useEffect(
+    () =>
+      client.onFresh(({ items }) => {
+        if (!settingOn(client.state.room?.mySettings, 'gameSounds')) return;
+        if (items.some((it) => it.k === 'ev' && ['build', 'knight', 'wall', 'setup'].includes(it.e.k)))
+          playSound('build');
+      }),
+    [],
+  );
+
   // A piece waiting for Confirm takes over the prompt.
   if (placing)
     pm = {
@@ -753,7 +836,11 @@ export function Game({
           title={status}
           data-testid="sync"
         />
-        <Dice dice={v.dice} />
+        {dice ? (
+          <button className="btn small ghost" onClick={() => setSheet({ k: 'dice' })} data-testid="open-dice">
+            Dice stats
+          </button>
+        ) : null}
         <EventDie v={v} />
         <button className="iconbtn" type="button" aria-label="Menu" onClick={() => setSheet({ k: 'menu' })}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -789,6 +876,29 @@ export function Game({
                 ) : null}
               </>
             )}
+          </div>
+        ) : null}
+        {answerUndo && v.undo ? (
+          <div className="banner" data-testid="undo-banner">
+            <span>{nameOf(v, v.undo.p)} asks to undo their last move.</span>
+            <span className="acts">
+              <button
+                className="btn small primary"
+                disabled={busy}
+                data-testid="undo-yes"
+                onClick={() => void client.act({ type: 'answerUndo', yes: true })}
+              >
+                OK, undo it
+              </button>
+              <button
+                className="btn small"
+                disabled={busy}
+                data-testid="undo-no"
+                onClick={() => void client.act({ type: 'answerUndo', yes: false })}
+              >
+                No
+              </button>
+            </span>
           </div>
         ) : null}
         {canHandBack && v.back?.asked ? (
@@ -848,13 +958,26 @@ export function Game({
             preview={previewAt}
             pending={placing?.ghosts}
           />
-          {v.phase === 'over' && !hideOver ? (
-            <div className="overlay">
-              <GameOver v={v} onHide={() => setHideOver(true)} />
+          {celebrating ? (
+            <Celebration
+              color={PCOL[v.players[v.winner!]!.color]}
+              text={v.winner === me ? 'You win!' : `${nameOf(v, v.winner)} wins!`}
+              onDone={() => setCelebrating(false)}
+            />
+          ) : v.phase === 'over' && !hideOver ? (
+            <div className="overlay endoverlay">
+              <GameOver v={v} stats={stats ?? null} onHide={() => setHideOver(true)} />
             </div>
           ) : null}
         </div>
         <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
+          <RollDice
+            dice={v.dice}
+            canRoll={canRoll}
+            onRoll={() => client.act({ type: 'roll' })}
+            sound={settingOn(my, 'gameSounds')}
+            rollRef={rollRef}
+          />
           <div className="msg">
             <strong>{pm.title}</strong>
             {pm.sub ? <span>{pm.sub}</span> : null}
@@ -899,7 +1022,9 @@ export function Game({
       <aside className="side">
         {v.ck ? <BarbarianBox v={v} /> : null}
         <section className="box" aria-label="Players">
-          <span className="eyebrow">Players</span>
+          <span className="eyebrow">
+            Players · first to <b data-testid="win-target">{v.winVP}</b> points
+          </span>
           <div className="players">
             {v.players.map((p, i) => (
               <div
@@ -927,10 +1052,8 @@ export function Game({
                     title={connected(i) ? 'Connected' : 'Disconnected'}
                   />
                 </span>
-                <span className="vp">
-                  {i === me && v.hand ? v.hand.totalVP : p.publicVP + (p.vpCards ?? 0)}
-                  <small>VP</small>
-                </span>
+                <Score v={v} s={s} p={i} always={settingOn(my, 'showBreakdown')} />
+                <PiecesLeft s={s} p={i} color={p.color} />
                 <span className="stats">
                   <span>
                     <b data-testid={`cards-${i}`}>{p.resCount}</b> cards
@@ -1067,12 +1190,26 @@ export function Game({
           onEndGame={() => setSheet({ k: 'endGame' })}
           onSettings={me != null ? () => setSheet({ k: 'settings' }) : undefined}
           onRules={() => setSheet({ k: 'rules' })}
+          onQuit={me != null && v.phase === 'play' ? () => setSheet({ k: 'quit' }) : undefined}
         />
       ) : null}
       {sheet?.k === 'settings' ? (
         <SettingsSheet mine={room.mySettings} onClose={() => setSheet(null)} />
       ) : null}
-      {sheet?.k === 'rules' ? <RulesSheet v={v} onClose={() => setSheet(null)} /> : null}
+      {sheet?.k === 'rules' ? <RulesSheet v={v} room={room} onClose={() => setSheet(null)} /> : null}
+      {sheet?.k === 'dice' && dice ? (
+        <DicePanel dice={dice} names={v.players.map((_, i) => nameOf(v, i))} onClose={() => setSheet(null)} />
+      ) : null}
+      {sheet?.k === 'quit' ? (
+        <ConfirmTwice
+          title="Save and quit?"
+          first="The game is saved after every move. This ends tonight’s session for everyone; you can resume it from Saved Games."
+          second="Everyone will be asked first and can stop you. Then you confirm once more from the banner."
+          action="Ask everyone"
+          onConfirm={() => client.resetRequest('quit')}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
       {sheet?.k === 'ask' ? (
         <AskSheet
           title={sheet.title}
@@ -1129,11 +1266,11 @@ function RejoinForm({ room }: { room: RoomInfo }) {
   );
 }
 
-function GameOver({ v, onHide }: { v: PlayerView; onHide: () => void }) {
+function GameOver({ v, stats, onHide }: { v: PlayerView; stats: GameStats | null; onHide: () => void }) {
   const total = (i: number) => v.players[i]!.publicVP + (v.players[i]!.vpCards ?? 0);
   const order = v.players.map((_, i) => i).sort((a, b) => total(b) - total(a));
   return (
-    <div className="card" role="dialog" aria-label="Game over" data-testid="game-over">
+    <div className="card endcard" role="dialog" aria-label="Game over" data-testid="game-over">
       <h2>{v.me === v.winner ? 'You win!' : `${nameOf(v, v.winner)} wins!`}</h2>
       <p className="lede">Final scores, hidden victory cards included.</p>
       <div className="seats" style={{ gridTemplateColumns: '1fr' }}>
@@ -1148,15 +1285,170 @@ function GameOver({ v, onHide }: { v: PlayerView; onHide: () => void }) {
       </div>
       <div className="row">
         {v.me != null ? (
-          <button className="btn primary" onClick={() => client.resetRequest()}>
-            New game, same players
+          <button className="btn primary" onClick={() => client.rematch()} data-testid="rematch">
+            Rematch
           </button>
         ) : null}
         <button className="btn ghost" onClick={onHide}>
           Look at the board
         </button>
       </div>
+      {stats ? (
+        <GameStatsView
+          stats={stats}
+          names={v.players.map((_, i) => nameOf(v, i))}
+          colors={v.players.map((p) => p.color)}
+          hexes={v.board.hexes}
+        />
+      ) : null}
     </div>
+  );
+}
+
+const VP_TEXT: Record<VPPart['k'], [string, string]> = {
+  settlement: ['settlement', 'settlements'],
+  city: ['city', 'cities'],
+  longest: ['Longest Road', 'Longest Road'],
+  largest: ['Largest Army', 'Largest Army'],
+  vpCards: ['victory point card', 'victory point cards'],
+  island: ['island bonus', 'island bonuses'],
+  metropolis: ['metropolis', 'metropolises'],
+  defender: ['Defender of Catan', 'Defender of Catan'],
+  merchant: ['merchant', 'merchant'],
+  progress: ['progress card', 'progress cards'],
+};
+
+/** "5 = 3 settlements (3) + Longest Road (2)" (SPEC 5.8). */
+export function breakdownText(parts: VPPart[]): string {
+  const sum = parts.reduce((a, x) => a + x.vp, 0);
+  if (!parts.length) return '0';
+  const each = parts.map((x) => {
+    const [one, many] = VP_TEXT[x.k];
+    const what = x.k === 'longest' || x.k === 'largest' ? one : `${x.n} ${x.n === 1 ? one : many}`;
+    return `${what}${x.hidden ? ', hidden' : ''} (${x.vp})`;
+  });
+  return `${sum} = ${each.join(' + ')}`;
+}
+
+/** A player's score; tap or hover for what it's made of, and how many points they still need. */
+function Score({
+  v,
+  s,
+  p,
+  always,
+}: {
+  v: PlayerView;
+  s: ReturnType<typeof stateFromView>;
+  p: Seat;
+  always: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const parts = vpBreakdown(s, p, p === v.me || v.phase === 'over');
+  const shown = p === v.me && v.hand ? v.hand.totalVP : v.players[p]!.publicVP + (v.players[p]!.vpCards ?? 0);
+  const text = breakdownText(parts);
+  const need = Math.max(0, v.winVP - shown);
+  return (
+    <span className="vpwrap">
+      <button
+        type="button"
+        className="vp"
+        title={text}
+        aria-expanded={open || always}
+        onClick={() => setOpen(!open)}
+        data-testid={`score-${p}`}
+        data-score={shown}
+      >
+        {shown}
+        <small>VP</small>
+      </button>
+      {open || always ? (
+        <span className="breakdown" data-testid={`breakdown-${p}`}>
+          {text}
+          {v.phase === 'play' ? <span className="need"> · needs {need} more</span> : null}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+const PIECE_NAME: Record<string, string> = {
+  road: 'Roads',
+  settlement: 'Settlements',
+  city: 'Cities',
+  ship: 'Ships',
+  knight1: 'Basic knights',
+  knight2: 'Strong knights',
+  knight3: 'Mighty knights',
+  wall: 'City walls',
+};
+
+/** A tiny icon for a piece in the supply. */
+function PieceIcon({ k, color }: { k: string; color: string }) {
+  const f = PCOL[color as 'red'];
+  const e = PEDGE(color as 'red');
+  const body = (() => {
+    switch (k) {
+      case 'road':
+        return <rect x={-8} y={-2.5} width={16} height={5} rx={2} fill={f} stroke={e} strokeWidth={1.2} />;
+      case 'settlement':
+        return <path d="M-6 6V-1L0-7 6-1V6Z" fill={f} stroke={e} strokeWidth={1.2} />;
+      case 'city':
+        return <path d="M-8 6V-2L-4-6 0-2V-1H8V6Z" fill={f} stroke={e} strokeWidth={1.2} />;
+      case 'ship':
+        return (
+          <g>
+            <path d="M-8 1H8L5 6H-5Z" fill={f} stroke={e} strokeWidth={1.2} />
+            <path d="M0 0V-8L5-2Z" fill="#f4ecd6" stroke="#0b1418" strokeWidth={1} />
+          </g>
+        );
+      case 'wall':
+        return (
+          <path d="M-8 6V-1H-5V-4H-2V-1H2V-4H5V-1H8V6Z" fill="#8b8172" stroke="#0b1418" strokeWidth={1.2} />
+        );
+      default: {
+        const lvl = Number(k.slice(-1));
+        return (
+          <g>
+            <path d="M-6-5Q0-8 6-5V0Q6 5 0 7Q-6 5-6 0Z" fill={f} stroke={e} strokeWidth={1.2} />
+            {[...Array(lvl)].map((_, i) => (
+              <circle
+                key={i}
+                cx={(i - (lvl - 1) / 2) * 3.4}
+                cy={0}
+                r={1.2}
+                fill={color === 'black' ? '#e8eaec' : '#0b1418'}
+              />
+            ))}
+          </g>
+        );
+      }
+    }
+  })();
+  return (
+    <svg viewBox="-9 -9 18 18" width={16} height={16} aria-hidden="true">
+      {body}
+    </svg>
+  );
+}
+
+/** How many of each piece a player has left (SPEC 5.11); 0 shows red. */
+function PiecesLeft({ s, p, color }: { s: ReturnType<typeof stateFromView>; p: Seat; color: string }) {
+  const left = piecesLeft(s, p);
+  return (
+    <span className="piecesleft" data-testid={`pieces-${p}`}>
+      {Object.entries(left).map(([k, n]) => (
+        <span
+          key={k}
+          className={`pl${n === 0 ? ' out' : ''}`}
+          data-kind={k}
+          data-n={n}
+          title={`${PIECE_NAME[k]}: ${n} left`}
+        >
+          <PieceIcon k={k} color={color} />
+          {n}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -1300,6 +1592,7 @@ function Tray(props: {
   const me = v.me!;
   const hand = v.hand!;
   const pieces = v.players[me]!.pieces;
+  const left = piecesLeft(stateFromView(v), me);
   const main = mine && v.stage === 'main' && !busy;
   const can = (t: Action['type']) => props.acts.some((a) => a.type === t);
   const builds = [
@@ -1309,8 +1602,18 @@ function Tray(props: {
     ...(sea ? [{ k: 'ship' as const, label: 'Ship', cost: SHIP_COST, left: pieces.ship ?? 0 }] : []),
     ...(ck
       ? [
-          { k: 'knight' as const, label: 'Knight', cost: KNIGHT_COST, left: can('knight') ? 1 : 0 },
-          { k: 'wall' as const, label: 'City wall', cost: WALL_COST, left: can('wall') ? 1 : 0 },
+          {
+            k: 'knight' as const,
+            label: 'Knight',
+            cost: KNIGHT_COST,
+            left: can('knight') ? (left.knight1 ?? 0) : 0,
+          },
+          {
+            k: 'wall' as const,
+            label: 'City wall',
+            cost: WALL_COST,
+            left: can('wall') ? (left.wall ?? 0) : 0,
+          },
         ]
       : [{ k: 'dev' as const, label: 'Dev card', cost: COST.dev, left: v.deckCount }]),
   ];
@@ -1362,7 +1665,17 @@ function Tray(props: {
                 else props.setMode(props.mode === b.k ? null : b.k);
               }}
             >
-              {b.label}
+              <span>
+                {b.label}
+                {b.k !== 'dev' ? (
+                  <span
+                    className={`left${(b.k === 'knight' ? left.knight1 : b.k === 'wall' ? left.wall : b.left) === 0 ? ' out' : ''}`}
+                  >
+                    {' '}
+                    · {b.k === 'knight' ? left.knight1 : b.k === 'wall' ? left.wall : b.left} left
+                  </span>
+                ) : null}
+              </span>
               <span className="cost">
                 {Object.entries(b.cost).flatMap(([r, n]) =>
                   Array.from({ length: n ?? 0 }, (_, i) => (
@@ -1459,8 +1772,13 @@ function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
       {log.map((it, i) => {
         if (it.k === 'chat')
           return (
-            <div key={`c${it.id}`} className="e chat">
-              <b>{it.nick}:</b> {it.text}
+            <div
+              key={`c${it.id}`}
+              className={`e chat${it.cpu ? ' cpu' : ''}`}
+              data-cpu={it.cpu ? 1 : undefined}
+            >
+              <b>{it.nick}</b>
+              {it.cpu ? <span className="cputag">CPU</span> : null}: {it.text}
             </div>
           );
         if (it.k === 'sys')

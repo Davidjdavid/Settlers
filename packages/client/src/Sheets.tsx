@@ -488,6 +488,7 @@ export function MenuSheet({
   onEndGame,
   onSettings,
   onRules,
+  onQuit,
 }: {
   v: PlayerView | null;
   code: string;
@@ -497,6 +498,8 @@ export function MenuSheet({
   onSettings?: () => void;
   /** The game's rules, changed by whoever has the dice. */
   onRules?: () => void;
+  /** "Save and quit" (SPEC 5.7). */
+  onQuit?: () => void;
 }) {
   const link = `${location.origin}/r/${code}`;
   const seated = v?.me != null;
@@ -565,6 +568,11 @@ export function MenuSheet({
             )}
           </div>
         </div>
+        {onQuit ? (
+          <button className="btn" onClick={onQuit} data-testid="menu-quit">
+            Save and quit
+          </button>
+        ) : null}
         {v && seated && v.phase === 'play' ? (
           <button className="btn danger" onClick={onEndGame}>
             End this game and start a new one…

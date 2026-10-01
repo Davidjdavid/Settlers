@@ -1763,3 +1763,395 @@ body.noroom .dock {
   gap: 6px;
   margin: 4px 0;
 }
+
+/* ---------- Milestone 5 ---------- */
+
+/* Dice beside the Roll button (SPEC 5.3) */
+.prompt {
+  flex-wrap: wrap;
+}
+.rolldice {
+  align-items: center;
+  flex: none;
+  padding: 4px 6px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+.rolldice.canroll {
+  cursor: pointer;
+  border-color: var(--line-2);
+  background: rgba(255, 255, 255, 0.04);
+}
+.rolldice.canroll:hover,
+.rolldice.canroll:focus-visible {
+  border-color: #e9b94a;
+  background: rgba(233, 185, 74, 0.12);
+  transform: translateY(-1px);
+}
+.rolldice.tumbling .die {
+  animation: shake 0.12s linear infinite;
+}
+.rolldice.tumbling .die + .die {
+  animation-direction: reverse;
+}
+.rolldice.fade .die {
+  animation: diefade 0.25s ease-out;
+}
+@keyframes diefade {
+  from {
+    opacity: 0.2;
+  }
+}
+
+/* Board zoom (SPEC 5.12) */
+.boardzoom {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.boardzoom #board {
+  width: 100%;
+  height: 100%;
+}
+.zoomctl {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.zoomctl .iconbtn {
+  width: 34px;
+  height: 34px;
+  font: 700 18px/1 var(--ui);
+  color: var(--ink);
+}
+.zoomctl .fit {
+  font-size: 11px;
+}
+
+/* Pieces left and score breakdowns (SPEC 5.8, 5.11) */
+.piecesleft {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.piecesleft .pl {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.piecesleft .pl.out {
+  color: #ff7a6b;
+  font-weight: 700;
+}
+.piecesleft .pl.out svg {
+  opacity: 0.45;
+}
+.bbtn .left {
+  font-size: 11px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.bbtn .left.out {
+  color: #ff7a6b;
+}
+.vpwrap {
+  display: contents;
+}
+button.vp {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.breakdown {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.breakdown .need {
+  color: var(--ink-3);
+}
+
+/* Table talk: CPU lines are marked */
+.e.chat.cpu {
+  color: var(--ink-2);
+  font-style: italic;
+}
+.cputag {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font: 600 10px/16px var(--ui);
+  font-style: normal;
+  background: rgba(157, 159, 147, 0.25);
+}
+
+/* Win celebration (SPEC 5.13) */
+.celebrate {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.celebrate canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.winbanner {
+  position: relative;
+  padding: 14px 28px;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 3px solid var(--c);
+  font: 400 32px/1.1 var(--display);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: bannerin 0.4s ease-out;
+}
+@keyframes bannerin {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
+.endcard {
+  max-height: 100%;
+  overflow-y: auto;
+  max-width: min(760px, 100%);
+}
+
+/* Stats (SPEC 5.4–5.6) */
+.chart {
+  margin: 10px 0;
+}
+.chart figcaption {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.chart figcaption .sub,
+.callouts {
+  color: var(--ink-2);
+  font-weight: 400;
+  font-size: 12px;
+}
+.chart svg {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  display: block;
+}
+.tablewrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.stattable {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.stattable caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+.stattable th,
+.stattable td {
+  text-align: left;
+  padding: 4px 10px 4px 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.stattable th {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.stattable small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.stattable .group th {
+  color: var(--ink);
+  font-weight: 700;
+  padding-top: 12px;
+}
+.stattable .parts span {
+  display: block;
+}
+.stattable .dot,
+.saved .dot,
+.profile .dot,
+.past .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: -1px;
+  border: 1px solid #0b1418;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.muted {
+  color: var(--ink-3);
+}
+.card.wide {
+  width: min(900px, 100%);
+}
+.statgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+.statgrid > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.pastlist {
+  display: grid;
+  gap: 6px;
+}
+.past {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.past .who,
+.saved .who {
+  margin-right: 10px;
+  white-space: nowrap;
+}
+.merge {
+  margin-top: 16px;
+  color: var(--ink-2);
+}
+.merge .row {
+  flex-wrap: wrap;
+}
+
+/* Saved games and profiles (SPEC 5.1, 5.7) */
+.savedlist {
+  display: grid;
+  gap: 8px;
+}
+.saved {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.saved .info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.saved .scores {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.saved .acts {
+  display: grid;
+  gap: 6px;
+}
+.mappreview {
+  display: block;
+}
+@container app (max-width: 440px) {
+  .saved {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .saved .acts {
+    grid-column: 1 / -1;
+    grid-auto-flow: column;
+  }
+}
+.profiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+.profile {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--ink);
+  font: 500 14px var(--ui);
+  cursor: pointer;
+}
+.profile.on {
+  border-color: #e9b94a;
+  background: rgba(233, 185, 74, 0.15);
+}
+.profile:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.profile.add {
+  border-style: dashed;
+  color: var(--ink-2);
+}
+.newprofile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.newprofile .text {
+  width: 150px;
+}
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+.seg .btn.on {
+  border-color: #e9b94a;
+}
+.overlay.endoverlay {
+  position: fixed;
+  z-index: 50;
+  background: rgba(5, 14, 18, 0.6);
+  pointer-events: auto;
+  overflow-y: auto;
+  place-items: start center;
+}
+.endoverlay .endcard {
+  max-height: none;
+  margin: 12px auto;
+}
