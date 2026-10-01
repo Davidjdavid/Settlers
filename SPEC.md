@@ -13,7 +13,7 @@ Status: **Milestone 1 (base game) — agreed, in progress.**
 - 2–4 players. Any seated player can start the game once at least 2 are seated.
 - **Rejoin:** your browser keeps a secret seat token. A refresh, a dropped connection or a server restart puts you back in your seat, in the middle of your turn if it was your turn. No turn timers. The game waits for a disconnected player.
 - Each seat shows whether that player is connected.
-- **Lost seat token** (cleared browser, new device): any connected player can hand a disconnected seat to a newcomer. They have to confirm twice, and everyone at the table sees a warning saying who took which seat.
+- **Lost seat token** (cleared browser, new device): open the room link. You'll be watching, with a button for each disconnected seat. Taking one needs two confirmations, everyone gets a warning saying whose seat was taken, and the old device's token stops working. A seat whose player is still connected can't be taken.
 - **Starting a new game in the same room:** any one player can do it, but they have to confirm twice, and everyone gets a warning first. The old game stays saved in the history.
 
 ### Saving
