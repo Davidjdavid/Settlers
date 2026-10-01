@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–3 (base game, Seafarers, Cities & Knights) and the CPU player done. Milestone 4 (table polish) agreed and being built.**
+Status: **Milestones 1–4 (base game, Seafarers, Cities & Knights, table polish) and the CPU player done and live.**
 
 ## Milestone 1: base game
 
@@ -117,7 +117,7 @@ The rules are written down, with your decisions, in **docs/rules/cities-and-knig
 
 ## Milestone 4: Table polish
 
-**Status: agreed (your answers are in 4.7). Being implemented.**
+**Status: done and live (deployed 2026-10-01).**
 
 These come from years of misclicks in Catan Universe, so they are about feel. If one of them makes the game less reliable, reliability still wins.
 
