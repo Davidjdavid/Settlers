@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  COST, DEV_PLAY, has, legalCities, legalRoads, legalSettlements, legalSetupRoads, legalSetupVerts,
-  RES, robberVictims, stateFromView, type DevPlayable, type PlayerView, type Seat,
+  COST, DEV_PLAY, SHIP_COST, goldDue, has, legalActions, RES, stateFromView, type Action, type DevPlayable,
+  type PlayerView, type Seat,
 } from '@settlers/engine'; // prettier-ignore
 import type { LogItem, RoomInfo } from '@settlers/server/protocol';
 import { BRAND_SVG, DEV_HELP, DEV_LABEL, PCOL, RES_LABEL, TILE_COLOR, iconSVG } from './art';
@@ -11,23 +11,28 @@ import { Board, NO_TARGETS, type Targets } from './Board';
 import { Dice } from './anim';
 import { client, type Status } from './net';
 import {
-  Chips, ConfirmTwice, DiscardSheet, MenuSheet, MonoSheet, PlentySheet, TradeSheet, VictimSheet,
+  Chips, ConfirmTwice, DiscardSheet, GoldSheet, MenuSheet, MonoSheet, PieceSheet, PlentySheet, TradeSheet,
+  VictimSheet,
 } from './Sheets'; // prettier-ignore
-import { eventText, listNames, nameOf } from './text';
+import { eventText, listNames, nameOf, routeName } from './text';
 
-type Mode = null | 'road' | 'settlement' | 'city';
+type Mode = null | 'road' | 'settlement' | 'city' | 'ship' | 'move';
 type SheetState =
   | null
   | { k: 'trade' }
   | { k: 'discard' }
   | { k: 'plenty' }
   | { k: 'mono' }
-  | { k: 'victim'; hex: number; victims: Seat[] }
+  | { k: 'victim'; hex: number; victims: Seat[]; kind: 'robber' | 'pirate' }
+  | { k: 'piece'; options: Action[] }
+  | { k: 'gold' }
   | { k: 'menu' }
   | { k: 'endGame' }
   | { k: 'claim'; seat: number; nick: string };
 
-const MODE_TEXT: Record<'road' | 'settlement' | 'city', [string, string]> = {
+const MODE_TEXT: Record<Exclude<Mode, null>, [string, string]> = {
+  ship: ['Choose where to build a ship', 'Ships sail from your settlements and other ships.'],
+  move: ['Choose a ship to move, then where it goes', 'Only the ship at the open end of a route can move.'],
   road: ['Choose where to build a road', 'Roads join your own roads or buildings.'],
   settlement: [
     'Choose where to build a settlement',
@@ -51,6 +56,7 @@ export function Game({
 }) {
   const [mode, setMode] = useState<Mode>(null);
   const [sel, setSel] = useState<number | null>(null);
+  const [moveFrom, setMoveFrom] = useState<number | null>(null);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [hideOver, setHideOver] = useState(false);
   const me = v.me;
@@ -62,10 +68,20 @@ export function Game({
   useEffect(() => {
     if (!mine || v.stage !== 'main') setMode(null);
     if (!mine || v.stage !== 'setup') setSel(null);
+    setMoveFrom(null);
   }, [mine, v.stage, v.seq]);
   useEffect(() => {
     if (v.phase === 'play') setHideOver(false);
   }, [v.phase]);
+  useEffect(() => {
+    if (mode !== 'move') setMoveFrom(null);
+  }, [mode]);
+  // Pop the gold sheet open when you're owed gold.
+  const goldOwed = me != null ? goldDue(s, me) : 0;
+  useEffect(() => {
+    if (goldOwed) setSheet({ k: 'gold' });
+    else setSheet((x) => (x?.k === 'gold' ? null : x));
+  }, [goldOwed]);
   // Pop the discard sheet open automatically when you owe a discard.
   const owes = me != null && v.stage === 'discard' && v.discard?.[me] != null;
   useEffect(() => {
@@ -73,58 +89,103 @@ export function Game({
     else setSheet((x) => (x?.k === 'discard' ? null : x));
   }, [owes]);
 
-  /* ---------- Board targets ---------- */
+  /* ---------- Board targets: whatever the engine says this seat can do ---------- */
+  const acts = mine && !busy ? legalActions(s, me) : [];
+  const edgeActs = (e: number): Action[] => {
+    if (v.stage === 'setup') return acts.filter((a) => a.type === 'setup' && a.v === sel && a.e === e);
+    if (v.stage === 'roads')
+      return acts.filter((a) => (a.type === 'freeRoad' || a.type === 'freeShip') && a.e === e);
+    if (v.stage !== 'main') return [];
+    if (mode === 'road') return acts.filter((a) => a.type === 'road' && a.e === e);
+    if (mode === 'ship') return acts.filter((a) => a.type === 'ship' && a.e === e);
+    if (mode === 'move' && moveFrom != null)
+      return acts.filter((a) => a.type === 'moveShip' && a.from === moveFrom && a.to === e);
+    return [];
+  };
+  const uniq = (xs: number[]) => [...new Set(xs)];
   let targets: Targets = NO_TARGETS;
-  if (mine && !busy) {
+  if (acts.length) {
     if (v.stage === 'setup') {
+      const verts = uniq(acts.flatMap((a) => (a.type === 'setup' ? [a.v] : [])));
       targets =
         sel == null
-          ? { ...NO_TARGETS, verts: legalSetupVerts(s) }
+          ? { ...NO_TARGETS, verts }
           : {
-              verts: legalSetupVerts(s).filter((x) => x !== sel),
-              edges: legalSetupRoads(s, sel),
+              verts: verts.filter((x) => x !== sel),
+              edges: uniq(acts.flatMap((a) => (a.type === 'setup' && a.v === sel ? [a.e] : []))),
               hexes: [],
               ghost: sel,
               dimVerts: true,
             };
     } else if (v.stage === 'robber') {
-      targets = { ...NO_TARGETS, hexes: v.board.hexes.map((_, i) => i).filter((i) => i !== v.board.robber) };
+      targets = {
+        ...NO_TARGETS,
+        hexes: uniq(acts.flatMap((a) => (a.type === 'robber' || a.type === 'pirate' ? [a.hex] : []))),
+      };
     } else if (v.stage === 'roads') {
-      targets = { ...NO_TARGETS, edges: legalRoads(s, me) };
+      targets = {
+        ...NO_TARGETS,
+        edges: uniq(acts.flatMap((a) => (a.type === 'freeRoad' || a.type === 'freeShip' ? [a.e] : []))),
+      };
     } else if (v.stage === 'main' && mode) {
-      if (mode === 'road') targets = { ...NO_TARGETS, edges: legalRoads(s, me) };
-      if (mode === 'settlement') targets = { ...NO_TARGETS, verts: legalSettlements(s, me) };
-      if (mode === 'city') targets = { ...NO_TARGETS, verts: legalCities(s, me) };
+      if (mode === 'road' || mode === 'ship') {
+        targets = { ...NO_TARGETS, edges: uniq(acts.flatMap((a) => (a.type === mode ? [a.e] : []))) };
+      }
+      if (mode === 'settlement')
+        targets = { ...NO_TARGETS, verts: acts.flatMap((a) => (a.type === 'settlement' ? [a.v] : [])) };
+      if (mode === 'city')
+        targets = { ...NO_TARGETS, verts: acts.flatMap((a) => (a.type === 'city' ? [a.v] : [])) };
+      if (mode === 'move') {
+        targets =
+          moveFrom == null
+            ? { ...NO_TARGETS, edges: uniq(acts.flatMap((a) => (a.type === 'moveShip' ? [a.from] : []))) }
+            : {
+                ...NO_TARGETS,
+                edges: uniq(
+                  acts.flatMap((a) => (a.type === 'moveShip' && a.from === moveFrom ? [a.to] : [])),
+                ),
+                ghostEdge: moveFrom,
+              };
+      }
     }
   }
 
+  const doAct = (a: Action, after?: () => void) => void client.act(a).then((r) => r.ok && after?.());
   const onVert = (x: number) => {
     if (!mine) return;
     if (v.stage === 'setup') setSel(x);
-    else if (mode === 'settlement')
-      void client.act({ type: 'settlement', v: x }).then((r) => r.ok && setMode(null));
-    else if (mode === 'city') void client.act({ type: 'city', v: x }).then((r) => r.ok && setMode(null));
+    else if (mode === 'settlement') doAct({ type: 'settlement', v: x }, () => setMode(null));
+    else if (mode === 'city') doAct({ type: 'city', v: x }, () => setMode(null));
   };
   const onEdge = (e: number) => {
     if (!mine) return;
-    if (v.stage === 'setup' && sel != null)
-      void client.act({ type: 'setup', v: sel, e }).then(() => setSel(null));
-    else if (v.stage === 'roads') void client.act({ type: 'freeRoad', e });
-    else if (mode === 'road') void client.act({ type: 'road', e }).then((r) => r.ok && setMode(null));
+    if (mode === 'move' && moveFrom == null) return setMoveFrom(e);
+    const options = edgeActs(e);
+    const done = () => {
+      setSel(null);
+      if (v.stage === 'main') setMode(null);
+    };
+    if (options.length === 1) doAct(options[0]!, done);
+    else if (options.length > 1) setSheet({ k: 'piece', options });
   };
   const onHex = (h: number) => {
     if (!mine || v.stage !== 'robber') return;
-    const victims = robberVictims(s, me, h);
-    if (victims.length > 1) setSheet({ k: 'victim', hex: h, victims });
-    else void client.act({ type: 'robber', hex: h, victim: victims[0] ?? null });
+    const here = acts.filter((a) => (a.type === 'robber' || a.type === 'pirate') && a.hex === h);
+    const kind = here[0]?.type === 'pirate' ? 'pirate' : 'robber';
+    const victims = uniq(
+      here.flatMap((a) =>
+        (a.type === 'robber' || a.type === 'pirate') && a.victim != null ? [a.victim] : [],
+      ),
+    );
+    if (victims.length > 1) setSheet({ k: 'victim', hex: h, victims, kind });
+    else if (here[0]) doAct(here[0]);
   };
 
   const canPlay = (c: DevPlayable) =>
-    mine &&
-    !v.devPlayed &&
-    (v.stage === 'preroll' || v.stage === 'main') &&
-    (v.hand?.dev[c] ?? 0) > 0 &&
-    (c !== 'road' || (v.players[me!]!.pieces.road > 0 && legalRoads(s, me!).length > 0));
+    acts.some(
+      (a) =>
+        a.type === { knight: 'playKnight', road: 'playRoads', plenty: 'playPlenty', mono: 'playMono' }[c],
+    );
   const play = (c: DevPlayable) => {
     if (c === 'knight') void client.act({ type: 'playKnight' });
     if (c === 'road') void client.act({ type: 'playRoads' });
@@ -197,18 +258,31 @@ export function Game({
           buttons: [{ label: 'Choose cards', on: () => setSheet({ k: 'discard' }), primary: true }],
         }
       : { title: 'A 7 was rolled', sub: `Waiting for ${listNames(v, waiting)} to discard.` };
+  } else if (v.stage === 'gold') {
+    const waiting = Object.keys(v.sea?.gold?.owed ?? {}).map(Number);
+    pm = goldOwed
+      ? {
+          title: `Gold! Pick ${goldOwed} resource${goldOwed === 1 ? '' : 's'}`,
+          sub: 'A gold field pays any resource you like.',
+          mine: true,
+          buttons: [{ label: 'Choose', on: () => setSheet({ k: 'gold' }), primary: true }],
+        }
+      : { title: 'Gold!', sub: `Waiting for ${listNames(v, waiting)} to pick resources.` };
   } else if (v.stage === 'robber') {
+    const sea = v.rules.modules.includes('seafarers');
     pm = mine
       ? {
-          title: 'Move the robber',
-          sub: 'Tap any other tile. It stops producing, and you steal a card from someone next to it.',
+          title: sea ? 'Move the robber or the pirate' : 'Move the robber',
+          sub: sea
+            ? 'Tap a land tile for the robber, or a sea tile for the pirate. You steal from someone next to it.'
+            : 'Tap any other tile. It stops producing, and you steal a card from someone next to it.',
           mine: true,
         }
-      : { title: `${cur} is moving the robber`, sub: '' };
+      : { title: `${cur} is moving the ${sea ? 'robber or pirate' : 'robber'}`, sub: '' };
   } else if (v.stage === 'roads') {
     pm = mine
       ? {
-          title: `Place ${v.freeRoads} free road${v.freeRoads === 1 ? '' : 's'}`,
+          title: `Place ${v.freeRoads} free ${v.rules.modules.includes('seafarers') ? 'road or ship' : 'road'}${v.freeRoads === 1 ? '' : 's'}`,
           sub: 'Road Building: tap a glowing edge.',
           mine: true,
           buttons: [{ label: 'Done', on: () => void client.act({ type: 'skipRoads' }) }],
@@ -383,7 +457,16 @@ export function Game({
       <section className="dock-wrap" aria-label="Your cards and actions">
         <Offers v={v} busy={busy} />
         {me != null && v.hand ? (
-          <Tray v={v} mine={mine} busy={busy} mode={mode} setMode={setMode} canPlay={canPlay} play={play} />
+          <Tray
+            v={v}
+            mine={mine}
+            busy={busy}
+            mode={mode}
+            setMode={setMode}
+            canPlay={canPlay}
+            play={play}
+            canMove={acts.some((a) => a.type === 'moveShip')}
+          />
         ) : null}
       </section>
 
@@ -431,7 +514,7 @@ export function Game({
                 </span>
                 {v.longest === i || v.largest === i ? (
                   <span className="badges">
-                    {v.longest === i ? <span className="badge">Longest Road</span> : null}
+                    {v.longest === i ? <span className="badge">{routeName(v)}</span> : null}
                     {v.largest === i ? <span className="badge">Largest Army</span> : null}
                   </span>
                 ) : null}
@@ -467,9 +550,32 @@ export function Game({
       {sheet?.k === 'trade' ? <TradeSheet v={v} onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'discard' && owes ? <DiscardSheet v={v} onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'plenty' ? <PlentySheet v={v} onClose={() => setSheet(null)} /> : null}
+      {sheet?.k === 'gold' && goldOwed ? (
+        <GoldSheet v={v} due={goldOwed} onClose={() => setSheet(null)} />
+      ) : null}
+      {sheet?.k === 'piece' ? (
+        <PieceSheet
+          options={sheet.options}
+          onPick={(a) => {
+            setSheet(null);
+            void client.act(a).then((r) => {
+              if (!r.ok) return;
+              setSel(null);
+              if (v.stage === 'main') setMode(null);
+            });
+          }}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
       {sheet?.k === 'mono' ? <MonoSheet onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'victim' ? (
-        <VictimSheet v={v} hex={sheet.hex} victims={sheet.victims} onClose={() => setSheet(null)} />
+        <VictimSheet
+          v={v}
+          hex={sheet.hex}
+          victims={sheet.victims}
+          kind={sheet.kind}
+          onClose={() => setSheet(null)}
+        />
       ) : null}
       {sheet?.k === 'menu' ? (
         <MenuSheet
@@ -626,8 +732,10 @@ function Tray(props: {
   setMode: (m: Mode) => void;
   canPlay: (c: DevPlayable) => boolean;
   play: (c: DevPlayable) => void;
+  canMove: boolean;
 }) {
   const { v, mine, busy } = props;
+  const sea = v.rules.modules.includes('seafarers');
   const me = v.me!;
   const hand = v.hand!;
   const pieces = v.players[me]!.pieces;
@@ -636,6 +744,7 @@ function Tray(props: {
     { k: 'road' as const, label: 'Road', cost: COST.road, left: pieces.road },
     { k: 'settlement' as const, label: 'Settlement', cost: COST.settlement, left: pieces.settlement },
     { k: 'city' as const, label: 'City', cost: COST.city, left: pieces.city },
+    ...(sea ? [{ k: 'ship' as const, label: 'Ship', cost: SHIP_COST, left: pieces.ship ?? 0 }] : []),
     { k: 'dev' as const, label: 'Dev card', cost: COST.dev, left: v.deckCount },
   ];
   const devs = [
@@ -682,7 +791,7 @@ function Tray(props: {
               {b.label}
               <span className="cost">
                 {Object.entries(b.cost).flatMap(([r, n]) =>
-                  Array.from({ length: n }, (_, i) => (
+                  Array.from({ length: n ?? 0 }, (_, i) => (
                     <i key={`${r}${i}`} style={{ ['--c' as string]: TILE_COLOR[r as 'wood'] }} />
                   )),
                 )}
@@ -690,6 +799,24 @@ function Tray(props: {
             </button>
           );
         })}
+        {sea ? (
+          <button
+            className={`btn bbtn${props.mode === 'move' ? ' on' : ''}`}
+            disabled={!main || !props.canMove}
+            data-testid="move-ship"
+            onClick={() => props.setMode(props.mode === 'move' ? null : 'move')}
+            title="Move the ship at the open end of a route"
+          >
+            Move ship
+            <span className="cost" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+              {v.rules.houseRules.freeShipMoves
+                ? 'any number'
+                : v.sea && v.sea.movesThisTurn
+                  ? 'used'
+                  : 'once a turn'}
+            </span>
+          </button>
+        ) : null}
       </div>
       {devs.length ? (
         <div className="devrow">

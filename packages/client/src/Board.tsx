@@ -11,6 +11,8 @@ export interface Targets {
   /** Selected setup corner, drawn as a ghost settlement. */
   ghost: number | null;
   dimVerts?: boolean;
+  /** A ship being moved, drawn highlighted. */
+  ghostEdge?: number | null;
 }
 
 export const NO_TARGETS: Targets = { verts: [], edges: [], hexes: [], ghost: null };
@@ -54,15 +56,18 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
   out.push(
     `<rect ${sea} fill="#12404f"/><rect ${sea} fill="url(#waves)"/><rect ${sea} fill="none" stroke="#1d5767" stroke-width="2"/>`,
   );
-  for (const h of g.hexes)
+  // Beaches under land only; sea hexes are open water.
+  const landHexes = g.hexes.filter((_, i) => board.hexes[i]!.t !== 'sea');
+  for (const h of landHexes)
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.1 * K)}" fill="#d9c69a"/>`);
-  for (const h of g.hexes)
+  for (const h of landHexes)
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.035 * K)}" fill="#c9b382"/>`);
   for (const pt of board.ports) {
     const e = g.edges[pt.e]!;
     const a = g.verts[e.a]!;
     const b = g.verts[e.b]!;
-    const h = g.hexes[e.hexes[0]!]!;
+    // Point the harbor away from its land hex, towards the water.
+    const h = g.hexes[e.hexes.find((x) => board.hexes[x]!.t !== 'sea') ?? e.hexes[0]!]!;
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2;
     const L = Math.hypot(mx - h.x, my - h.y);
@@ -94,16 +99,37 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
     const h = g.hexes[i]!;
     const cx = h.x * K;
     const cy = h.y * K;
+    if (hx.t === 'sea') {
+      // A faint outline so you can see where the pirate can go.
+      out.push(
+        `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="rgba(255,255,255,.025)" stroke="rgba(160,215,225,.16)" stroke-width="1.5" data-sea="${i}"/>`,
+      );
+      return;
+    }
+    if (hx.t === 'fog') {
+      out.push(
+        `<polygon points="${hexPts(cx, cy, 0.965 * K)}" fill="${TILE_COLOR.fog}" stroke="rgba(10,27,35,.35)" stroke-width="2" data-fog="${i}"/>`,
+      );
+      out.push(
+        `<use href="#g-fog" x="${f1(cx - 0.45 * K)}" y="${f1(cy - 0.45 * K)}" width="${f1(0.9 * K)}" height="${f1(0.9 * K)}" opacity=".85"/>`,
+      );
+      out.push(
+        `<text x="${f1(cx)}" y="${f1(cy + 0.55 * K)}" text-anchor="middle" font-size="${0.17 * K}" fill="#e8eef0" opacity=".8">?</text>`,
+      );
+      return;
+    }
     out.push(
       `<polygon points="${hexPts(cx, cy, 0.965 * K)}" fill="${TILE_COLOR[hx.t]}" stroke="rgba(10,27,35,.35)" stroke-width="2"/>`,
     );
     out.push(
-      `<polygon points="${hexPts(cx, cy, 0.8 * K)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>`,
+      hx.t === 'gold'
+        ? `<polygon points="${hexPts(cx, cy, 0.86 * K)}" fill="none" stroke="#ffe27a" stroke-width="3" opacity=".75"/>`
+        : `<polygon points="${hexPts(cx, cy, 0.8 * K)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>`,
     );
     DECOR.forEach(([ang, rad], j) => {
       if ((i + j) % 6 === 2) return;
       const a = (Math.PI / 180) * ang;
-      const s = (hx.t === 'ore' ? 0.42 : hx.t === 'desert' ? 0.36 : 0.34) * K;
+      const s = (hx.t === 'ore' ? 0.42 : hx.t === 'desert' ? 0.36 : hx.t === 'gold' ? 0.38 : 0.34) * K;
       out.push(
         `<use href="#g-${hx.t}" x="${f1(cx + Math.cos(a) * rad * K - s / 2)}" y="${f1(cy + Math.sin(a) * rad * K - s / 2)}" width="${f1(s)}" height="${f1(s)}" opacity="${hx.t === 'desert' ? 0.7 : 0.85}"/>`,
       );
@@ -134,6 +160,34 @@ function robberSVG(g: Geometry, i: number): string {
   return `<g class="piece" data-robber="${i}"><ellipse cx="${f1(x)}" cy="${f1(y + 0.3 * K)}" rx="${0.19 * K}" ry="${0.06 * K}" fill="rgba(0,0,0,.35)"/><path d="M${f1(x - 0.16 * K)} ${f1(y + 0.29 * K)}Q${f1(x - 0.17 * K)} ${f1(y - 0.02 * K)} ${f1(x)} ${f1(y - 0.07 * K)}Q${f1(x + 0.17 * K)} ${f1(y - 0.02 * K)} ${f1(x + 0.16 * K)} ${f1(y + 0.29 * K)}Z" fill="#20242b" stroke="#efe7d2" stroke-width="2.2"/><circle cx="${f1(x)}" cy="${f1(y - 0.17 * K)}" r="${0.105 * K}" fill="#20242b" stroke="#efe7d2" stroke-width="2.2"/></g>`;
 }
 
+/** A small boat on an edge, pointing along it. */
+function shipSVG(g: Geometry, e: number, color: string, isFresh: boolean, lifted: boolean): string {
+  const E = g.edges[e]!;
+  const a = g.verts[E.a]!;
+  const b = g.verts[E.b]!;
+  const x = ((a.x + b.x) / 2) * K;
+  const y = ((a.y + b.y) / 2) * K;
+  const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  const u = 0.11 * K;
+  return `<g class="piece${isFresh ? ' fresh' : ''}" data-ship="${e}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})"${lifted ? ' opacity=".45"' : ''}>
+    <path d="M${f1(-2.6 * u)} ${f1(-0.2 * u)}L${f1(2.6 * u)} ${f1(-0.2 * u)}L${f1(1.7 * u)} ${f1(1.1 * u)}L${f1(-1.7 * u)} ${f1(1.1 * u)}Z" fill="${color}" stroke="#0b1418" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M${f1(-0.1 * u)} ${f1(-0.3 * u)}V${f1(-2.4 * u)}L${f1(1.5 * u)} ${f1(-0.6 * u)}Z" fill="#f4ecd6" stroke="#0b1418" stroke-width="1.6" stroke-linejoin="round"/>
+  </g>`;
+}
+
+function pirateSVG(g: Geometry, i: number): string {
+  const h = g.hexes[i]!;
+  const x = h.x * K;
+  const y = h.y * K;
+  const u = 0.13 * K;
+  return `<g class="piece" data-pirate="${i}" transform="translate(${f1(x)} ${f1(y)})">
+    <ellipse cx="0" cy="${f1(1.5 * u)}" rx="${f1(3 * u)}" ry="${f1(0.6 * u)}" fill="rgba(0,0,0,.35)"/>
+    <path d="M${f1(-3 * u)} 0L${f1(3 * u)} 0L${f1(2 * u)} ${f1(1.5 * u)}L${f1(-2 * u)} ${f1(1.5 * u)}Z" fill="#20242b" stroke="#efe7d2" stroke-width="2"/>
+    <path d="M${f1(-0.2 * u)} ${f1(-0.1 * u)}V${f1(-3.2 * u)}L${f1(2 * u)} ${f1(-0.8 * u)}Z" fill="#20242b" stroke="#efe7d2" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${f1(0.8 * u)}" cy="${f1(-1.6 * u)}" r="${f1(0.35 * u)}" fill="#efe7d2"/>
+  </g>`;
+}
+
 function roadLine(g: Geometry, e: number, inset: number) {
   const E = g.edges[e]!;
   const a = g.verts[E.a]!;
@@ -157,7 +211,9 @@ export function Board(props: {
   const { view, targets } = props;
   const g = geometryFor(view.board.hexes);
   const vb = useMemo(() => viewBox(g), [g]);
-  const staticHtml = useMemo(() => staticSVG(view.board, g, vb), [view.board.hexes, view.board.ports, g, vb]);
+  // Hexes change when fog is discovered, so the key includes their terrain.
+  const hexKey = view.board.hexes.map((h) => `${h.t}${h.n}`).join(',');
+  const staticHtml = useMemo(() => staticSVG(view.board, g, vb), [hexKey, view.board.ports, g, vb]);
   const seen = useRef<Set<string> | null>(null);
 
   const sum = view.dice ? view.dice[0] + view.dice[1] : 0;
@@ -181,7 +237,13 @@ export function Board(props: {
       `<g class="piece${fresh(`e${e}:${p}`) ? ' fresh' : ''}" data-road="${e}" data-owner="${p}"><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#0b1418" stroke-width="${0.22 * K}" stroke-linecap="round"/><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${col}" stroke-width="${0.13 * K}" stroke-linecap="round"/></g>`,
     );
   });
-  parts.push(robberSVG(g, view.board.robber));
+  const ships = view.sea?.ships ?? [];
+  ships.forEach((p, e) => {
+    if (p == null) return;
+    parts.push(shipSVG(g, e, PCOL[view.players[p]!.color], fresh(`s${e}:${p}`), e === targets.ghostEdge));
+  });
+  if (view.board.robber >= 0) parts.push(robberSVG(g, view.board.robber));
+  if ((view.board.pirate ?? -1) >= 0) parts.push(pirateSVG(g, view.board.pirate!));
   view.verts.forEach((b, v) => {
     if (!b) return;
     const V = g.verts[v]!;

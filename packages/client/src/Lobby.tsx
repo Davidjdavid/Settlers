@@ -1,8 +1,8 @@
 /* Login, home and lobby screens. */
 
 import { useState } from 'react';
-import { COLORS, type Color } from '@settlers/engine';
-import type { RoomInfo } from '@settlers/server/protocol';
+import { COLORS, SCENARIOS, type Color } from '@settlers/engine';
+import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
 import { BRAND_SVG, PCOL, PNAME } from './art';
 import { client, getStored } from './net';
 
@@ -103,6 +103,8 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const free = COLORS.filter((c) => !taken.has(c));
   const pick = color && !taken.has(color) ? color : (free[0] ?? null);
   const link = `${location.origin}/r/${room.code}`;
+  const scenario = SCENARIOS[room.options.scenario]!;
+  const fits = scenario.players.includes(room.seats.length);
   return (
     <div className="center">
       <div className="card" data-testid="lobby">
@@ -159,10 +161,11 @@ export function Lobby({ room }: { room: RoomInfo }) {
                 ))}
               </div>
             </div>
+            <Options room={room} editable />
             <div className="row">
               <button
                 className="btn primary"
-                disabled={room.seats.length < 2}
+                disabled={!fits}
                 onClick={() => client.start()}
                 data-testid="start"
               >
@@ -173,9 +176,9 @@ export function Lobby({ room }: { room: RoomInfo }) {
               </button>
             </div>
             <p className="hint">
-              {room.seats.length < 2
-                ? 'Waiting for at least one more player.'
-                : 'Anyone seated can start when everyone is here.'}
+              {fits
+                ? 'Anyone seated can start when everyone is here.'
+                : `${scenario.name} needs ${scenario.players.join(' or ')} players.`}
             </p>
           </>
         ) : room.seats.length < 4 ? (
@@ -185,6 +188,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
               if (nick.trim() && pick) client.join(nick.trim(), pick);
             }}
           >
+            <Options room={room} editable={false} />
             <div className="field">
               <label htmlFor="nick">Nickname</label>
               <input
@@ -220,6 +224,86 @@ export function Lobby({ room }: { room: RoomInfo }) {
         ) : (
           <p className="hint">The table is full.</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+const SCENARIO_LIST: { id: RoomOptions['scenario']; label: string }[] = [
+  { id: 'classic', label: 'Classic' },
+  { id: 'heading-for-new-shores', label: 'Seafarers: Heading for New Shores' },
+];
+
+const HOUSE_RULES: { k: keyof RoomOptions['houseRules']; label: string; seafarers?: boolean }[] = [
+  { k: 'no7FirstRound', label: 'No 7s in the first round' },
+  { k: 'bank3to1', label: '3:1 bank trades for everyone' },
+  { k: 'freeShipMoves', label: 'Move ships as often as you like', seafarers: true },
+];
+
+/** Scenario, points to win and house rules. Seated players edit; everyone sees them. */
+function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
+  const o = room.options;
+  const scenario = SCENARIOS[o.scenario]!;
+  const sea = scenario.modules.includes('seafarers');
+  const set = (next: RoomOptions) => client.setOptions(next);
+  const check = { display: 'flex', gap: 8, alignItems: 'center', textTransform: 'none', letterSpacing: 0, fontSize: 14, color: 'var(--ink)', fontWeight: 500 } as const; // prettier-ignore
+  return (
+    <div className="field" data-testid="options">
+      <label>Game</label>
+      <div className="row">
+        {SCENARIO_LIST.map((x) => (
+          <button
+            key={x.id}
+            type="button"
+            className={`btn small${o.scenario === x.id ? ' on' : ''}`}
+            disabled={!editable}
+            data-testid={`scenario-${x.id}`}
+            onClick={() => set({ ...o, scenario: x.id, winVP: SCENARIOS[x.id]!.winVP })}
+          >
+            {x.label}
+          </button>
+        ))}
+      </div>
+      <p className="hint" style={{ margin: '2px 0 6px' }}>
+        {scenario.players.join(' or ')} players
+        {sea && scenario.specialVP?.newIsland
+          ? ` · ${scenario.specialVP.newIsland} points for each new island you settle`
+          : ''}
+      </p>
+      <label>Points to win</label>
+      <div className="ctl" style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          disabled={!editable || o.winVP <= 5}
+          onClick={() => set({ ...o, winVP: o.winVP - 1 })}
+          aria-label="Fewer points"
+        >
+          −
+        </button>
+        <output data-testid="win-vp">{o.winVP}</output>
+        <button
+          type="button"
+          disabled={!editable || o.winVP >= 30}
+          onClick={() => set({ ...o, winVP: o.winVP + 1 })}
+          aria-label="More points"
+        >
+          +
+        </button>
+      </div>
+      <label>House rules</label>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {HOUSE_RULES.filter((h) => !h.seafarers || sea).map((h) => (
+          <label key={h.k} style={check}>
+            <input
+              type="checkbox"
+              checked={!!o.houseRules[h.k]}
+              disabled={!editable}
+              data-testid={`rule-${h.k}`}
+              onChange={(e) => set({ ...o, houseRules: { ...o.houseRules, [h.k]: e.target.checked } })}
+            />
+            {h.label}
+          </label>
+        ))}
       </div>
     </div>
   );

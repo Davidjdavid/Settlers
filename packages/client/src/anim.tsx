@@ -180,6 +180,12 @@ function flightsFor(e: GameEvent, v: PlayerView): Flight[] {
     case 'plenty':
       move(cardsOf(e.got), bankSpot(), playerSpot(e.p));
       break;
+    case 'gold':
+      move(cardsOf(e.got), bankSpot(), playerSpot(e.p));
+      break;
+    case 'discover':
+      if (e.got) move(cardsOf(e.got), hexScreenPoint(e.h), playerSpot(e.p));
+      break;
     case 'buyDev':
       move([{ kind: 'dev' }], bankSpot(), playerSpot(e.p));
       break;

@@ -143,6 +143,16 @@ describe('rooms', () => {
     expect(c.last('error').text).toMatch(/started/);
   });
 
+  it('the mover gets the new state before the ack', () => {
+    const { code, conns } = table(2);
+    send(rooms, conns[0]!, { t: 'start' });
+    const s = state(code);
+    const turn = connFor(conns, s, s.turn);
+    turn.clear();
+    send(rooms, turn, { t: 'act', id: 'order', action: legalActions(s, s.turn)[0]! });
+    expect(turn.msgs.map((m) => m.t)).toEqual(['update', 'ack']);
+  });
+
   it('only the player whose turn it is can move, and resends are applied once', () => {
     const { code, conns } = table(3);
     send(rooms, conns[0]!, { t: 'start' });

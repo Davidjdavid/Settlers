@@ -8,7 +8,7 @@
 
 import { useSyncExternalStore } from 'react';
 import type { Action, Color, PlayerView } from '@settlers/engine';
-import type { ClientMsg, LogItem, RoomInfo, ServerMsg } from '@settlers/server/protocol';
+import type { ClientMsg, LogItem, RoomInfo, RoomOptions, ServerMsg } from '@settlers/server/protocol';
 
 export type Status = 'connecting' | 'live' | 'offline';
 
@@ -299,6 +299,9 @@ export class Client {
   }
   start() {
     this.send({ t: 'start' });
+  }
+  setOptions(options: RoomOptions) {
+    this.send({ t: 'setOptions', options });
   }
   chat(text: string) {
     this.send({ t: 'chat', text });

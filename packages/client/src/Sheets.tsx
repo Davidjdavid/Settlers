@@ -6,6 +6,7 @@ import {
   rateFor,
   stateFromView,
   total,
+  type Action,
   type PartialRes,
   type PlayerView,
   type Resource,
@@ -357,11 +358,13 @@ export function VictimSheet({
   v,
   hex,
   victims,
+  kind = 'robber',
   onClose,
 }: {
   v: PlayerView;
   hex: number;
   victims: Seat[];
+  kind?: 'robber' | 'pirate';
   onClose: () => void;
 }) {
   return (
@@ -381,7 +384,7 @@ export function VictimSheet({
             key={p}
             className="btn"
             onClick={() => {
-              void client.act({ type: 'robber', hex, victim: p });
+              void client.act({ type: kind, hex, victim: p });
               onClose();
             }}
           >
@@ -497,6 +500,90 @@ export function MenuSheet({
         <button className="btn ghost" onClick={() => client.leaveRoom()}>
           Leave this room
         </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ---------- Seafarers ---------- */
+
+export function GoldSheet({ v, due, onClose }: { v: PlayerView; due: number; onClose: () => void }) {
+  const [pick, setPick] = useState<PartialRes>({});
+  const n = total(pick);
+  return (
+    <Sheet
+      title={`Gold! Pick ${due} resource${due === 1 ? '' : 's'}`}
+      sub={`A gold field pays any resource you like. Picked ${n} of ${due}.`}
+      onClose={onClose}
+      foot={
+        <button
+          className="btn primary"
+          disabled={n !== due}
+          data-testid="gold-take"
+          onClick={() => {
+            void client.act({ type: 'chooseGold', cards: pick });
+            onClose();
+          }}
+        >
+          Take {cardsText(pick)}
+        </button>
+      }
+    >
+      <div className="steppers">
+        {RES.map((r) => (
+          <div className="stepper" key={r} style={{ ['--c' as string]: TILE_COLOR[r] }}>
+            <Icon r={r} />
+            <span className="lbl">
+              {RES_LABEL[r]}
+              <small>bank {v.bank[r]}</small>
+            </span>
+            <Ctl
+              label={r}
+              value={pick[r] ?? 0}
+              max={Math.min(v.bank[r], (pick[r] ?? 0) + due - n)}
+              onChange={(x) => setPick({ ...pick, [r]: x })}
+            />
+          </div>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
+/** When an edge could take a road or a ship, ask which. */
+export function PieceSheet({
+  options,
+  onPick,
+  onClose,
+}: {
+  options: Action[];
+  onPick: (a: Action) => void;
+  onClose: () => void;
+}) {
+  const label = (a: Action) =>
+    a.type === 'ship' || a.type === 'freeShip' || (a.type === 'setup' && a.ship) ? 'Ship' : 'Road';
+  return (
+    <Sheet
+      title="Road or ship?"
+      sub="This edge is on the coast, so either fits."
+      onClose={onClose}
+      foot={
+        <button className="btn ghost" onClick={onClose}>
+          Back
+        </button>
+      }
+    >
+      <div className="row">
+        {options.map((a) => (
+          <button
+            key={label(a)}
+            className="btn primary"
+            onClick={() => onPick(a)}
+            data-testid={`piece-${label(a).toLowerCase()}`}
+          >
+            {label(a)}
+          </button>
+        ))}
       </div>
     </Sheet>
   );

@@ -33,7 +33,7 @@ Everything in the base game (SPEC.md) still applies unless this document changes
   - **An edge with a fog hex on one side** takes its kind from the known side (§11.4).
   - **An edge with fog on both sides** has no kind, and nothing can be built on it.
 - **Land vertex:** touches at least one land hex. Settlements and cities can only go on land vertices.
-- **Island:** a group of land hexes connected through shared edges. Fog hexes count as unknown; when one becomes land, islands are recomputed. A map may instead list its islands explicitly, which overrides the automatic grouping (needed when a scenario's "islands" are really separate areas, as in *Through the Desert*).
+- **Island:** a group of land hexes connected through shared edges. Fog hexes count as unknown; when one becomes land, islands are recomputed. (Explicit island lists, needed for scenarios like *Through the Desert*, will be added to the map format with that scenario.)
 - **Home islands:** the islands a player's two starting settlements are on.
 - **Shipping route:** a connected chain of one player's ships.
 - **Trade route:** any chain of a player's roads and ships, counted for the longest route (§13).
@@ -111,7 +111,7 @@ Same phases as the base game: optionally play a development card, roll, then bui
    - Each settlement next to a producing gold hex earns **1 resource of its owner's choice**; each city earns **2**. Any resource the bank still has can be picked; there are no separate gold cards.
    - Gold choices are made **after** normal resources are paid.
    - Every player owed gold chooses at the same time, like discarding. Each player picks exactly as many resources as they're owed, and only resources the bank still has.
-   - **Bank runs low:** if the bank can't cover everyone's gold, choosing goes **in turn order starting with the roller,** each player taking as many as they can, until the bank runs out. **(D6)**
+   - **Bank runs low:** choices are applied as each player makes them. Each player must pick as many as they're owed, or as many as the bank still holds if that's fewer. If the bank runs dry, anyone still owed gets nothing. **(D6)**
    - Gold choices are public, the same as normal production.
 4. A player owed gold who has nothing left to choose (empty bank) skips the step.
 
@@ -365,7 +365,7 @@ Set when the room's game is created. All of them are shown to everyone in the lo
 
   Base rules call extension points such as "who can be stolen from here", "what counts toward the longest route" and "where can setup pieces go". Base code never checks `if (seafarers)`.
 - **Combining with C&K:** knights and city walls only touch land, so they won't conflict with ships. Where both expansions affect the same thing (C&K's barbarians and Seafarers' pirate; C&K's "Merchant Fleet" and harbors), the combined rules go in a small dedicated module that is only loaded when both are on.
-- **Saved games:** today's base games carry engine version 1. Before restructuring, I'll record the full move logs of 50 seeded base games. After restructuring, a test will require them to replay to byte-identical states, along with the games already saved on the live server. If the restructure changes anything a base game can see, it fails.
+- **Saved games:** today's base games carry engine version 1. Before restructuring, I'll record the full move logs of 12 seeded base games (2–4 players). After restructuring, a test will require them to replay to byte-identical states, along with the games already saved on the live server. If the restructure changes anything a base game can see, it fails.
 
 ---
 
@@ -373,47 +373,52 @@ Set when the room's game is created. All of them are shown to everyone in the lo
 
 ### A.1 Coordinates
 - Hexes use axial `q, r` coordinates with pointy tops, like the current engine.
-- Hex sides are numbered **0–5 clockwise, starting with the top-right side.**
+- **Hex sides are numbered 0–5 clockwise, starting with the east side:** 0 east, 1 south-east, 2 south-west, 3 west, 4 north-west, 5 north-east.
 - Harbors and start areas refer to `[q, r]` coordinates and side numbers, never to engine edge ids, so files stay readable and editable.
+- **The order of `hexes` defines the board's internal ids.** Never reorder the hexes of a map that has been played, or saved games would replay on a different board.
 
 ### A.2 Example
 
 ```json
 {
   "format": 1,
-  "id": "heading-for-new-shores-4p",
+  "id": "heading-for-new-shores",
   "name": "Heading for New Shores",
-  "modules": ["base", "seafarers"],
-  "players": [4],
+  "modules": ["seafarers"],
+  "players": [3, 4],
   "winVP": 14,
   "specialVP": { "newIsland": 2 },
   "hexes": [
-    { "q": 0, "r": 0, "t": "random", "pool": "main", "n": "random" },
-    { "q": 3, "r": -1, "t": "gold", "n": 4 },
-    { "q": 2, "r": 0, "t": "sea" },
-    { "q": 4, "r": 1, "t": "fog" }
+    { "q": 0, "r": -2, "t": "random", "pool": "main", "n": "random" },
+    { "q": -3, "r": 0, "t": "sea" },
+    { "q": 4, "r": -1, "t": "random", "pool": "isles", "n": "random" },
+    { "q": 5, "r": 0, "t": "fog" }
   ],
   "pools": {
-    "main": { "terrain": { "wood": 4, "brick": 3, "sheep": 4, "wheat": 4, "ore": 3, "desert": 1 }, "numbers": [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12] }
+    "main": { "terrain": ["wood", "wood", "sheep", "desert"], "numbers": [2, 3, 12] },
+    "isles": { "terrain": ["gold", "ore"], "numbers": [5, 9] }
   },
-  "fog": { "terrain": { "sea": 4, "wood": 1, "gold": 1 }, "numbers": [3, 11] },
-  "numberRules": { "noAdjacentRed": true },
-  "harbors": [{ "q": 1, "r": -2, "side": 0, "t": "any" }],
-  "start": [[0, 0], [1, 0]],
-  "islands": "auto",
+  "fog": { "terrain": ["sea", "wood"], "numbers": [4] },
+  "harbors": [{ "q": -2, "r": 0, "side": 3, "t": "random" }],
+  "harborPool": ["any"],
+  "numberRules": { "noAdjacentRed": true, "noAdjacentSame": true },
+  "start": "all",
   "robber": "desert",
-  "pirate": [2, 0]
+  "pirate": null
 }
 ```
+
+(Shortened: a real file lists every hex, and pool sizes must match.)
 
 Field notes:
 
 | Field | Meaning |
 |---|---|
 | `t` | `wood`, `brick`, `sheep`, `wheat`, `ore`, `gold`, `desert`, `sea`, `fog`, or `random` (drawn from `pool`) |
+| `pools` | Random terrain lists and number tokens, shuffled with the game's seed in the order listed |
+| `harborPool` | Types shuffled onto harbors marked `random` |
 | `n` | a number token, `"random"` (from the pool's numbers), or absent |
 | `start` | the starting-area hexes |
-| `islands` | `"auto"` or an explicit list of hex groups |
 | `robber` / `pirate` | a hex, `"desert"`, or `null` (off the board) |
 
 ### A.3 Checks on load

@@ -398,11 +398,13 @@ export class Rooms {
     g.events.push(...items);
     if (g.events.length > LOG_EVENTS * 2) g.events = g.events.slice(-LOG_EVENTS);
     if (over) room.pendingReset = null;
-    conn.send({ t: 'ack', id, ok: true });
+    // The new state goes out before the ack, so when a client sees its move acknowledged it is
+    // already looking at the result (no moment of acting on a stale view).
     this.broadcast(
       room,
       items.map((x): LogItem => ({ k: 'ev', ...x })),
     );
+    conn.send({ t: 'ack', id, ok: true });
   }
 
   private chat(conn: Conn, room: Room, raw: string) {
