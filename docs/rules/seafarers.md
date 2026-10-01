@@ -1,10 +1,10 @@
 # Seafarers: rules as we will implement them
 
-**Status: draft for review. No code has been written for this yet.**
+**Status: agreed (your answers are recorded under Decisions at the end). Being implemented.**
 
 This document is the contract for the Seafarers milestone. The engine, the simulator's invariants and the tests will follow it exactly. If something here is wrong, it should be fixed here first.
 
-**Sources.** I'm working from the current (5th) edition of *Catan: Seafarers*, which is what Catan Universe plays, as best I know it. I can't open Catan Universe from here to check its behaviour. Everything marked **⚠ Qn** is either something I'm not sure Catan Universe does this way, or something that differs between editions. Those are listed as questions at the end, each with what I'll do if you don't say otherwise.
+**Sources.** I'm working from the current (5th) edition of *Catan: Seafarers*, which is what Catan Universe plays, as best I know it. I can't open Catan Universe from here to check its behaviour. Points that were open are marked **(Dn)**, pointing to the decision at the end.
 
 Everything in the base game (SPEC.md) still applies unless this document changes it.
 
@@ -15,7 +15,7 @@ Everything in the base game (SPEC.md) still applies unless this document changes
 1. **Restructure the engine** so expansions are optional rule modules that can be combined: `base`, `seafarers`, and later `cities-knights`, including C&K + Seafarers together. Existing saved base games must replay exactly as before (§20).
 2. **Maps and scenarios as data files** (JSON), in the format the map editor will use later (Appendix A).
 3. **Seafarers core rules:** sea and coast, ships, moving ships, shipping routes counting toward the longest route, gold fields, the pirate, fog hexes and discovery, harbors from map data, and special victory points such as settling a new island.
-4. **Scenarios.** Batch 1 in this milestone: those that need only the core rules (§18). Batch 2 has scenario-specific mechanics (§18.2). **⚠ Q3**
+4. **Scenarios.** Only **Heading for New Shores** in this milestone (§18). Fog is supported by the engine and tested on a small test map, but no room offers a fog scenario yet. **(D3)**
 5. **Room creation options:** expansions, scenario or map, points to win, house-rule toggles (§19).
 
 ---
@@ -84,9 +84,9 @@ Random parts of a map (shuffled terrain, number tokens, harbors, fog stacks) are
 2. **Each placement** is a settlement plus one adjacent **road or ship**:
    - a road on a land or coast edge;
    - a ship on a coast or sea edge.
-3. **Where:** a starting settlement must be on a land vertex that touches at least one hex marked as a **starting area**, and must obey the distance rule. Scenarios that allow starting on two islands (*The Four Islands*) mark several islands as starting areas.
+3. **Where:** a starting settlement must be on a land vertex that touches at least one hex marked as a **starting area**, and must obey the distance rule. In *Heading for New Shores* every land hex is a starting area, so you may start on any island. **(D5)**
 4. **Second settlement payout:** one resource for each adjacent producing hex.
-   - **Gold:** you choose one resource for each adjacent gold hex. **⚠ Q6**
+   - **Gold:** you choose one resource (any the bank has) for each adjacent gold hex. **(D6)**
    - Desert, sea and fog pay nothing.
 5. **Robber and pirate** start where the scenario says; either may start off the board.
 
@@ -96,7 +96,7 @@ Random parts of a map (shuffled terrain, number tokens, harbors, fog stacks) are
 
 Same phases as the base game: optionally play a development card, roll, then build, trade and play in any order. New in Seafarers:
 
-- **Move one ship per turn,** after rolling (§9). **⚠ Q9**
+- **Move one ship per turn,** after rolling (§9), or as many as you like with the house rule. **(D9, D11)**
 - **Build ships.**
 - A **7** or a **Knight** moves the robber **or** the pirate (§10).
 - When a roll pays out gold, a new **"choose gold"** step comes before you can act (§7).
@@ -108,10 +108,10 @@ Same phases as the base game: optionally play a development card, roll, then bui
 1. On a roll other than 7, every land hex with that number produces, unless the robber is on it. **The pirate doesn't stop production.**
 2. Normal resources are paid out exactly as in the base game, including the bank-shortage rule.
 3. **Gold fields:**
-   - Each settlement next to a producing gold hex earns **1 resource of its owner's choice**; each city earns **2**.
+   - Each settlement next to a producing gold hex earns **1 resource of its owner's choice**; each city earns **2**. Any resource the bank still has can be picked; there are no separate gold cards.
    - Gold choices are made **after** normal resources are paid.
    - Every player owed gold chooses at the same time, like discarding. Each player picks exactly as many resources as they're owed, and only resources the bank still has.
-   - **Bank runs low:** if the bank can't cover everyone's gold, choosing goes **in turn order starting with the roller,** each player taking as many as they can, until the bank runs out. **⚠ Q6**
+   - **Bank runs low:** if the bank can't cover everyone's gold, choosing goes **in turn order starting with the roller,** each player taking as many as they can, until the bank runs out. **(D6)**
    - Gold choices are public, the same as normal production.
 4. A player owed gold who has nothing left to choose (empty bank) skips the step.
 
@@ -150,7 +150,7 @@ Same deck and prices as the base game.
 
 ## 9. Moving ships
 
-Once per turn, after rolling, you may move **one** of your ships to a new place.
+Once per turn, after rolling, you may move **one** of your ships to a new place. With the **"move ships freely"** house rule there's no limit on how many moves you make per turn; every other rule below still applies. **(D11)**
 
 1. **Which ships can move:** the ship must be at the **open end** of a shipping route. One of its two ends must touch none of the following:
    - your settlement or city;
@@ -165,7 +165,7 @@ Once per turn, after rolling, you may move **one** of your ships to a new place.
    - The new edge must be a legal ship placement under §8.2, with the ship already removed.
    - The new edge must be different from the one it left.
 6. Moving costs nothing. It can change who holds the longest route, which is recalculated afterwards.
-7. Moving a ship next to a fog hex discovers it, the same as building (§11). **⚠ Q8**
+7. Moving a ship next to a fog hex discovers it, the same as building (§11). **(D8)**
 
 ---
 
@@ -173,7 +173,7 @@ Once per turn, after rolling, you may move **one** of your ships to a new place.
 
 1. **On a 7** (after discards) or **a Knight,** the player chooses one:
    - **Robber:** move it to a different **land** hex. Not sea, fog or undiscovered hexes; the desert is allowed. Then steal one random resource from an opponent who has a settlement or city on that hex and holds cards. This is the same as the base game.
-   - **Pirate:** move it to a different **sea** hex. Then steal one random resource from an opponent who has a **ship on an edge of that hex** and holds cards. **⚠ Q7**
+   - **Pirate:** move it to a different **sea** hex. Then steal one random resource from an opponent who has a **ship on an edge of that hex** and holds cards. **(D7)**
 2. If either piece starts off the board, it can be placed anywhere legal.
 3. **Robber effects:** its hex produces nothing (unchanged).
 4. **Pirate effects:**
@@ -190,12 +190,12 @@ Used by scenarios with fog, such as *The Fog Islands*.
 1. **Fog hexes start face down.** The scenario provides two secret **fog stacks**:
    - terrain tiles (land types, gold and sea);
    - number tokens.
-2. **Revealing:** when you **build or move** a road or ship onto an edge with a fog hex on either side, that fog hex is revealed. Free roads from Road Building count as building. **⚠ Q8**
+2. **Revealing:** when you **build or move** a road or ship onto an edge with a fog hex on either side, that fog hex is revealed. Free roads from Road Building count as building. **(D8)**
    - Draw a random terrain from the stack.
    - If it's land other than desert, also draw a random number token.
 3. **The reward** goes to whoever revealed it:
    - **Resource land:** 1 card of that resource, if the bank has one.
-   - **Gold:** 1 resource of your choice. **⚠ Q8**
+   - **Gold:** 1 resource of your choice. **(D8)**
    - **Desert or sea:** nothing.
 4. **Building on edges next to fog:**
    - An edge with fog on one side and a known hex on the other can take:
@@ -206,7 +206,6 @@ Used by scenarios with fog, such as *The Fog Islands*.
      - a road becomes a coast or land edge;
      - a ship becomes a coast or sea edge.
 
-   **⚠ Q8c** asks whether this matches Catan Universe.
 5. **Running out:** if the number-token stack is empty when land is revealed, the hex gets no number. Our maps are written so this can't happen, and the map checker requires it.
 6. **What's hidden:** the contents of the fog stacks, like the dev deck, never leave the server. Players see only how many fog hexes are left.
 
@@ -251,7 +250,7 @@ Used by scenarios with fog, such as *The Fog Islands*.
 
 1. **Points to win:** the scenario's target by default (§18). The room creator can change it (§19).
 2. **Special VP, "settling a new island":**
-   - The first settlement you build on an island earns the scenario's bonus (usually 2 VP) if the island isn't one of your **home islands** and you haven't built on it before. **⚠ Q5**
+   - The first settlement you build on an island earns the scenario's bonus (usually 2 VP) if the island isn't one of your **home islands** and you haven't built on it before. **(D5)**
    - Each player can earn this once per island.
    - Other players building there doesn't affect you.
    - Upgrading to a city adds nothing more.
@@ -288,7 +287,7 @@ Everything from the base game, plus:
    - every road is on a land or coast edge;
    - no edge holds two pieces;
    - no piece is on an edge that still borders a fog hex. Revealing happens in the same move as placing, so this always holds after a move.
-4. **Ships are connected:** every ship belongs to a shipping route that reaches one of its owner's settlements or cities, through that owner's ships, at vertices without opponent buildings. **(The pirate, moving ships and opponents' later buildings must never leave a ship stranded.)** ⚠ The base game's road check allows a road beyond an opponent's later settlement; the ship check will match that exactly.
+4. **Ships are connected:** every ship belongs to a chain of its owner's ships that reaches one of its owner's settlements or cities. As with roads, the chain may pass a vertex where an opponent settled later: building rules stop new ships passing there, but ships already placed stay connected. Moving ships and the pirate must never leave a ship stranded.
 5. **Roads are connected**, the same as the base invariant, but roads can't pass through ships.
 6. **The robber is on a land hex** (not sea, not fog) or off the board. **The pirate is on a sea hex** or off the board.
 7. **No ship touches the pirate's hex** unless it was already there when the pirate arrived. Checked as a rule about each move: no move builds or moves a ship onto or off an edge of the pirate's hex.
@@ -305,28 +304,33 @@ The simulator will play **1,000+ random games across every scenario and player c
 
 ## 18. Scenarios
 
-**⚠ Q2:** I can't reproduce the official layouts tile for tile from memory, and I can't look them up in Catan Universe from here. The layouts, points and bonuses below are my best recollection of the 5th-edition rulebook, and **need checking**.
+### 18.1 This milestone: Heading for New Shores
 
-### 18.1 Batch 1: this milestone (core rules only)
-
-| Scenario | Players | Win | Special VP | Fog | Notes |
-|---|---|---|---|---|---|
-| Heading for New Shores | 3, 4 | 14 | 2 per new island | no | Large home island plus small islands with gold. Start on the home island only. |
-| The Four Islands | 3, 4 | 13 | 2 per new island | no | 3 or 4 similar islands. Your two starting settlements may be on one or two islands, and both count as home. |
-| The Fog Islands | 3, 4 | 12 | 2 per new island ⚠ | **yes** | Home island with fog hexes around it. Discovery rewards resources. |
-| Through the Desert | 3, 4 | 14 | 2 per new area | no | A desert strip splits the main island. The land beyond the desert counts as separate "islands" for the bonus (explicit island list). |
-| New World | 3, 4 | 12 ⚠ | 2 per new island ⚠ | no | Random islands, generated by a generator that writes the same JSON format, so it's still data. |
-
-### 18.2 Batch 2: a later milestone (each needs its own rules)
-
-| Scenario | Its own rules |
+| | |
 |---|---|
-| The Forgotten Tribe | Tribe pieces on small islands give VP, harbors and dev cards to whoever builds ships next to them. |
-| Cloth for Catan | Villages produce cloth to players with ships next to them; 2 cloth = 1 VP. |
-| The Pirate Islands | Pirate fortresses, warships, a fixed sailing path. |
-| The Wonders of Catan | Building wonders, with special conditions. |
+| Players | 3 or 4 (Seafarers is 3–4 players only) **(D4)** |
+| Points to win | 14 |
+| Special VP | 2 for the first settlement on each island that isn't one of your home islands **(D5)** |
+| Start | Anywhere on land (any island) **(D5)** |
+| Fog | none |
+| Robber | starts on the desert |
+| Pirate | starts off the board; it arrives the first time someone chooses it on a 7 or Knight |
 
-The module design (§20) leaves room for these without changing core rules.
+**Layout:** our own map in the spirit of the official one, not a copy of it **(D2)**:
+- a 19-hex main island, with the standard terrain mix and numbers, shuffled each game;
+- a ring of sea around it;
+- four small islands of 3 hexes each, holding 2 gold fields among them, with shuffled terrain and numbers;
+- 9 harbors around the main island, shuffled each game.
+
+The file is `packages/engine/maps/heading-for-new-shores.json`.
+
+### 18.2 Later
+
+The other official scenarios come later, each with its own win target and special VP **(D5)**:
+- The Four Islands, The Fog Islands, Through the Desert, New World (core rules only);
+- The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (each with its own rules).
+
+The module design (§20) leaves room for all of them without changing core rules.
 
 ---
 
@@ -338,10 +342,13 @@ Set when the room's game is created. All of them are shown to everyone in the lo
   - Base only (default), or Seafarers.
   - Later, Cities & Knights and C&K + Seafarers, greyed out until built.
 - **Scenario or map:**
-  - with Seafarers, any batch 1 scenario that fits the number of seated players;
+  - with Seafarers, Heading for New Shores (3–4 players only);
   - without Seafarers, the classic random board.
 - **Points to win:** defaults to the scenario's target; can be set from 8 to 20.
-- **House-rule toggles:** these change rules in this document or SPEC.md, so each one is **off by default** and must be on the list you approve. **⚠ Q12**
+- **House-rule toggles,** each off by default **(D11)**:
+  - **No 7s in the first round:** while it is any player's first turn, a roll of 7 is re-rolled automatically, and the re-roll is shown. Works with or without Seafarers. Later, with Cities & Knights: "no 7s until the barbarians have attacked once".
+  - **3:1 bank trades for everyone:** the default bank rate is 3:1 instead of 4:1; 2:1 harbors still give 2:1.
+  - **Move ships freely** (Seafarers only): no limit on ship moves per turn.
 
 ---
 
@@ -422,40 +429,19 @@ A map is refused unless all of these hold:
 
 ---
 
-## Questions
+## Decisions
 
-Each question says what I'll do if you don't answer it.
+Your answers to the questions in the first draft:
 
-1. **Edition:** follow the current (5th) edition, which I believe is what Catan Universe uses? *Default: yes.*
-2. **Official layouts:** I can't check the exact official tile layouts, and I won't present a guess as official. Options:
-   - **(a)** You send photos or screenshots of each scenario layout, from the rulebook or Catan Universe, and I transcribe them into map files. Each file gets a test that the tile counts match the rulebook's.
-   - **(b)** I write layouts that follow each scenario's structure and counts as I remember them, label them "close to official", and you fix them later in the map editor.
-
-   *Default: (b) now, then swapped for (a) as you send images.*
-3. **Which scenarios now?** Batch 1 (Heading for New Shores, The Four Islands, The Fog Islands, Through the Desert, New World) in this milestone, and batch 2 (Forgotten Tribe, Cloth, Pirate Islands, Wonders) as its own milestone? *Default: yes.* Tell me if one of batch 2 is a favourite you want first.
-4. **2 players:** Seafarers is officially for 3–4. Should 2 players be allowed, using the 3-player maps? *Default: allowed, marked "unofficial".*
-5. **Special VP values:** confirm the win targets and new-island bonuses in the §18.1 table, especially Fog Islands and New World. In particular: does settling an island a starting settlement is on ever earn the bonus? (I assume never.)
-6. **Gold:**
-   - **(a)** A second starting settlement next to gold gets a resource of your choice. *Default: yes.*
-   - **(b)** When the bank can't cover everyone's gold, I'll go in turn order starting with the roller. Do you remember how Catan Universe handles this?
-7. **Pirate:**
-   - **(a)** It steals only from players with a **ship** on its hex (not settlements). *Default: yes.*
-   - **(b)** It freezes ships on its hex's edges: no building, no moving on or off. *Default: yes.*
-   - **(c)** It starts off the board and only arrives on the first 7 or Knight. *Default: per scenario.*
-8. **Fog:**
-   - **(a)** Does moving a ship next to fog discover it? *Default: yes.*
-   - **(b)** Discovering gold gives a resource of your choice? *Default: yes.*
-   - **(c)** An edge with fog on one side can be built on according to its known side, and building there reveals the fog (§11.4). Does that match how you remember Catan Universe? *Default: yes.*
-9. **Moving ships:** only after rolling, one per turn, never a ship built this turn? *Default: yes.*
-10. **Robber on new islands:** the robber can go on any discovered land hex, including islands nobody has settled. *Default: yes.*
-11. **Longest route through your own ships and roads:** roads and ships join only at your own building. *Default: yes.* (This is the rule; I'm listing it because it's the one people most often play differently.)
-12. **House rules:** which toggles do you want in room creation? Common ones:
-    - **Friendly robber:** can't target a player with 2 VP or fewer.
-    - **No 7s in the first round.**
-    - **Bank trades 3:1 for everyone.**
-    - **Seafarers:** "ships may be moved before rolling".
-
-    I'll only build the ones you name, each off by default.
-13. **CPU player:** there isn't one you can add to a room yet. The engine has a simple bot, but it's only used by the tests. Should this milestone add **CPU seats** in the lobby?
-    - *Default:* no; it gets its own milestone, as planned.
-    - If yes, it will play Seafarers (weakly) and will **never target a human**: no robber or pirate placed to block or steal from a human, and no Monopoly naming a resource only humans hold. Is that what you mean by "never targets us"?
+1. **D1 Edition:** the current (5th) edition.
+2. **D2 Layouts:** start with one default Seafarers map, our own in the official spirit.
+3. **D3 Scenarios:** only Heading for New Shores in this milestone.
+4. **D4 Players:** Seafarers games need 3 or 4 players.
+5. **D5 Special VP:** set per scenario (to be decided as we add them). Heading for New Shores gives 2 VP per new island settled. Starting settlements may go on any island; islands you start on are home islands and earn no bonus.
+6. **D6 Gold:** you pick any resource you want. There are no gold cards; the only limit is that the bank must have the resource.
+7. **D7 Pirate:** steals only from players with a ship on its hex; freezes ships on its hex's edges (no building, no moving on or off). It starts off the board in Heading for New Shores.
+8. **D8 Fog:** moving a ship next to fog discovers it; discovering gold gives a resource of your choice; an edge with fog on one side is buildable according to its known side.
+9. **D9 Moving ships:** after rolling, one per turn, never a ship built this turn.
+10. **D10 Robber:** any revealed land hex, including unsettled islands.
+11. **D11 House rules:** no 7s in the first round; 3:1 bank trades for everyone; move ships freely. Planned for Cities & Knights: no 7s until the barbarians have attacked once.
+12. **D12 CPU player:** not in this milestone. When it comes, it must never target a human player.

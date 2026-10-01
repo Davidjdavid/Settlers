@@ -7,8 +7,10 @@
  * the simulator checks that.
  */
 
+import { mods } from './modules/api';
 import {
-  COST, deckCount, geo, has, legalCities, legalRoads, legalSettlements, rateFor, robberVictims, vertFree,
+  COST, canPlaceFreePiece, deckCount, freePieceSupply, has, legalCities, legalRoads, legalSettlements,
+  legalSetupRoads, legalSetupVerts, rateFor, robberHexOK, robberVictims,
 } from './queries'; // prettier-ignore
 import { RES, type Action, type GameState, type Seat } from './types';
 
@@ -21,7 +23,6 @@ export function legalActions(s: GameState, p: Seat): Action[] {
   const out: Action[] = [];
   const me = s.players[p]!;
   const myTurn = s.turn === p;
-  const g = geo(s);
 
   // Answering trade offers can happen off-turn.
   if (s.stage === 'main') {
@@ -49,20 +50,20 @@ export function legalActions(s: GameState, p: Seat): Action[] {
       }
     }
   }
+  for (const m of mods(s)) m.legal?.(s, p, out);
   if (!myTurn) return out;
 
   switch (s.stage) {
     case 'setup':
-      for (let v = 0; v < s.verts.length; v++) {
-        if (!vertFree(s, v)) continue;
-        for (const e of g.verts[v]!.edges) if (s.edges[e] == null) out.push({ type: 'setup', v, e });
+      for (const v of legalSetupVerts(s)) {
+        for (const e of legalSetupRoads(s, v)) out.push({ type: 'setup', v, e });
       }
       return out;
     case 'discard':
       return out;
     case 'robber':
       for (let h = 0; h < s.board.hexes.length; h++) {
-        if (h === s.board.robber) continue;
+        if (h === s.board.robber || !robberHexOK(s, h)) continue;
         const victims = robberVictims(s, p, h);
         if (!victims.length) out.push({ type: 'robber', hex: h });
         for (const victim of victims) out.push({ type: 'robber', hex: h, victim });
@@ -95,6 +96,8 @@ export function legalActions(s: GameState, p: Seat): Action[] {
       }
       return out;
     }
+    default:
+      return out;
   }
 }
 
@@ -102,7 +105,8 @@ function pushDevPlays(s: GameState, p: Seat, out: Action[]) {
   const me = s.players[p]!;
   if (s.devPlayed) return;
   if (me.dev.knight > 0) out.push({ type: 'playKnight' });
-  if (me.dev.road > 0 && me.pieces.road > 0 && legalRoads(s, p).length) out.push({ type: 'playRoads' });
+  if (me.dev.road > 0 && freePieceSupply(s, p) > 0 && canPlaceFreePiece(s, p))
+    out.push({ type: 'playRoads' });
   if (me.dev.plenty > 0) {
     for (let i = 0; i < RES.length; i++) {
       for (let j = i; j < RES.length; j++) {

@@ -20,6 +20,10 @@ export function listNames(v: PlayerView, seats: Seat[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
+/** "Longest Road", or "Longest Trade Route" when ships count too. */
+export const routeName = (v: PlayerView) =>
+  v.rules.modules.includes('seafarers') ? 'Longest Trade Route' : 'Longest Road';
+
 /** One log line, or null for events that only matter to the UI. */
 export function eventText(
   v: PlayerView,
@@ -38,6 +42,8 @@ export function eventText(
     case 'turn':
       return { text: `${who(e.p) === 'You' ? 'Your' : `${who(e.p)}’s`} turn`, sep: true };
     case 'roll':
+      if (e.redo)
+        return { text: `${who(e.p)} rolled 7, but there are no 7s in the first round: rolling again` };
       return { text: `${who(e.p)} rolled ${e.d[0] + e.d[1]}`, big: e.d[0] + e.d[1] === 7 };
     case 'produce': {
       const lines = Object.entries(e.gains).map(([p, g]) => `${who(Number(p))} got ${cardsText(g)}`);
@@ -82,7 +88,7 @@ export function eventText(
       return { text: `${who(e.a)} gave ${cardsText(e.give)} to ${who(e.b)} for ${cardsText(e.want)}` };
     case 'longest':
       return {
-        text: e.p == null ? 'Nobody holds Longest Road now' : `${who(e.p)} took Longest Road (${e.n})`,
+        text: e.p == null ? `Nobody holds ${routeName(v)} now` : `${who(e.p)} took ${routeName(v)} (${e.n})`,
         big: true,
       };
     case 'largest':
@@ -92,5 +98,21 @@ export function eventText(
     case 'respond':
     case 'cancelOffer':
       return null;
+    case 'moveShip':
+      return { text: `${who(e.p)} moved a ship` };
+    case 'pirate':
+      return { text: `${who(e.p)} moved the pirate` };
+    case 'goldOwed':
+      return {
+        text: `Gold! ${listNames(v, Object.keys(e.owed).map(Number))} ${Object.keys(e.owed).length === 1 ? 'picks' : 'pick'} resources`,
+      };
+    case 'gold':
+      return { text: `${who(e.p)} took ${cardsText(e.got)} from a gold field` };
+    case 'discover':
+      return {
+        text: `${who(e.p)} discovered ${e.t === 'sea' ? 'open sea' : e.t === 'gold' ? 'a gold field' : `${e.t}${e.n ? ` (${e.n})` : ''}`}${e.got ? ` and got ${cardsText(e.got)}` : ''}`,
+      };
+    case 'islandBonus':
+      return { text: `${who(e.p)} settled a new island: +${e.vp} points`, big: true };
   }
 }

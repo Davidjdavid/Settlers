@@ -15,12 +15,12 @@ export const BASE_COORDS: { q: number; r: number }[] = (() => {
   return out;
 })();
 
-const TERRAIN: Terrain[] = [
+export const TERRAIN: Terrain[] = [
   'wood', 'wood', 'wood', 'wood', 'sheep', 'sheep', 'sheep', 'sheep', 'wheat', 'wheat', 'wheat', 'wheat',
   'brick', 'brick', 'brick', 'ore', 'ore', 'ore', 'desert',
 ]; // prettier-ignore
-const NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
-const PORT_TYPES: PortType[] = ['any', 'any', 'any', 'any', 'wood', 'brick', 'sheep', 'wheat', 'ore'];
+export const NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+export const PORT_TYPES: PortType[] = ['any', 'any', 'any', 'any', 'wood', 'brick', 'sheep', 'wheat', 'ore'];
 /** Coastal edges skipped between ports, walking around the island. */
 const PORT_GAPS = [3, 3, 4, 3, 3, 4, 3, 3, 4];
 
@@ -34,8 +34,15 @@ export function basePortSlots(g: Geometry): number[] {
   return out;
 }
 
-/** No two adjacent hexes share a number, and 6s and 8s never touch. */
-export function numbersOK(g: Geometry, nums: number[]): boolean {
+/** No two adjacent hexes share a number, and 6s and 8s never touch (each rule can be turned off). */
+export function numbersOK(
+  g: Geometry,
+  nums: number[],
+  rules: { noAdjacentRed?: boolean; noAdjacentSame?: boolean } = {
+    noAdjacentRed: true,
+    noAdjacentSame: true,
+  },
+): boolean {
   const red = (n: number) => n === 6 || n === 8;
   for (let i = 0; i < nums.length; i++) {
     const a = nums[i]!;
@@ -43,7 +50,7 @@ export function numbersOK(g: Geometry, nums: number[]): boolean {
     for (const j of g.hexNeighbors[i]!) {
       const b = nums[j]!;
       if (!b) continue;
-      if (a === b || (red(a) && red(b))) return false;
+      if ((rules.noAdjacentSame && a === b) || (rules.noAdjacentRed && red(a) && red(b))) return false;
     }
   }
   return true;

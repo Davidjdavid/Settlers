@@ -17,6 +17,9 @@ export const TILE_COLOR: Record<Terrain, string> = {
   wheat: '#e9b94a',
   ore: '#7e8a99',
   desert: '#d7c69c',
+  gold: '#d9a521',
+  sea: '#1f5f73',
+  fog: '#5d6b73',
 };
 export const PCOL: Record<Color, string> = {
   red: '#e5484d',
@@ -57,6 +60,9 @@ export const GLYPH: Record<Terrain, string> = {
   wheat:
     '<path d="M0 11V-6" stroke="#7a500b" stroke-width="1.6" stroke-linecap="round"/><g fill="#7a500b"><ellipse cx="0" cy="-9" rx="1.7" ry="3"/><ellipse cx="-2.6" cy="-4.6" rx="1.6" ry="3" transform="rotate(-35 -2.6 -4.6)"/><ellipse cx="2.6" cy="-4.6" rx="1.6" ry="3" transform="rotate(35 2.6 -4.6)"/><ellipse cx="-2.6" cy="-.2" rx="1.6" ry="3" transform="rotate(-35 -2.6 -.2)"/><ellipse cx="2.6" cy="-.2" rx="1.6" ry="3" transform="rotate(35 2.6 -.2)"/><ellipse cx="-2.6" cy="4.2" rx="1.6" ry="3" transform="rotate(-35 -2.6 4.2)"/><ellipse cx="2.6" cy="4.2" rx="1.6" ry="3" transform="rotate(35 2.6 4.2)"/></g>',
   ore: '<path d="M-11 9-3.5-6l3.5 5 4.5-9L11 9z" fill="#363e49"/><path d="m4.5-10 2.6 5.2-2.6-1.4-2.4 1.6zM-3.5-6l1.9 3.8-1.9-.9-1.8 1z" fill="#f5f7fa"/>',
+  gold: '<g fill="#7a5200"><path d="M-9 6h18l-3-6h-12z"/><path d="M-6 0h12l-2.5-5h-7z" opacity=".85"/></g><path d="M-3-5h6l-1.2-3.5h-3.6z" fill="#fff4c2"/>',
+  sea: '<path d="M-10 2q5-4 10 0t10 0M-10 7q5-4 10 0t10 0" fill="none" stroke="#9fd3df" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>',
+  fog: '<g fill="#c6d0d4" opacity=".9"><circle cx="-4" cy="1" r="4"/><circle cx="2" cy="-1" r="5"/><circle cx="6" cy="3" r="3.5"/><rect x="-8" y="2" width="17" height="4" rx="2"/></g>',
   desert:
     '<g fill="#6f7f3f"><path d="M-2 11V-8a2 2 0 0 1 4 0v19z"/><path d="M2 1h3.5A1.5 1.5 0 0 0 7-.5V-5a1.5 1.5 0 0 1 3 0v4.5A4.5 4.5 0 0 1 5.5 4H2z"/><path d="M-2 4h-3a4 4 0 0 1-4-4v-2.5a1.5 1.5 0 0 1 3 0V0a1 1 0 0 0 1 1h3z"/></g>',
 };

@@ -8,3 +8,7 @@ export * from './view';
 export * from './legal';
 export * from './invariants';
 export * from './bot';
+export * from './map';
+export * from './ops';
+export * from './modules/api';
+export * from './modules/seafarers';

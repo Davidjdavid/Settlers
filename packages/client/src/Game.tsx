@@ -270,6 +270,7 @@ export function Game({
                     robber: 'robber',
                     roads: 'building',
                     main: 'playing',
+                    gold: 'choosing gold',
                   }[v.stage]
                 }
               </span>

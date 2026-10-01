@@ -43,6 +43,7 @@ const WEIGHT: Record<Action['type'], number> = {
   playKnight: 3, playRoads: 2, playPlenty: 2, playMono: 1,
   bank: 1.5, end: 3, confirm: 8, cancel: 0.5, respond: 2,
   discard: 1, offer: 1,
+  ship: 6, freeShip: 5, moveShip: 1, pirate: 1, chooseGold: 1,
 }; // prettier-ignore
 
 function randomDiscard(s: GameState, p: Seat, rng: RngState): Action {

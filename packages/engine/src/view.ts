@@ -4,9 +4,10 @@
  */
 
 import { cloneJson } from './clone';
+import { mods } from './modules/api';
 import { deckCount, devCount, publicVP, total, totalVP } from './queries';
 import type {
-  Board, Building, Color, DevCounts, GameEvent, GameState, Offer, ResCounts, Seat, Stage,
+  Board, Building, Color, DevCounts, GameEvent, GameState, HouseRules, ModuleId, Offer, ResCounts, Seat, Stage,
 } from './types'; // prettier-ignore
 
 export interface PublicPlayer {
@@ -17,7 +18,7 @@ export interface PublicPlayer {
   devCount: number;
   knights: number;
   played: { road: number; plenty: number; mono: number };
-  pieces: { road: number; settlement: number; city: number };
+  pieces: { road: number; settlement: number; city: number; ship?: number };
   roadLen: number;
   publicVP: number;
   /** Only filled in once the game is over. */
@@ -57,13 +58,37 @@ export interface PlayerView {
   largest: Seat | null;
   offers: Offer[];
   winner: Seat | null;
+  /** Rules in force: expansions, house rules, and the map's public rules. */
+  rules: {
+    modules: ModuleId[];
+    houseRules: HouseRules;
+    mapId: string;
+    mapName: string;
+    /** Starting-area hexes as q,r, or 'all'. */
+    start: 'all' | [number, number][];
+    newIslandVP: number;
+  };
+  /** Seafarers (public parts only). */
+  sea?: SeaView;
+}
+
+export interface SeaView {
+  ships: (Seat | null)[];
+  builtThisTurn: number[];
+  movesThisTurn: number;
+  specialVP: number[];
+  home: number[][][];
+  bonus: number[][][];
+  gold: { owed: Record<number, number>; back: Stage } | null;
+  /** How many fog tiles are still face down (their contents stay secret). */
+  fogLeft: number;
 }
 
 export function viewFor(s: GameState, seat: Seat | null): PlayerView {
   const me = seat != null && seat >= 0 && seat < s.players.length ? seat : null;
   const over = s.phase === 'over';
   const mine = me != null ? s.players[me]! : null;
-  return cloneJson({
+  const v: PlayerView = cloneJson({
     me,
     seq: s.seq,
     phase: s.phase,
@@ -101,7 +126,17 @@ export function viewFor(s: GameState, seat: Seat | null): PlayerView {
     largest: s.largest,
     offers: s.offers,
     winner: s.winner,
-  });
+    rules: {
+      modules: s.config.modules ?? [],
+      houseRules: s.config.houseRules ?? {},
+      mapId: s.config.map?.id ?? 'classic',
+      mapName: s.config.map?.name ?? 'Classic',
+      start: s.config.map?.start ?? 'all',
+      newIslandVP: s.config.map?.specialVP?.newIsland ?? 0,
+    },
+  } satisfies PlayerView);
+  for (const m of mods(s)) m.view?.(s, me, v);
+  return v;
 }
 
 /** Redact one event for a seat (null = spectator). */
@@ -128,9 +163,20 @@ export function eventsFor(events: GameEvent[], seat: Seat | null): GameEvent[] {
 export function stateFromView(v: PlayerView): GameState {
   const zero = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 };
   const noDev = { knight: 0, road: 0, plenty: 0, mono: 0 };
-  return cloneJson({
+  const config: GameState['config'] = { winVP: v.winVP };
+  if (v.rules.modules.length) config.modules = v.rules.modules.slice();
+  if (Object.keys(v.rules.houseRules).length) config.houseRules = { ...v.rules.houseRules };
+  if (v.rules.mapId !== 'classic') {
+    // Only the public parts of the map matter for legal-move checks.
+    config.map = {
+      format: 1, id: v.rules.mapId, name: v.rules.mapName, modules: v.rules.modules.slice(), players: [],
+      winVP: v.winVP, hexes: [], harbors: [], robber: null, start: v.rules.start,
+      specialVP: { newIsland: v.rules.newIslandVP },
+    }; // prettier-ignore
+  }
+  const s: GameState = cloneJson({
     v: 1,
-    config: { winVP: v.winVP },
+    config,
     rng: [0, 0, 0, 0],
     seq: v.seq,
     phase: v.phase,
@@ -171,4 +217,6 @@ export function stateFromView(v: PlayerView): GameState {
     offerN: 0,
     winner: v.winner,
   } satisfies GameState);
+  for (const m of mods(s)) m.fromView?.(v, s);
+  return s;
 }

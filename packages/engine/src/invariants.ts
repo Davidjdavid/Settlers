@@ -4,7 +4,8 @@
  * problems (empty means OK).
  */
 
-import { BANK_EACH, DEV_COUNTS, PIECES, geo, roadLen, totalVP } from './queries';
+import { mods } from './modules/api';
+import { BANK_EACH, DEV_COUNTS, PIECES, geo, robberHexOK, routeLen, totalVP } from './queries';
 import { DEV_PLAY, RES, type GameState } from './types';
 
 export function checkInvariants(s: GameState): string[] {
@@ -78,7 +79,7 @@ export function checkInvariants(s: GameState): string[] {
   }
 
   // Longest road.
-  const lens = s.players.map((_, p) => roadLen(s, p));
+  const lens = s.players.map((_, p) => routeLen(s, p));
   if (lens.some((l, p) => l !== s.roadLens[p])) bad.push(`roadLens ${s.roadLens} != ${lens}`);
   const max = Math.max(...lens);
   const atMax = lens.filter((l) => l === max).length;
@@ -110,13 +111,18 @@ export function checkInvariants(s: GameState): string[] {
   // Stage bookkeeping.
   if ((s.stage === 'discard') !== (s.discard != null))
     bad.push(`stage ${s.stage} with discard ${JSON.stringify(s.discard)}`);
-  if ((s.stage === 'roads') !== s.freeRoads > 0) bad.push(`stage ${s.stage} with ${s.freeRoads} free roads`);
+  // Free pieces are pending only in the roads stage (or while gold is chosen in the middle of it).
+  if (s.stage === 'roads' ? !(s.freeRoads > 0) : s.freeRoads > 0 && s.stage !== 'gold') {
+    bad.push(`stage ${s.stage} with ${s.freeRoads} free roads`);
+  }
   if ((s.stage === 'robber' || s.stage === 'discard') !== (s.robberReturn != null)) {
     bad.push(`stage ${s.stage} with robberReturn ${s.robberReturn}`);
   }
-  if (!(s.board.robber >= 0 && s.board.robber < s.board.hexes.length)) bad.push(`robber off the board`);
+  if (s.board.robber !== -1 && !robberHexOK(s, s.board.robber))
+    bad.push(`robber on an illegal hex ${s.board.robber}`);
   if (!(s.turn >= 0 && s.turn < n)) bad.push(`turn ${s.turn} out of range`);
 
+  for (const m of mods(s)) bad.push(...(m.invariants?.(s) ?? []));
   return bad;
 }
 
@@ -142,5 +148,6 @@ export function checkTransition(prev: GameState, next: GameState): string[] {
     }
   }
   if (next.seq !== prev.seq + 1) bad.push(`seq ${prev.seq} -> ${next.seq}`);
+  for (const m of mods(next)) bad.push(...(m.transition?.(prev, next) ?? []));
   return bad;
 }

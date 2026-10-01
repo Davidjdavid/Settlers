@@ -1,19 +1,29 @@
-/* Base-game rules. A typed port of the prototype's reducer, with seeded randomness and events. */
+/* Base-game rules. A typed port of the prototype's reducer, with seeded randomness and events.
+ * Expansion modules extend it through the hooks in modules/api.ts. */
 
+import classicMap from '../maps/classic.json';
 import { cloneJson } from './clone';
-import { generateBaseBoard } from './board';
+import { boardFromMap, type MapData } from './map';
+import { mods, type Ctx } from './modules/api';
+import './modules';
 import {
-  BANK_EACH, COST, DEV_COUNTS, PIECES, deckCount, geo, has, legalRoads, rateFor, robberVictims, roadLen,
-  roadOK, settlementOK, snakeOrder, total, totalVP, vertFree, zeroRes,
+  afterFreePiece, checkWin, cleanCounts, finishFreePieces, finishRobber, gain, isInt, isRes, pay, stealRandom, updateLargest,
+  updateLongest,
+} from './ops'; // prettier-ignore
+import {
+  BANK_EACH, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, deckCount, freePieceSupply, geo, has, rateFor,
+  roadEdgeOK, roadOK, robberHexOK, robberVictims, routeLen, settlementOK, setupVertOK, snakeOrder, total, zeroRes,
 } from './queries'; // prettier-ignore
 import { nextInt, seedRng, shuffle, type RngState } from './rng';
 import {
-  COLORS, DEV_PLAY, DEV_TYPES, RES, type Action, type ApplyResult, type Color, type DevCounts, type GameConfig,
-  type GameEvent, type GameState, type PartialRes, type Player, type Resource, type ResCounts, type Seat,
+  COLORS, DEV_PLAY, DEV_TYPES, RES, isResource, type Action, type ApplyResult, type Color, type DevCounts,
+  type GameConfig, type GameEvent, type GameState, type PartialRes, type Player, type Resource, type ResCounts, type Seat,
 } from './types'; // prettier-ignore
 
 /** Bump when a rules change would replay saved games differently. */
 export const ENGINE_VERSION = 1;
+
+export const CLASSIC_MAP = classicMap as MapData;
 
 export interface NewPlayer {
   pid: string;
@@ -23,20 +33,28 @@ export interface NewPlayer {
 
 const zeroDev = (): DevCounts => ({ knight: 0, road: 0, plenty: 0, mono: 0 });
 
-/** Start a game. Turn order is shuffled from the seed. */
+/**
+ * Start a game. Turn order is shuffled from the seed. Without `config.map` this is the classic
+ * board, and the config stays exactly { winVP } so classic games replay as they always have.
+ */
 export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameConfig> = {}): GameState {
-  if (seats.length < 2 || seats.length > 4) throw new Error('A game needs 2 to 4 players');
+  const map = config.map ?? CLASSIC_MAP;
+  if (!map.players.includes(seats.length)) {
+    throw new Error(`${map.name} is for ${map.players.join(', ')} players`);
+  }
   const colors = new Set(seats.map((x) => x.color));
   if (colors.size !== seats.length || seats.some((x) => !COLORS.includes(x.color))) {
     throw new Error('Each player needs a different color');
   }
+  const cfg: GameConfig = { winVP: config.map ? map.winVP : 10, ...config };
+  if (config.map && !config.modules && map.modules.length) cfg.modules = map.modules;
   const rng: RngState = seedRng(seed);
   const order = shuffle(seats.slice(), rng);
-  const board = generateBaseBoard(rng);
+  const { board, fog } = boardFromMap(map, rng);
   const g = geo({ board } as GameState);
-  return {
+  const s: GameState = {
     v: 1,
-    config: { winVP: 10, ...config },
+    config: cfg,
     rng,
     seq: 0,
     phase: 'play',
@@ -74,6 +92,8 @@ export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameCo
     offerN: 0,
     winner: null,
   };
+  for (const m of mods(s)) m.init?.(s, fog);
+  return s;
 }
 
 /** Apply one action for `seat`. Never mutates `s0`. */
@@ -91,86 +111,11 @@ export function applyAction(s0: GameState, seat: Seat, action: Action): ApplyRes
   return { ok: true, state: s, events };
 }
 
-/* ---------- Input checks (actions arrive from the network) ---------- */
-
-const isInt = (x: unknown): x is number => typeof x === 'number' && Number.isInteger(x);
-const isRes = (x: unknown): x is Resource => typeof x === 'string' && (RES as readonly string[]).includes(x);
-
-function cleanCounts(obj: unknown): ResCounts | null {
-  const out = zeroRes();
-  if (obj == null || typeof obj !== 'object') return null;
-  const o = obj as Record<string, unknown>;
-  for (const k of Object.keys(o)) {
-    if (!isRes(k)) return null;
-    const n = o[k];
-    if (n === undefined || n === 0) continue;
-    if (!isInt(n) || n < 0 || n > BANK_EACH * 5) return null;
-    out[k] = n;
-  }
-  return out;
-}
-
-/* ---------- Mutating helpers (only ever applied to the clone) ---------- */
-
-function gain(s: GameState, p: Seat, r: Resource, n: number) {
-  s.players[p]!.res[r] += n;
-  s.bank[r] -= n;
-}
-
-function pay(s: GameState, p: Seat, cost: PartialRes) {
-  for (const r of RES) {
-    const n = cost[r] || 0;
-    s.players[p]!.res[r] -= n;
-    s.bank[r] += n;
-  }
-}
-
-function updateLongest(s: GameState, events: GameEvent[]) {
-  const lens = s.players.map((_, p) => roadLen(s, p));
-  s.roadLens = lens;
-  const max = Math.max(...lens);
-  const prev = s.longest;
-  let holder: Seat | null;
-  if (max < 5) holder = null;
-  else if (prev != null && lens[prev] === max) holder = prev;
-  else {
-    const top = lens.flatMap((l, p) => (l === max ? [p] : []));
-    holder = top.length === 1 ? top[0]! : null;
-  }
-  if (holder !== prev) {
-    s.longest = holder;
-    events.push({ k: 'longest', p: holder, n: holder != null ? lens[holder]! : 0, from: prev });
-  }
-}
-
-function updateLargest(s: GameState, p: Seat, events: GameEvent[]) {
-  const k = s.players[p]!.knights;
-  if (k < 3 || s.largest === p) return;
-  if (s.largest == null || k > s.players[s.largest]!.knights) {
-    const from = s.largest;
-    s.largest = p;
-    events.push({ k: 'largest', p, n: k, from });
-  }
-}
-
-/** A player can only win on their own turn. */
-function checkWin(s: GameState, events: GameEvent[]) {
-  if (s.phase !== 'play' || s.stage === 'setup') return;
-  const p = s.turn;
-  const vp = totalVP(s, p);
-  if (vp >= s.config.winVP) {
-    s.phase = 'over';
-    s.winner = p;
-    s.offers = [];
-    events.push({ k: 'win', p, vp });
-  }
-}
-
 function produce(s: GameState, roll: number): { gains: Record<number, PartialRes>; short: Resource[] } {
   const g = geo(s);
   const owed = s.players.map(() => zeroRes());
   s.board.hexes.forEach((h, hi) => {
-    if (h.n !== roll || hi === s.board.robber || h.t === 'desert') return;
+    if (h.n !== roll || hi === s.board.robber || !isResource(h.t)) return;
     for (const v of g.hexVerts[hi]!) {
       const b = s.verts[v];
       if (b) owed[b[0]]![h.t] += b[1];
@@ -199,16 +144,6 @@ function produce(s: GameState, roll: number): { gains: Record<number, PartialRes
     }
   }
   return { gains, short };
-}
-
-function stealRandom(s: GameState, from: Seat, to: Seat): Resource | null {
-  const pool: Resource[] = [];
-  for (const r of RES) for (let i = 0; i < s.players[from]!.res[r]; i++) pool.push(r);
-  if (!pool.length) return null;
-  const r = pool[nextInt(s.rng, pool.length)]!;
-  s.players[from]!.res[r]--;
-  s.players[to]!.res[r]++;
-  return r;
 }
 
 function doTrade(
@@ -241,35 +176,50 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
   const g = geo(s);
   const me = s.players[p]!;
   const myTurn = s.turn === p;
+  const x: Ctx = { s, p, me, myTurn, events };
+
+  // Expansion actions first; a module returns undefined for actions that aren't its own.
+  for (const m of mods(s)) {
+    const r = m.reduce?.(x, a);
+    if (r !== undefined) return r;
+  }
 
   switch (a.type) {
     case 'setup': {
       if (s.stage !== 'setup') return 'Setup is finished';
       if (!myTurn) return 'Wait for your turn';
       const { v, e } = a;
-      if (!isInt(v) || v < 0 || v >= g.verts.length || !vertFree(s, v)) {
+      if (!isInt(v) || v < 0 || v >= g.verts.length || !setupVertOK(s, v)) {
         return 'Settlements need a free corner with no neighbor next to it';
       }
-      if (!isInt(e) || !g.verts[v]!.edges.includes(e) || s.edges[e] != null) {
-        return 'The road must touch your new settlement';
+      if (!isInt(e) || !g.verts[v]!.edges.includes(e)) return 'The road must touch your new settlement';
+      if (a.ship) {
+        const place = mods(s).find((m) => m.placeSetupPiece);
+        if (!place) return 'Ships need the Seafarers expansion';
+        s.verts[v] = [p, 1];
+        const err = place.placeSetupPiece!(x, v, e);
+        if (err) return err;
+      } else {
+        if (!roadEdgeOK(s, e)) return 'The road must touch your new settlement';
+        s.verts[v] = [p, 1];
+        s.edges[e] = p;
+        me.pieces.road--;
       }
-      s.verts[v] = [p, 1];
       me.pieces.settlement--;
-      s.edges[e] = p;
-      me.pieces.road--;
+      const second = s.setupI >= s.players.length;
       let got: PartialRes | null = null;
-      if (s.setupI >= s.players.length) {
+      if (second) {
         // Second settlement pays out its neighbors.
         got = {};
         for (const h of g.verts[v]!.hexes) {
           const t = s.board.hexes[h]!.t;
-          if (t !== 'desert' && s.bank[t] > 0) {
+          if (isResource(t) && s.bank[t] > 0) {
             gain(s, p, t, 1);
             got[t] = (got[t] || 0) + 1;
           }
         }
       }
-      events.push({ k: 'setup', p, v, e, got });
+      events.push(a.ship ? { k: 'setup', p, v, e, got, ship: true } : { k: 'setup', p, v, e, got });
       s.setupI++;
       const order = snakeOrder(s.players.length);
       if (s.setupI >= order.length) {
@@ -280,15 +230,23 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       } else {
         s.turn = order[s.setupI]!;
       }
-      s.roadLens = s.players.map((_, i) => roadLen(s, i));
+      s.roadLens = s.players.map((_, i) => routeLen(s, i));
+      if (!a.ship) for (const m of mods(s)) m.afterRoad?.(x, e);
+      for (const m of mods(s)) m.afterSetupSettlement?.(x, v, second, e, !!a.ship);
       return null;
     }
 
     case 'roll': {
       if (!myTurn) return 'Wait for your turn';
       if (s.stage !== 'preroll') return s.stage === 'setup' ? 'Finish setup first' : 'You already rolled';
-      const d1 = 1 + nextInt(s.rng, 6);
-      const d2 = 1 + nextInt(s.rng, 6);
+      let d1 = 1 + nextInt(s.rng, 6);
+      let d2 = 1 + nextInt(s.rng, 6);
+      // House rule: no 7s while it is anyone's first turn; the 7 is shown, then rolled again.
+      while (d1 + d2 === 7 && s.config.houseRules?.no7FirstRound && s.turnN <= s.players.length) {
+        events.push({ k: 'roll', p, d: [d1, d2], redo: true });
+        d1 = 1 + nextInt(s.rng, 6);
+        d2 = 1 + nextInt(s.rng, 6);
+      }
       s.dice = [d1, d2];
       events.push({ k: 'roll', p, d: [d1, d2] });
       if (d1 + d2 === 7) {
@@ -309,6 +267,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
         const out = produce(s, d1 + d2);
         events.push({ k: 'produce', gains: out.gains, short: out.short });
         s.stage = 'main';
+        for (const m of mods(s)) m.afterProduce?.(x, d1 + d2);
       }
       return null;
     }
@@ -335,6 +294,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       const h = a.hex;
       if (!isInt(h) || h < 0 || h >= s.board.hexes.length) return 'Pick a tile';
       if (h === s.board.robber) return 'Move the robber to a different tile';
+      if (!robberHexOK(s, h)) return 'The robber can only go on land';
       const victims = robberVictims(s, p, h);
       let victim: Seat | null = null;
       if (victims.length) {
@@ -347,8 +307,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
         const r = stealRandom(s, victim, p);
         events.push({ k: 'steal', p, from: victim, r });
       }
-      s.stage = s.robberReturn ?? 'main';
-      s.robberReturn = null;
+      finishRobber(s);
       return null;
     }
 
@@ -361,6 +320,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       }
       s.offers = [];
       s.devPlayed = false;
+      for (const m of mods(s)) m.onTurnEnd?.(s);
       s.turn = (s.turn + 1) % s.players.length;
       s.stage = 'preroll';
       s.turnN++;
@@ -380,6 +340,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       me.pieces.road--;
       events.push({ k: 'build', p, what: 'road', at: a.e });
       updateLongest(s, events);
+      for (const m of mods(s)) m.afterRoad?.(x, a.e);
       checkWin(s, events);
       return null;
     }
@@ -395,6 +356,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       me.pieces.settlement--;
       events.push({ k: 'build', p, what: 'settlement', at: a.v });
       updateLongest(s, events);
+      for (const m of mods(s)) m.afterSettlement?.(x, a.v);
       checkWin(s, events);
       return null;
     }
@@ -467,8 +429,8 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
         return null;
       }
       if (a.type === 'playRoads') {
-        const n = Math.min(2, me.pieces.road);
-        if (!n || !legalRoads(s, p).length) return 'You have nowhere to build a road';
+        const n = Math.min(2, freePieceSupply(s, p));
+        if (!n || !canPlaceFreePiece(s, p)) return 'You have nowhere to build a road';
         me.dev.road--;
         me.played.road++;
         s.devPlayed = true;
@@ -517,23 +479,17 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       if (!roadOK(s, p, a.e)) return 'Roads must connect to your own roads or buildings';
       s.edges[a.e] = p;
       me.pieces.road--;
-      s.freeRoads--;
       events.push({ k: 'build', p, what: 'road', at: a.e, free: true });
       updateLongest(s, events);
-      if (s.freeRoads <= 0 || me.pieces.road <= 0 || !legalRoads(s, p).length) {
-        s.stage = s.roadsReturn ?? 'main';
-        s.freeRoads = 0;
-        s.roadsReturn = null;
-      }
+      afterFreePiece(x);
+      for (const m of mods(s)) m.afterRoad?.(x, a.e);
       checkWin(s, events);
       return null;
     }
 
     case 'skipRoads': {
       if (!myTurn || s.stage !== 'roads') return 'You have no free roads to place';
-      s.stage = s.roadsReturn ?? 'main';
-      s.freeRoads = 0;
-      s.roadsReturn = null;
+      finishFreePieces(s);
       return null;
     }
 

@@ -19,7 +19,7 @@ const cards = z.strictObject({
 const idx = z.number().int().min(0).max(999);
 
 export const ActionSchema = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('setup'), v: idx, e: idx }),
+  z.strictObject({ type: z.literal('setup'), v: idx, e: idx, ship: z.boolean().optional() }),
   z.strictObject({ type: z.literal('roll') }),
   z.strictObject({ type: z.literal('discard'), cards }),
   z.strictObject({ type: z.literal('robber'), hex: idx, victim: idx.nullable().optional() }),
@@ -39,6 +39,11 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('respond'), id: idx.max(1e6), yes: z.boolean() }),
   z.strictObject({ type: z.literal('confirm'), id: idx.max(1e6), with: idx }),
   z.strictObject({ type: z.literal('cancel'), id: idx.max(1e6) }),
+  z.strictObject({ type: z.literal('ship'), e: idx }),
+  z.strictObject({ type: z.literal('freeShip'), e: idx }),
+  z.strictObject({ type: z.literal('moveShip'), from: idx, to: idx }),
+  z.strictObject({ type: z.literal('pirate'), hex: idx, victim: idx.nullable().optional() }),
+  z.strictObject({ type: z.literal('chooseGold'), cards }),
 ]);
 
 const roomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);

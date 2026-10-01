@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   RES,
   geometryFor,
+  isResource,
   type GameEvent,
   type PartialRes,
   type PlayerView,
@@ -139,11 +140,12 @@ function flightsFor(e: GameEvent, v: PlayerView): Flight[] {
       const sum = v.dice ? v.dice[0] + v.dice[1] : 0;
       const g = geometryFor(v.board.hexes);
       v.board.hexes.forEach((hx, i) => {
-        if (hx.n !== sum || i === v.board.robber || hx.t === 'desert') return;
+        if (hx.n !== sum || i === v.board.robber || !isResource(hx.t)) return;
+        const t = hx.t;
         for (const vert of g.hexVerts[i]!) {
           const b = v.verts[vert];
-          if (!b || !(e.gains[b[0]]?.[hx.t] ?? 0)) continue;
-          move(Array(b[1]).fill({ kind: hx.t }), hexScreenPoint(i), playerSpot(b[0]));
+          if (!b || !(e.gains[b[0]]?.[t] ?? 0)) continue;
+          move(Array(b[1]).fill({ kind: t }), hexScreenPoint(i), playerSpot(b[0]));
         }
       });
       break;
@@ -153,7 +155,7 @@ function flightsFor(e: GameEvent, v: PlayerView): Flight[] {
       const g = geometryFor(v.board.hexes);
       for (const h of g.verts[e.v]!.hexes) {
         const t = v.board.hexes[h]!.t;
-        if (t !== 'desert') move([{ kind: t }], hexScreenPoint(h), playerSpot(e.p));
+        if (isResource(t)) move([{ kind: t }], hexScreenPoint(h), playerSpot(e.p));
       }
       break;
     }
