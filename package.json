@@ -9,7 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc -p packages/engine",
+    "typecheck": "tsc -p packages/engine && tsc -p packages/server",
     "lint": "prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
