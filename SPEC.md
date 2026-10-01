@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–4 (base game, Seafarers, Cities & Knights, table polish) and the CPU player done and live. Milestone 5 (stats, saved games, game-night extras) proposed, waiting for OK.**
+Status: **Milestones 1–4 (base game, Seafarers, Cities & Knights, table polish) and the CPU player done and live. Milestone 5 (stats, saved games, game-night extras) agreed and being built.**
 
 ## Milestone 1: base game
 
@@ -273,7 +273,7 @@ The rules are written down, with your decisions, in **docs/bot.md**.
 
 ## Milestone 5: Stats, saved games and game-night extras
 
-**Status: proposed. Waiting for your OK (open questions in 5.15).**
+**Status: agreed (your answers are in 5.15). Being implemented.**
 
 Reliability still comes first. In particular, every number on a stats screen is worked out from the saved move history, so it can always be rebuilt and always agrees with what happened.
 
@@ -302,7 +302,7 @@ Reliability still comes first. In particular, every number on a stats screen is 
 ### 5.2 CPU records
 
 - **CPUs aren't profiles.** Each CPU difficulty has its own record, e.g. "Easy CPU: 0 wins, 147 losses", shown on the Stats page.
-- **Today's CPU is "Easy".** See question Q1 about Medium and Hard.
+- **Today's CPU is "Easy"** (**D1**).
 
 ### 5.3 Dice
 
@@ -341,7 +341,7 @@ Reliability still comes first. In particular, every number on a stats screen is 
 - **"Hasn't come up" callouts,** e.g. "no 8 in 20 rolls". One shows when a total has gone so long without coming up that the chance of a gap that long is under 10%. That's 16 rolls for a 6 or 8, 13 for a 7, and 82 for a 2 or 12.
 - **The event die** (Knights, Full game): how often each face came up against 1 in 6 each (3 in 6 for the ship).
 
-**All-time,** on the Stats page:
+**All-time,** on the Stats page (finished games with two or more people, **D2**):
 
 - **The same charts** across every game.
 - **Each player's luck:** cards produced by the dice compared with what was expected.
@@ -395,9 +395,7 @@ Reached from the start screen. Pick a name (a profile, or a CPU difficulty) to s
 
 **What counts:**
 
-- **Wins and losses:** only finished games.
-- **Card totals:** only from finished games, so an unfinished game never leaks a hand.
-- **Dice charts:** every roll from every game, since rolls are public.
+- **Only finished games with two or more people** count (**D2**), for the dice charts too.
 
 **How it's worked out:**
 
@@ -423,7 +421,7 @@ Reached from the start screen. Pick a name (a profile, or a CPU difficulty) to s
   - The game carries on exactly where it stopped.
   - CPUs come back on their own.
   - Several saved games can exist at once.
-- **Delete:** two confirmations. See Q2 for what deleting removes.
+- **Delete:** two confirmations. Removes the game from the list (**D2**).
 - **Games already in progress in a room** show up in the list too.
 
 ### 5.8 Point breakdowns
@@ -547,10 +545,15 @@ This replaces bot.md D6 ("the CPU never talks").
   - Every level only knows what a person at the table would know, because chatter is made from the CPU's own view.
 - **Saved and replayed:** chatter is saved like a normal chat line, so it doesn't change the game.
 
-### 5.15 Open questions
+### 5.15 Decisions
 
-1. **Q1 CPU difficulty.** Today there is one CPU, and it's deliberately weak. My proposal: it becomes **Easy**. Records and chatter are built for Easy, Medium and Hard. Medium (builds every turn, trades sensibly with the bank, aims for cities) and Hard (plays to win, but still never sees hidden cards) come in the following milestone, with their own rules in docs/bot.md. Or do you want Medium and Hard in this milestone?
-2. **Q2 Deleting a saved game.** My proposal: deleting removes an unfinished game from the list and from the stats, since nobody won it. Finished games are history and can't be deleted. OK?
+1. **D1** Today's CPU is **Easy**. Records and chatter are built for Easy, Medium and Hard. Medium and Hard themselves come in the next milestone, with their rules agreed first in docs/bot.md.
+2. **D2** **Stats history only holds finished games with two or more people.**
+   - What counts: all-time totals, dice charts, luck, wins and losses, head-to-heads, streaks, CPU records, and the past-games list.
+   - What doesn't count: unfinished games, and games with one person against CPUs.
+   - Those games still show their own end-screen stats, and unfinished ones can still be saved and resumed.
+   - Deleting a saved (unfinished) game removes it from the Saved Games list. It was never part of the history.
+   - Finished games are history and can't be deleted.
 
 ### 5.16 Done means
 
