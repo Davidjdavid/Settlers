@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–4 (base game, Seafarers, Cities & Knights, table polish) and the CPU player done and live.**
+Status: **Milestones 1–4 (base game, Seafarers, Cities & Knights, table polish) and the CPU player done and live. Milestone 5 (stats, saved games, game-night extras) proposed, waiting for OK.**
 
 ## Milestone 1: base game
 
@@ -271,11 +271,319 @@ The rules are written down, with your decisions, in **docs/bot.md**.
 - It plays legally but badly (builds on 1 turn in 4), and is never mean: no trading with players (it declines every offer), bank trades only for its hand limit and toward a city, the robber/pirate on an empty hex, else a hex only it uses, else its own hex shared with the fewest players, robbing a CPU before a person; no Monopoly or nasty progress cards; in C&K it builds and activates knights but never displaces or chases.
 - It takes 1–2 seconds a move and never chats. Works with every expansion.
 
+## Milestone 5: Stats, saved games and game-night extras
+
+**Status: proposed. Waiting for your OK (open questions in 5.15).**
+
+Reliability still comes first. In particular, every number on a stats screen is worked out from the saved move history, so it can always be rebuilt and always agrees with what happened.
+
+### 5.1 Player profiles
+
+- **What a profile is:** a name and a favourite colour. No passwords.
+- **Joining a room:**
+  - Pick your profile from a list, or create a new one.
+  - The browser remembers your last pick, so it's usually one tap.
+  - Your favourite colour is picked for you if it's free.
+- **Names are unique,** ignoring capitals and extra spaces ("ann" is "Ann").
+- **A profile someone is using** (connected in a room right now) shows as in use, and can't be picked by a second person at the same time.
+- **What hangs off a profile:**
+  - your personal settings (moved over from your nickname);
+  - your seat in every game, past and saved;
+  - all your stats.
+  - Rejoining a room or resuming a saved game matches seats by profile.
+- **Merging two profiles** (e.g. a typo "Bbo" into "Bob"):
+  - From the Stats page.
+  - Two confirmations.
+  - Everything of the merged profile moves to the kept one: games, stats, settings stay those of the kept one.
+  - Refused if both profiles sat in the same game, since that game would have two seats for one person.
+  - Recorded, so stats stay rebuildable.
+- **Existing games:** a profile is created for every nickname already in the database, so your games so far count in the stats.
+
+### 5.2 CPU records
+
+- **CPUs aren't profiles.** Each CPU difficulty has its own record, e.g. "Easy CPU: 0 wins, 147 losses", shown on the Stats page.
+- **Today's CPU is "Easy".** See question Q1 about Medium and Hard.
+
+### 5.3 Dice
+
+**One dice function** on the server rolls every die in every game: people's rolls, CPU rolls, re-rolled 7s, and the event die.
+
+- **How a roll works:**
+  - Each die is its own number from 1 to 6, from Node's cryptographically secure generator (`crypto.randomInt`).
+  - The total is the two dice added together. A total from 2 to 12 is never generated directly.
+- **The event die** (Knights, Full game) is a separate roll of its own.
+- **How the rolled dice reach the engine:**
+  - The server puts the rolled dice into the roll move before the engine applies it, and saves them with the move.
+  - Replays and stats use exactly those dice.
+  - The engine stays pure: it never rolls anything itself for new games.
+  - Players can't send dice; the server rejects a roll move that carries any.
+  - Games saved before this milestone still replay with the old rolls (ENGINE_VERSION goes to 2; old games keep version 1 behaviour).
+  - Other shuffles (the board, card decks, which card is stolen) stay as now, from the game's secret seed.
+- **The Alchemist:** the dice land on the numbers the player chose.
+- **"Balanced dice"** isn't part of this milestone. If it's ever added, it will be a house rule, off by default, and labelled as changing the odds on purpose.
+
+**On screen:**
+
+- **Next to the Roll dice button:** the two dice, each showing its own face. On your roll, the dice are clickable and work exactly like the button. They look clickable on hover, and do nothing when it isn't your roll.
+- **The roll animation:**
+  - Every roll tumbles for about half a second on every screen, then lands on the server's result.
+  - For the roller, the tumble starts the moment they click.
+  - The animation is only for show. It always ends on the real numbers.
+  - With "reduced motion" on, a short fade replaces the tumble.
+- **A dice sound** plays for everyone on every roll (game sounds switch, 5.9).
+
+### 5.4 Dice statistics
+
+**During a game,** in a "Dice" panel anyone can open:
+
+- **A bar chart of totals 2–12:** how often each has been rolled, next to how often it should have been with two real dice. For example, 7 is 6 in 36, 6 and 8 are 5 in 36, and 2 and 12 are 1 in 36.
+- **Rolls per player,** and the number of 7s.
+- **"Hasn't come up" callouts,** e.g. "no 8 in 20 rolls". One shows when a total has gone so long without coming up that the chance of a gap that long is under 10%. That's 16 rolls for a 6 or 8, 13 for a 7, and 82 for a 2 or 12.
+- **The event die** (Knights, Full game): how often each face came up against 1 in 6 each (3 in 6 for the ship).
+
+**All-time,** on the Stats page:
+
+- **The same charts** across every game.
+- **Each player's luck:** cards produced by the dice compared with what was expected.
+  - Expected means: on each roll, the average production over all 36 outcomes, given that player's buildings, the robber and the bank at that moment.
+  - Shown like "received 412, expected 389 (+6%)".
+
+### 5.5 Per-game stats
+
+Shown on the end screen, and for any past game from the Stats page, including games played before this milestone.
+
+For each player:
+
+- **Cards received** by type, split by source:
+  - production;
+  - trades with players;
+  - trades with the bank;
+  - steals;
+  - cards (Year of Plenty, Monopoly, progress cards, gold, aqueduct and the like);
+  - starting resources.
+- **Cards lost** by type:
+  - robbed;
+  - discarded on 7s;
+  - taken by Monopoly or progress cards;
+  - lost in trades;
+  - spent on building.
+- **Robber:** times robbed and times they robbed someone, plus a who-robbed-whom table.
+- **Cards and building:**
+  - development or progress cards bought (drawn) and played, by type;
+  - knights played (base);
+  - knights built, promoted and activated (C&K);
+  - buildings by type;
+  - longest road reached;
+  - trades with players and with the bank.
+- **Points by source** (5.8).
+- **A chart of every player's points over the game,** turn by turn.
+- **Their most productive tile:** the tile, its number, and how many cards it gave them.
+
+**Hidden information:** during a game, only the dice stats are shown. Everything else waits until the game is over, so stats can't give away a hand.
+
+### 5.6 Stats page
+
+Reached from the start screen. Pick a name (a profile, or a CPU difficulty) to see:
+
+- **Results:** wins and losses, overall and by game mode, and win rate.
+- **Points:** average points per game.
+- **Head-to-head records** against each other player.
+- **All-time totals:** resources received and lost by type, robberies done and suffered.
+- **Dice luck** (5.4).
+- **Streaks:** current and longest winning streak.
+- **Past games:** date, mode, players, winner. Each opens that game's stats (5.5).
+
+**What counts:**
+
+- **Wins and losses:** only finished games.
+- **Card totals:** only from finished games, so an unfinished game never leaks a hand.
+- **Dice charts:** every roll from every game, since rolls are public.
+
+**How it's worked out:**
+
+- A pure function in the engine replays a game's saved moves and adds up its events.
+- The server caches the results, but can always throw the cache away and rebuild it.
+- A test checks that the running totals kept during play equal a fresh rebuild.
+
+### 5.7 Saved games
+
+- **Saving is automatic,** after every move, as now.
+- **"Save and quit"** (in the menu) ends tonight's session.
+  - It asks everyone first, with the same warning as ending a game, but it loses nothing.
+  - The room closes, and everyone goes back to the start screen.
+- **The Saved Games list** on the start screen shows each unfinished game with:
+  - its players and their colours;
+  - the date it was last played;
+  - the game mode;
+  - the current scores (public points only);
+  - a small map preview.
+- **Resume:**
+  - Opens a fresh room for that game.
+  - Each person picks their profile and gets their own seat back.
+  - The game carries on exactly where it stopped.
+  - CPUs come back on their own.
+  - Several saved games can exist at once.
+- **Delete:** two confirmations. See Q2 for what deleting removes.
+- **Games already in progress in a room** show up in the list too.
+
+### 5.8 Point breakdowns
+
+Every player's score can show what it's made of, for example "5 = 3 settlements (3) + Longest Road (2)".
+
+- **How to see it:** tap or hover a score. A personal setting shows breakdowns all the time.
+- **Every source in every mode:**
+  - settlements;
+  - cities;
+  - Longest Road (Longest Trade Route in Seafarers);
+  - Largest Army;
+  - victory point cards;
+  - island bonuses (Seafarers);
+  - metropolises, Defender of Catan, the merchant, and point-giving progress cards (Knights, Full game).
+- **Hidden points:** your own breakdown includes your hidden victory point cards, marked as hidden. Other players' breakdowns show only their public points.
+- **How it's worked out:** the engine builds the breakdown itself, and a test checks it always adds up exactly to the score shown.
+- **Points to win:** the screen shows the points the game needs, and how many each player still needs.
+
+### 5.9 Turn alerts and sounds
+
+- **The turn sound** plays only for the player who needs to act:
+  - your turn starts;
+  - a setup placement;
+  - a discard;
+  - a trade offered to you;
+  - a choice you owe (gold, C&K choices);
+  - someone asks for the dice back.
+- **Personal settings,** remembered on your profile:
+
+  | Setting | Default | What it does |
+  |---|---|---|
+  | Turn sound | on | The sound above. |
+  | Game sounds | on | Dice, building, robber and the win fanfare. |
+  | Browser notification | off | A notification when it's your move and the tab is in the background. Switching it on asks the browser's permission. |
+
+- **No sound files:** the sounds are made in the browser (Web Audio), with no new dependencies.
+
+### 5.10 Undo, with everyone's OK
+
+- **Asking:** right after your own move, an "Undo" button lets you ask to take it back.
+- **Who approves:** every other person at the table. CPUs approve automatically.
+  - One "no" cancels the request.
+  - Anyone who doesn't answer simply holds it open.
+  - You can withdraw your request.
+- **Which move:** only your most recent move, and only until anyone else acts or you make another move.
+- **Moves that can be undone** (they reveal nothing hidden):
+  - placing a road, ship, settlement, city, knight or wall;
+  - a setup placement;
+  - moving a ship or a knight;
+  - promoting or activating a knight;
+  - a city improvement;
+  - a bank trade;
+  - moving the robber or pirate when nobody was robbed.
+- **Moves that can never be undone:**
+  - dice rolls;
+  - steals;
+  - drawing or buying a card;
+  - playing a card (it shows what was in your hand);
+  - discards;
+  - trades with players (someone else acted);
+  - discovering fog or a new island;
+  - ending your turn (that's the dice hand-back, 4.4).
+- **Undoing** restores the game exactly as it was before the move, like the hand-back.
+- **How it's recorded:** asking, answering and the undo itself are recorded moves, so replays and stats stay exact.
+
+### 5.11 Pieces
+
+- **Ships:** already drawn as small boats (a hull and a sail) and roads as straight bars. That will be checked in screenshots at the smallest zoom and display size, and the boat made bigger or bolder if it isn't obvious.
+- **Knights:**
+  - Level shown by shape as well as pips: basic is a plain shield, strong has a helmet crest, mighty has a crown.
+  - An active knight has a bright gold ring and is fully solid; an inactive one is dimmed with no ring.
+- **City walls:** a thicker stone base with crenels.
+- **Metropolises:** a taller tower in the track's colour.
+- **Pieces left:**
+  - Every player's panel shows how many pieces they have left, as small icons with numbers:
+    - roads, settlements and cities, everywhere;
+    - ships in Seafarers and Full game;
+    - knights by level and city walls in Knights and Full game.
+  - Everyone sees everyone's counts. A count at 0 turns red.
+  - Your build buttons show yours, e.g. "Settlement · 2 left".
+  - The engine provides the counts, and a test checks them against the rules.
+
+### 5.12 Zoom and display size
+
+- **Board zoom:**
+  - Ways to zoom: + and − buttons, the mouse wheel, trackpad pinch, or two-finger pinch on phones and tablets.
+  - Drag to move around while zoomed.
+  - A "Fit board" button snaps back.
+  - Zoom changes only your own view.
+- **Display size:**
+  - Small, Medium (today's size), Large or Extra large.
+  - Scales text, cards, buttons and panels together.
+  - Remembered per device, since a phone and a laptop want different sizes.
+  - At every size the layout adapts: nothing overlaps, nothing is cut off, no sideways scrolling.
+- **Taps land where you aim** at every zoom level, including on Confirm ghosts.
+
+### 5.13 Win celebration
+
+- **When someone wins:**
+  - confetti in the winner's colour;
+  - a winner banner;
+  - a short fanfare (game sounds switch);
+  - then the end screen with that game's stats and a **Rematch** button: same players, same mode, new board.
+- **With reduced motion on:** the banner and end screen, with no confetti.
+
+### 5.14 CPU chatter
+
+This replaces bot.md D6 ("the CPU never talks").
+
+- **What CPUs post** now and then in table talk, marked as a CPU:
+  - what they're looking for ("anyone have brick?");
+  - what they have too much of ("drowning in wheat");
+  - what they're saving for;
+  - reactions ("robbed AGAIN").
+- **How often:** at most one message per CPU per turn, and not every turn (about 1 turn in 4).
+- **Turning it off:** a room setting, on by default, changeable in the lobby or mid-game like other table rules.
+- **Honesty:**
+  - Easy (and Medium) say only what's true about their hand and plans.
+  - Hard is cagey and may bluff.
+  - Every level only knows what a person at the table would know, because chatter is made from the CPU's own view.
+- **Saved and replayed:** chatter is saved like a normal chat line, so it doesn't change the game.
+
+### 5.15 Open questions
+
+1. **Q1 CPU difficulty.** Today there is one CPU, and it's deliberately weak. My proposal: it becomes **Easy**. Records and chatter are built for Easy, Medium and Hard. Medium (builds every turn, trades sensibly with the bank, aims for cities) and Hard (plays to win, but still never sees hidden cards) come in the following milestone, with their own rules in docs/bot.md. Or do you want Medium and Hard in this milestone?
+2. **Q2 Deleting a saved game.** My proposal: deleting removes an unfinished game from the list and from the stats, since nobody won it. Finished games are history and can't be deleted. OK?
+
+### 5.16 Done means
+
+1. **Dice:** a test of 1,000,000 rolls through the dice function.
+   - Each die is even over 1–6.
+   - The totals match two-dice odds within a tight tolerance: 2 about 2.8%, 6 about 13.9%, 7 about 16.7%. The tolerance is set from the expected spread, so a correct generator fails less than 1 time in 10,000.
+   - The event die is checked the same way.
+2. **Stats:**
+   - Rebuilt from the move log, they match the live totals in a test over 500 simulated games.
+   - Wins, losses and head-to-heads are checked against known games.
+3. **Saved games:** a game is saved, the server restarted, and the game resumed identically, in seats matched by profile.
+4. **Undo tests:** approved; denied; refused for hidden information (roll, steal, card draw and play, fog); refused after someone else acts.
+5. **Turn sound:** it plays only for the player who needs to act, and only when their setting is on (browser test).
+6. **Dice on screen:**
+   - Clicking the dice rolls exactly like the button.
+   - The animation lands on the server's result on every screen.
+   - The dice sound plays for everyone and respects the switch.
+7. **Pieces:**
+   - Ships and roads are clearly different in screenshots at the smallest zoom and display size.
+   - Pieces-left counts match the engine across 500 simulated games in every mode.
+8. **Points:** every breakdown adds up exactly to the score shown, across 500 simulated games in every mode and scenario.
+9. **Zoom and display size:**
+   - tested on a phone, a tablet and a laptop screen at every display size;
+   - nothing overlaps or is cut off;
+   - placements land exactly where tapped when zoomed.
+10. **CPU chatter:** respects its one-per-turn limit and the off switch, and Easy only says true things.
+11. **A full 3-player game in browsers** ends with confetti and correct stats.
+12. **`npm run check` green, then deploy.**
+
 ## Later milestones (design for these now, don't build them)
 - Map editor (custom boards, saved and shared).
 - More Seafarers scenarios: The Four Islands, The Fog Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan.
 - Options for a more competent CPU player.
-- Accounts and game history / stats.
 - A replay viewer.
 
 ## Catan Universe complaints
