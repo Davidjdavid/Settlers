@@ -15,6 +15,15 @@ import { expect, test, type BrowserContextOptions, type Locator, type Page } fro
 import { TestServer, freePort } from './server';
 import { checkFrames, view, type Frame } from './table';
 
+// A click that can't happen should fail the test quickly, not wait for the 10-minute limit.
+test.use({ actionTimeout: 15000 });
+test.setTimeout(20 * 60 * 1000);
+
+/** Screenshots for checking the UI by eye: SHOTS=<dir> npx playwright test e2e/polish.spec.ts */
+const shot = async (p: Page, name: string) => {
+  if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/${name}.png` });
+};
+
 const RES = ['wood', 'brick', 'sheep', 'wheat', 'ore'] as const;
 type SettingKey = 'confirmPlace' | 'confirmPlaceTouch' | 'confirmEnd' | 'confirmCard' | 'confirmTrade';
 
@@ -82,6 +91,11 @@ test('three players use the table polish features through a whole game', async (
     await help.hover();
     await expect(help.locator('.helptext')).toBeVisible();
     await expect(help.locator('.helptext')).toContainText('give the dice back');
+    await shot(a, 'lobby');
+    await shot(c, 'lobby-phone');
+    // A shorter game: 7 points to win (raised to 8 mid-game below).
+    for (let i = 0; i < 3; i++) await a.click('[aria-label="Fewer points"]');
+    await expect(c.getByTestId('win-vp')).toHaveText('7');
     await a.click('[data-testid=start]');
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
     const v0 = await view(a);
@@ -114,6 +128,7 @@ test('three players use the table polish features through a whole game', async (
       await p.getByTestId('menu-settings').click();
       const sw = p.getByTestId(`setting-${k}`);
       await expect(sw).toBeChecked({ checked: cur });
+      await shot(p, `settings-${touch.has(p) ? 'phone' : 'desktop'}`);
       await sw.click();
       await expect.poll(() => isOn(p, k)).toBe(on);
       await p.getByTestId('settings-close').click();
@@ -153,6 +168,7 @@ test('three players use the table polish features through a whole game', async (
         await expect(p.getByTestId('confirm-place')).toBeVisible();
         await expect(p.locator('#board .ghost.waiting')).toHaveCount(2);
         expect((await view(p)).seq).toBe(seq);
+        await shot(p, `confirm-${t ? 'phone' : 'mouse'}-${count.placeTouch[1] + count.placeMouse[1]}`);
         await hit(p, p.getByTestId('confirm-place'));
       } else await expect(p.getByTestId('confirm-place')).toHaveCount(0);
       await seqUp(p, seq);
@@ -178,6 +194,7 @@ test('three players use the table polish features through a whole game', async (
     const p1 = await turnPage();
     await p0.getByTestId('ask-back').click();
     await expect(p1.getByTestId('back-banner')).toBeVisible();
+    await shot(p1, 'back-banner');
     await p1.getByTestId('back-banner').getByTestId('hand-back').click();
     await expect.poll(async () => (await view(a)).turn).toBe(await seatOf(p0));
     expect((await view(a)).verts.every((x: unknown) => x == null)).toBe(true);
@@ -199,6 +216,7 @@ test('three players use the table polish features through a whole game', async (
     const changeRules = async (p: Page) => {
       await openMenu(p);
       await p.getByTestId('menu-rules').click();
+      await shot(p, 'rules');
       await p.getByTestId('tablerule-bank3to1').click();
       for (const q of pages)
         await expect.poll(async () => (await view(q)).rules.houseRules.bank3to1).toBe(true);
@@ -263,6 +281,7 @@ test('three players use the table polish features through a whole game', async (
       await p.getByTestId('end').click();
       if (on) {
         await expect(p.getByRole('dialog')).toContainText('End your turn?');
+        if (count.end[1] === 1) await shot(p, 'end-confirm');
         expect((await view(p)).seq).toBe(seq);
         await p.getByTestId('ask-yes').click();
       }
@@ -327,6 +346,8 @@ test('three players use the table polish features through a whole game', async (
       if (step > 30000) throw new Error('too many steps');
       const v = await view(a);
       if (v.phase === 'over') break;
+      if (step % 200 === 0)
+        console.log(`step ${step}: turn ${v.turnN}, stage ${v.stage}`, JSON.stringify(count));
       if (!rejoined && v.turnN >= 15 && v.stage === 'preroll') await rejoin();
       let moved = false;
       for (const p of pages) {

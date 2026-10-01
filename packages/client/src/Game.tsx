@@ -7,7 +7,7 @@ import {
 } from '@settlers/engine'; // prettier-ignore
 import type { LogItem, RoomInfo } from '@settlers/server/protocol';
 import {
-  BRAND_SVG, CARD_COLOR, CARD_LABEL, DEV_HELP, DEV_LABEL, PCOL, PROGRESS_HELP, PROGRESS_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR,
+  BRAND_SVG, CARD_COLOR, CARD_LABEL, DEV_HELP, DEV_LABEL, PCOL, PEDGE, PROGRESS_HELP, PROGRESS_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR,
   TRACK_LABEL, cardIcon,
 } from './art'; // prettier-ignore
 import { Board, NO_TARGETS, type Ghost, type Targets } from './Board';
@@ -909,7 +909,12 @@ export function Game({
               >
                 <span className="pc">
                   <svg viewBox="-15 -15 30 30" aria-hidden="true">
-                    <path d="M-10 9V-2L0-11 10-2V9Z" fill={PCOL[p.color]} stroke="#0b1418" strokeWidth="2" />
+                    <path
+                      d="M-10 9V-2L0-11 10-2V9Z"
+                      fill={PCOL[p.color]}
+                      stroke={PEDGE(p.color)}
+                      strokeWidth="2"
+                    />
                   </svg>
                 </span>
                 <span className="nm">
