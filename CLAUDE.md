@@ -32,7 +32,7 @@ Run all commands from the repo root.
 | End-to-end (3 browsers, real server build) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
 | **Everything CI runs** | `npm run check` |
 | Build (client to `packages/client/dist`, server bundle to `packages/server/dist`) | `npm run build` |
-| Deploy | see `deploy/README.md` _(not built yet)_ |
+| Deploy | GitHub → Actions → Deploy → Run workflow, or `npm run deploy` (see `deploy/README.md`) |
 
 ## Definition of done
 

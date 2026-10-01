@@ -17,7 +17,8 @@
     "check": "npm run typecheck && npm run lint && npm test && npm run sim && npm run test:e2e",
     "build": "npm run build -w @settlers/client && npm run build -w @settlers/server",
     "dev": "node scripts/dev.mjs",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "npm run build && playwright test",
+    "deploy": "bash deploy/deploy.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

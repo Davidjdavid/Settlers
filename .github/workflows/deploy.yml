@@ -1,0 +1,36 @@
+name: Deploy
+# Runs the full check, then ships to the server. Start it from the Actions tab ("Run workflow"),
+# or by pushing to main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check (typecheck, lint, unit tests, simulator, end-to-end)
+        run: npm run check
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          SITE_PASSPHRASE: ${{ secrets.SITE_PASSPHRASE }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          DEPLOY_KEY=~/.ssh/deploy_key bash deploy/deploy.sh
