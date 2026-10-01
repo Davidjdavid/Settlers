@@ -122,12 +122,57 @@ export function applyAction(s0: GameState, seat: Seat, action: Action): ApplyRes
   }
   if (error) return { ok: false, error };
   keepForHandBack(s0, s, seat, action);
+  keepForUndo(s0, s, seat, action, events);
   s.seq = s0.seq + 1;
   return { ok: true, state: s, events };
 }
 
 /** Actions that leave a pending hand-back alone. */
-const BACK_ACTIONS = new Set<Action['type']>(['askBack', 'handBack', 'refuseBack', 'setRule']);
+const BACK_ACTIONS = new Set<Action['type']>([
+  'askBack', 'handBack', 'refuseBack', 'setRule', 'askUndo', 'answerUndo', 'cancelUndo',
+]); // prettier-ignore
+
+/** Moves that can be undone (SPEC 5.10), as long as they revealed nothing hidden. */
+const UNDOABLE = new Set<Action['type']>([
+  'setup', 'road', 'ship', 'settlement', 'city', 'freeRoad', 'freeShip', 'moveShip', 'robber', 'pirate',
+  'knight', 'wall', 'promote', 'activate', 'moveKnight', 'improve', 'bank',
+]); // prettier-ignore
+/** Events that mean a move showed something hidden (or can't be taken back), so no undo. */
+const REVEALING = new Set<GameEvent['k']>([
+  'roll', 'produce', 'steal', 'buyDev', 'draw', 'discover', 'spy', 'give', 'gold', 'goldOwed', 'win', 'trade',
+  'eventDie', 'attack',
+]); // prettier-ignore
+const UNDO_ACTIONS = new Set<Action['type']>(['askUndo', 'answerUndo', 'cancelUndo']);
+
+/**
+ * Undo (SPEC 5.10): after an undoable move, keep the game as it was before it until anyone
+ * makes another move. Games without the rule never get it.
+ */
+function keepForUndo(s0: GameState, s: GameState, p: Seat, a: Action, events: GameEvent[]) {
+  if (UNDO_ACTIONS.has(a.type)) return;
+  if (
+    s.phase === 'play' &&
+    s.config.houseRules?.undo &&
+    UNDOABLE.has(a.type) &&
+    !events.some((e) => REVEALING.has(e.k))
+  ) {
+    const { undo: _old, ...before } = s0;
+    void _old;
+    s.undo = { p, asked: false, ok: [], state: cloneJson(before) };
+  } else delete s.undo;
+}
+
+/** Everyone else has said yes (people answer; CPUs always agree): put the game back. */
+function undoIfAgreed(s: GameState, events: GameEvent[]) {
+  const u = s.undo!;
+  const others = s.players.map((_, i) => i).filter((i) => i !== u.p);
+  if (!others.every((i) => u.ok.includes(i))) return;
+  const config = s.config;
+  const before = u.state!;
+  for (const k of Object.keys(s)) delete (s as unknown as Record<string, unknown>)[k];
+  Object.assign(s, before, { config });
+  events.push({ k: 'undo', p: u.p });
+}
 
 /**
  * Handing the dice back (SPEC 4.4): ending a turn (or, if allowed, a starting placement) keeps
@@ -137,8 +182,9 @@ function keepForHandBack(s0: GameState, s: GameState, p: Seat, a: Action) {
   if (BACK_ACTIONS.has(a.type)) return;
   const hr = s.config.houseRules;
   if (s.phase === 'play' && hr?.handBack && (a.type === 'end' || (a.type === 'setup' && hr.handBackSetup))) {
-    const { back: _old, ...before } = s0;
+    const { back: _old, undo: _undo, ...before } = s0;
     void _old;
+    void _undo;
     s.back = { from: p, asked: false, refused: false, state: cloneJson(before) };
   } else delete s.back;
 }
@@ -175,6 +221,7 @@ function setRule(
     if (Object.keys(hr).length) s.config.houseRules = hr;
     else delete s.config.houseRules;
     if (rule === 'handBack' && !value) delete s.back;
+    if (rule === 'undo' && !value) delete s.undo;
   }
   events.push({ k: 'rule', p, rule, value });
   return null;
@@ -254,6 +301,39 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       for (const k of Object.keys(s)) delete (s as unknown as Record<string, unknown>)[k];
       Object.assign(s, before, { config });
       events.push({ k: 'handBack', p, to: b.from });
+      return null;
+    }
+    case 'askUndo': {
+      const u = s.undo;
+      if (!u?.state || u.p !== p) return 'There’s nothing of yours to undo';
+      if (u.asked) return 'You already asked';
+      u.asked = true;
+      // CPUs always agree.
+      u.ok = s.players.flatMap((pl, i) => (i !== p && pl.cpu ? [i] : []));
+      events.push({ k: 'askUndo', p });
+      undoIfAgreed(s, events);
+      return null;
+    }
+    case 'answerUndo': {
+      const u = s.undo;
+      if (!u?.asked || u.p === p) return 'Nobody asked you to undo anything';
+      if (u.ok.includes(p)) return 'You already said yes';
+      if (typeof a.yes !== 'boolean') return 'Say yes or no';
+      events.push({ k: 'answerUndo', p, yes: a.yes });
+      if (!a.yes) {
+        delete s.undo;
+        return null;
+      }
+      u.ok.push(p);
+      undoIfAgreed(s, events);
+      return null;
+    }
+    case 'cancelUndo': {
+      const u = s.undo;
+      if (!u?.asked || u.p !== p) return 'You haven’t asked to undo';
+      u.asked = false;
+      u.ok = [];
+      events.push({ k: 'cancelUndo', p });
       return null;
     }
     case 'setRule':

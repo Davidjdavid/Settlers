@@ -152,12 +152,14 @@ export interface HouseRules {
   handBack?: boolean;
   /** ...also after a starting placement. */
   handBackSetup?: boolean;
+  /** Players may ask everyone to undo their last move (SPEC 5.10). */
+  undo?: boolean;
 }
 
 /** Game rules a player may change during their turn (SPEC 4.5). */
 export const RULE_KEYS = [
   'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
-  'barbarianDelay', 'handBack', 'handBackSetup',
+  'barbarianDelay', 'handBack', 'handBackSetup', 'undo',
 ] as const; // prettier-ignore
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -168,6 +170,17 @@ export interface HandBack {
   asked: boolean;
   refused: boolean;
   /** The game as it was before; restored on hand-back. Server-only. */
+  state: GameState | null;
+}
+
+/** A move that can still be undone, if everyone agrees (SPEC 5.10). */
+export interface UndoState {
+  /** Whose move it was. */
+  p: Seat;
+  asked: boolean;
+  /** Who has said yes so far (CPUs say yes as soon as it's asked). */
+  ok: Seat[];
+  /** The game as it was before the move; restored on undo. Server-only. */
   state: GameState | null;
 }
 
@@ -324,6 +337,8 @@ export interface GameState {
   ck?: CKState;
   /** A turn that can still be handed back; absent otherwise. */
   back?: HandBack;
+  /** The last move, while it can still be undone; absent otherwise. */
+  undo?: UndoState;
 }
 
 /** Where a player's points come from (SPEC 5.8). */
@@ -393,6 +408,9 @@ export type Action =
   | { type: 'askBack' }
   | { type: 'handBack' }
   | { type: 'refuseBack' }
+  | { type: 'askUndo' }
+  | { type: 'answerUndo'; yes: boolean }
+  | { type: 'cancelUndo' }
   /** Change a game rule during your turn. */
   | { type: 'setRule'; rule: RuleKey; value: boolean | number }
   /* Cities & Knights */
@@ -474,6 +492,10 @@ export type GameEvent =
   | { k: 'askBack'; p: Seat }
   | { k: 'handBack'; p: Seat; to: Seat }
   | { k: 'refuseBack'; p: Seat }
+  | { k: 'askUndo'; p: Seat }
+  | { k: 'answerUndo'; p: Seat; yes: boolean }
+  | { k: 'cancelUndo'; p: Seat }
+  | { k: 'undo'; p: Seat }
   | { k: 'rule'; p: Seat; rule: RuleKey; value: boolean | number }
   /* Cities & Knights */
   | { k: 'eventDie'; face: 'ship' | Track }

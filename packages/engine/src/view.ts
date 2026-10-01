@@ -72,6 +72,8 @@ export interface PlayerView {
     start: 'all' | [number, number][];
     newIslandVP: number;
   };
+  /** A move that can be undone: whose, whether they asked, who has agreed. */
+  undo?: { p: Seat; asked: boolean; ok: Seat[] };
   /** A turn that can be handed back (who ended it, whether they asked). */
   back?: { from: Seat; asked: boolean; refused: boolean };
   /** Seafarers (public parts only). */
@@ -145,6 +147,7 @@ export function viewFor(s: GameState, seat: Seat | null): PlayerView {
     },
   } satisfies PlayerView);
   if (s.back) v.back = { from: s.back.from, asked: s.back.asked, refused: s.back.refused };
+  if (s.undo) v.undo = { p: s.undo.p, asked: s.undo.asked, ok: s.undo.ok.slice() };
   for (const m of mods(s)) m.view?.(s, me, v);
   return v;
 }
@@ -237,6 +240,7 @@ export function stateFromView(v: PlayerView): GameState {
   } satisfies GameState);
   // The turn to restore is server-only; legal moves only need to know a hand-back is possible.
   if (v.back) s.back = { ...v.back, state: null };
+  if (v.undo) s.undo = { ...v.undo, ok: v.undo.ok.slice(), state: null };
   for (const m of mods(s)) m.fromView?.(v, s);
   return s;
 }

@@ -179,6 +179,17 @@ export function checkInvariants(s: GameState, prev?: GameState): string[] {
     if (s.phase !== 'play') bad.push('hand-back pending after the game ended');
   }
 
+  // Undo.
+  if (s.undo) {
+    const u = s.undo;
+    if (!s.config.houseRules?.undo) bad.push('undo pending without the rule');
+    if (!(u.p >= 0 && u.p < n)) bad.push(`undo for ${u.p}`);
+    if (!u.state || u.state.undo) bad.push('undo without exactly one earlier state');
+    if (!u.asked && u.ok.length) bad.push('undo approved before it was asked');
+    if (u.ok.includes(u.p)) bad.push('undo approved by its own player');
+    if (s.phase !== 'play') bad.push('undo pending after the game ended');
+  }
+
   for (const m of mods(s)) bad.push(...(m.invariants?.(s) ?? []));
   return bad;
 }

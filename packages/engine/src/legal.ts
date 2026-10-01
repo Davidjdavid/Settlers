@@ -58,6 +58,13 @@ export function legalActions(s: GameState, p: Seat): Action[] {
     if (myTurn) out.push({ type: 'handBack' });
     if (myTurn && b.asked) out.push({ type: 'refuseBack' });
   }
+  // Undo (SPEC 5.10).
+  const u = s.undo;
+  if (u) {
+    if (p === u.p) out.push(u.asked ? { type: 'cancelUndo' } : { type: 'askUndo' });
+    else if (u.asked && !u.ok.includes(p))
+      out.push({ type: 'answerUndo', yes: true }, { type: 'answerUndo', yes: false });
+  }
   if (!myTurn) return out;
 
   switch (s.stage) {

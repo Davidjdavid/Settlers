@@ -62,7 +62,7 @@ const WEIGHT: Record<Action['type'], number> = {
   improve: 25, wall: 4, knight: 6, promote: 4, activate: 5, moveKnight: 1.5, chase: 3,
   dropProgress: 1, progress: 4, choose: 1,
   // Hand-backs and rule changes are made on purpose in chooseMove, not picked at random.
-  askBack: 0, handBack: 0, refuseBack: 0, setRule: 0,
+  askBack: 0, handBack: 0, refuseBack: 0, setRule: 0, askUndo: 0, answerUndo: 0, cancelUndo: 0,
 }; // prettier-ignore
 
 function randomCards(s: GameState, p: Seat, need: number, rng: RngState): Cards {
@@ -205,6 +205,15 @@ function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
     if (b.asked) return [s.turn, { type: chance(rng, 0.6) ? 'handBack' : 'refuseBack' }];
     if (!b.refused && b.from !== s.turn) return [b.from, { type: 'askBack' }];
     if (chance(rng, 0.3)) return [s.turn, { type: 'handBack' }];
+  }
+  // Undo: ask, answer (mostly yes) or withdraw now and then.
+  const u = s.undo;
+  if (u && chance(rng, 0.15)) {
+    if (!u.asked) return [u.p, { type: 'askUndo' }];
+    const waiting = s.players.map((_, i) => i).filter((i) => i !== u.p && !u.ok.includes(i));
+    if (waiting.length && chance(rng, 0.85))
+      return [pick(rng, waiting), { type: 'answerUndo', yes: chance(rng, 0.75) }];
+    if (chance(rng, 0.3)) return [u.p, { type: 'cancelUndo' }];
   }
   if (s.stage === 'main' && chance(rng, 0.003)) return [s.turn, randomRule(s, rng)];
   if (s.stage === 'discard') {
@@ -479,6 +488,14 @@ export function withDice(a: Action, dice: RngState): Action {
   return { type: 'roll', dice: { d: Array.from({ length: 32 }, die), e: [die()] } };
 }
 
+const UNDO_TYPES = new Set(['askUndo', 'answerUndo', 'cancelUndo']);
+// Kept separately from the engine's lists, so a move added there by mistake is caught here.
+const UNDOABLE_TYPES = new Set([
+  'setup', 'road', 'ship', 'settlement', 'city', 'freeRoad', 'freeShip', 'moveShip', 'robber', 'pirate',
+  'knight', 'wall', 'promote', 'activate', 'moveKnight', 'improve', 'bank',
+]); // prettier-ignore
+const SECRET_EVENTS = new Set(['roll', 'steal', 'buyDev', 'draw', 'discover', 'spy', 'give', 'gold']);
+
 export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}): SimResult {
   const maxTurns = opts.maxTurns ?? 1500;
   const deep = opts.deepCheckRate ?? 0.03;
@@ -560,7 +577,24 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       const same = (x: GameState) => canonical({ ...x, seq: 0, config: null });
       if (same(s) !== same(prev.back!.state!)) fail('hand-back did not restore the turn exactly');
     }
-    const bad = [...checkInvariants(s, prev), ...checkTransition(prev, s)];
+    // An undo restores the game exactly as it was before the move (SPEC 5.10).
+    if (r.events.some((e) => e.k === 'undo')) {
+      const same = (x: GameState) => canonical({ ...x, seq: 0, config: null });
+      if (same(s) !== same(prev.undo!.state!)) fail('undo did not restore the game exactly');
+    }
+    // After any other move, the undo on offer (if any) is for exactly that move.
+    if (s.undo && !UNDO_TYPES.has(a.type)) {
+      const same = (x: GameState) => canonical({ ...x, seq: 0, undo: null });
+      if (s.undo.p !== p || same(s.undo.state!) !== same(prev))
+        fail('undo on offer is not for the last move');
+    }
+    if (s.undo && !UNDOABLE_TYPES.has(a.type) && !UNDO_TYPES.has(a.type))
+      fail(`undo offered after ${a.type}`);
+    if (s.undo && UNDOABLE_TYPES.has(a.type) && r.events.some((e) => SECRET_EVENTS.has(e.k)))
+      fail(`undo offered after ${a.type}, which revealed something`);
+    // An undo goes back to an earlier state (checked exactly above), not forward.
+    const undone = r.events.some((e) => e.k === 'undo');
+    const bad = [...checkInvariants(s, prev), ...(undone ? [] : checkTransition(prev, s))];
     if (bad.length) bad.forEach((b) => fail(`after ${JSON.stringify(a)}: ${b}`));
   }
 
