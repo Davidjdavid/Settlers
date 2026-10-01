@@ -6,6 +6,7 @@ import { botMove, seedRng, viewFor, type GameState } from '@settlers/engine';
 import type { ClientMsg, ServerMsg } from '../src/protocol';
 import { Rooms, type Conn } from '../src/rooms';
 import { Store } from '../src/store';
+import { joinAs } from './util';
 
 class FakeConn implements Conn {
   room: Conn['room'] = null;
@@ -61,7 +62,7 @@ function lobby() {
   const host = new FakeConn();
   send(host, { t: 'create' });
   const code = host.last('sync').room.code;
-  send(host, { t: 'join', nick: 'Ann', color: 'red' });
+  send(host, joinAs(store, 'Ann', 'red'));
   return { host, code };
 }
 
@@ -109,7 +110,7 @@ describe('CPU seats in the lobby', () => {
     send(c, { t: 'claim', seat: 0 });
     expect(c.last('error').text).toMatch(/CPU/);
     // Sit back down: now it can start.
-    send(host, { t: 'join', nick: 'Ann', color: 'red' });
+    send(host, joinAs(store, 'Ann', 'red'));
     send(host, { t: 'start' });
     expect(rooms.getRoom(code)!.game).not.toBeNull();
     expect(state(code).players.filter((p) => p.cpu)).toHaveLength(2);

@@ -3,7 +3,7 @@
  * end-to-end test, and the starting point for the deliberately weak CPU player.
  */
 
-import { legalActions, mustDiscard } from './legal';
+import { TABLE_TALK, legalActions, mustDiscard } from './legal';
 import { ckDiscardDue } from './modules/citiesKnights';
 import { goldDue } from './modules/seafarers';
 import { COST, cardKinds, geo, has, legalSettlements, rateFor, vertFree, vertexOK } from './queries';
@@ -70,7 +70,10 @@ export function botMove(v: PlayerView, rng: RngState): Action | null {
       return { type: 'respond', id: o.id, yes: false };
   }
   if (v.turn !== me) return null;
-  const acts = legalActions(s, me).filter((a) => !['respond', 'confirm', 'cancel'].includes(a.type));
+  // Never asks for undos or the dice back, and never changes the rules.
+  const acts = legalActions(s, me).filter(
+    (a) => !['respond', 'confirm', 'cancel', ...TABLE_TALK].includes(a.type),
+  );
   if (!acts.length) return null;
 
   const res = v.hand!.res;

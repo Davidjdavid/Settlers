@@ -99,14 +99,22 @@ describe('websocket', () => {
     const sync = await a.next();
     if (sync.t !== 'sync') throw new Error(sync.t);
     const code = sync.room.code;
-    a.ws.send(JSON.stringify({ t: 'join', nick: 'Ann', color: 'red' }));
+    a.ws.send(JSON.stringify({ t: 'newProfile', name: 'Ann', color: 'red' }));
+    const ann = await a.next();
+    if (ann.t !== 'profile') throw new Error(ann.t);
+    expect((await a.next()).t).toBe('profiles');
+    a.ws.send(JSON.stringify({ t: 'join', profile: ann.profile.id, color: 'red' }));
     expect((await a.next()).t).toBe('seat');
     await a.next(); // update
 
     const b = await connect(cookie!);
     b.ws.send(JSON.stringify({ t: 'hello', room: code }));
     expect((await b.next()).t).toBe('sync');
-    b.ws.send(JSON.stringify({ t: 'join', nick: 'Bob', color: 'blue' }));
+    b.ws.send(JSON.stringify({ t: 'newProfile', name: 'Bob', color: 'blue' }));
+    const bob = await b.next();
+    if (bob.t !== 'profile') throw new Error(bob.t);
+    await b.next(); // profiles
+    b.ws.send(JSON.stringify({ t: 'join', profile: bob.profile.id, color: 'blue' }));
     expect((await b.next()).t).toBe('seat');
 
     b.ws.send(JSON.stringify({ t: 'bogus' }));

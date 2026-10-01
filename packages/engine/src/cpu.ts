@@ -3,7 +3,7 @@
  * from its own view only. `memo` is the little it remembers within a turn; the caller keeps it.
  */
 
-import { legalActions, mustDiscard } from './legal';
+import { TABLE_TALK, legalActions, mustDiscard } from './legal';
 import { ckDiscardDue, firstOwe } from './modules/citiesKnights';
 import { goldDue } from './modules/seafarers';
 import { COST, cardKinds, geo, handLimit, rateFor, robberHexOK, total, vertFree, vertexOK } from './queries';
@@ -245,7 +245,8 @@ export function cpuMove(v: PlayerView, rng: RngState, memo: CpuMemo): Action | n
   if (s.back?.asked) return { type: 'handBack' };
 
   const acts = legalActions(s, me).filter(
-    (a) => a.type !== 'respond' && a.type !== 'confirm' && a.type !== 'cancel',
+    (a) =>
+      a.type !== 'respond' && a.type !== 'confirm' && a.type !== 'cancel' && !TABLE_TALK.includes(a.type),
   );
   if (!acts.length) return null;
   if (s.stage !== 'setup' && memo.turnN !== s.turnN) {

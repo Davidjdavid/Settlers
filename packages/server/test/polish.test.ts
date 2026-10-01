@@ -6,6 +6,7 @@ import { legalActions, type GameState } from '@settlers/engine';
 import type { ClientMsg, ServerMsg } from '../src/protocol';
 import { Rooms, type Conn } from '../src/rooms';
 import { Store } from '../src/store';
+import { joinAs, moves } from './util';
 
 class FakeConn implements Conn {
   room: Conn['room'] = null;
@@ -46,7 +47,7 @@ function table(nicks: string[]) {
   const conns = nicks.map((nick, i) => {
     const c = i === 0 ? host : new FakeConn();
     if (i) send(c, { t: 'hello', room: code });
-    send(c, { t: 'join', nick, color: colors[i]! });
+    send(c, joinAs(store, nick, colors[i]!));
     return c;
   });
   return { code, conns };
@@ -84,14 +85,14 @@ describe('rejoining by name (SPEC 4.6)', () => {
     rooms.disconnect(conns[1]!);
     const phone = new FakeConn();
     send(phone, { t: 'hello', room: code });
-    send(phone, { t: 'join', nick: ' bob ', color: 'yellow' });
+    send(phone, joinAs(store, ' bob ', 'yellow'));
     expect(phone.last('seat').pid).toBe(bobPid);
     expect(phone.last('update').game!.me).toBe(state(code).players.findIndex((p) => p.pid === bobPid));
     const thief = new FakeConn();
     send(thief, { t: 'hello', room: code });
-    send(thief, { t: 'join', nick: 'Cat', color: 'yellow' });
+    send(thief, joinAs(store, 'Cat', 'yellow'));
     expect(thief.last('error').text).toMatch(/in use/);
-    send(thief, { t: 'join', nick: 'Dan', color: 'yellow' });
+    send(thief, joinAs(store, 'Dan', 'yellow'));
     expect(thief.last('error').text).toMatch(/already started/);
   });
 });
@@ -103,7 +104,7 @@ describe('colours', () => {
     expect(conns[0]!.last('error').text).toMatch(/CPU/);
     const c = new FakeConn();
     send(c, { t: 'hello', room: conns[0]!.last('update').room.code });
-    send(c, { t: 'join', nick: 'Bob', color: 'gray' });
+    send(c, joinAs(store, 'Bob', 'gray'));
     expect(c.last('error').text).toMatch(/CPU/);
     send(conns[0]!, { t: 'addCpu' });
     expect(conns[0]!.last('update').room.seats[1]!.color).toBe('gray');
@@ -121,7 +122,7 @@ describe('game rules during the game', () => {
     expect(other.last('ack').ok).toBe(false);
     send(turn, { t: 'act', id: 'r2', action: { type: 'setRule', rule: 'bank3to1', value: true } });
     expect(turn.last('ack').ok).toBe(true);
-    expect(state(code).config.houseRules).toEqual({ handBack: true, bank3to1: true });
+    expect(state(code).config.houseRules).toEqual({ handBack: true, undo: true, bank3to1: true });
     expect(rooms.getRoom(code)!.options.houseRules.bank3to1).toBe(true);
     const log = other.last('update').log;
     expect(log.some((it) => it.k === 'ev' && it.e.k === 'rule')).toBe(true);
@@ -140,14 +141,14 @@ describe('game rules during the game', () => {
     let n = 0;
     while (state(code).stage === 'setup') {
       const s = state(code);
-      send(by(s.turn), { t: 'act', id: `s${n++}`, action: legalActions(s, s.turn)[0]! });
+      send(by(s.turn), { t: 'act', id: `s${n++}`, action: moves(s, s.turn)[0]! });
     }
     const first = state(code).turn;
     send(by(first), { t: 'act', id: 'roll', action: { type: 'roll' } });
     while (state(code).stage !== 'main') {
       const s = state(code);
       const p = s.stage === 'discard' ? Number(Object.keys(s.discard!)[0]) : s.turn;
-      const a = legalActions(s, p).find((x) => x.type !== 'respond')!;
+      const a = moves(s, p).find((x) => x.type !== 'respond')!;
       send(by(p), {
         t: 'act',
         id: `x${n++}`,

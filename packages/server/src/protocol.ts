@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import type { Color, GameEvent, PlayerView } from '@settlers/engine';
+import type { Color, CpuLevel, GameEvent, GameStats, PlayerView } from '@settlers/engine';
 
 const RES = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore']);
 const CARD = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore', 'paper', 'cloth', 'coin']);
@@ -59,11 +59,14 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('askBack') }),
   z.strictObject({ type: z.literal('handBack') }),
   z.strictObject({ type: z.literal('refuseBack') }),
+  z.strictObject({ type: z.literal('askUndo') }),
+  z.strictObject({ type: z.literal('answerUndo'), yes: z.boolean() }),
+  z.strictObject({ type: z.literal('cancelUndo') }),
   z.strictObject({
     type: z.literal('setRule'),
     rule: z.enum([
       'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
-      'barbarianDelay', 'handBack', 'handBackSetup',
+      'barbarianDelay', 'handBack', 'handBackSetup', 'undo',
     ]), // prettier-ignore
     value: z.union([z.boolean(), z.number().int().min(0).max(30)]),
   }),
@@ -115,7 +118,11 @@ export const OptionsSchema = z.strictObject({
     /** Handing the dice back; on unless set to false. */
     handBack: z.boolean().optional(),
     handBackSetup: z.boolean().optional(),
+    /** Asking to undo a move (SPEC 5.10); on unless set to false. */
+    undo: z.boolean().optional(),
   }),
+  /** CPU chatter in table talk (SPEC 5.14); on unless set to false. */
+  cpuChat: z.boolean().optional(),
 });
 
 /** Personal confirmation settings (SPEC 4.3), saved under your nickname. Missing means on. */
@@ -125,6 +132,12 @@ export const SettingsSchema = z.strictObject({
   confirmEnd: z.boolean().optional(),
   confirmCard: z.boolean().optional(),
   confirmTrade: z.boolean().optional(),
+  /** SPEC 5.9: the sound when you need to act, other game sounds, a browser notification (off unless true). */
+  turnSound: z.boolean().optional(),
+  gameSounds: z.boolean().optional(),
+  browserNotify: z.boolean().optional(),
+  /** SPEC 5.8: show every score's breakdown all the time (off unless true). */
+  showBreakdown: z.boolean().optional(),
 });
 export type PlayerSettings = z.infer<typeof SettingsSchema>;
 export type RoomOptions = z.infer<typeof OptionsSchema>;
@@ -137,7 +150,21 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   /** Attach to a room; with a token, resume your seat. */
   z.strictObject({ t: z.literal('hello'), room: roomCode, token: z.string().max(100).optional() }),
   z.strictObject({ t: z.literal('create') }),
-  z.strictObject({ t: z.literal('join'), nick, color: COLOR }),
+  /** Sit down as one of the profiles (SPEC 5.1). Your own seat back if it's already at the table. */
+  z.strictObject({ t: z.literal('join'), profile: z.string().min(1).max(60), color: COLOR }),
+  /** Profiles: the list, a new one, merging a typo into the right one. Allowed outside rooms. */
+  z.strictObject({ t: z.literal('profiles') }),
+  z.strictObject({ t: z.literal('newProfile'), name: nick, color: COLOR }),
+  z.strictObject({ t: z.literal('mergeProfiles'), from: z.string().max(60), into: z.string().max(60) }),
+  /** Saved games (SPEC 5.7). */
+  z.strictObject({ t: z.literal('saved') }),
+  z.strictObject({ t: z.literal('resume'), game: z.string().max(60) }),
+  z.strictObject({ t: z.literal('deleteSaved'), game: z.string().max(60) }),
+  /** Stats (SPEC 5.6): someone's record (a profile id, or cpu:easy etc.), or one game. */
+  z.strictObject({ t: z.literal('stats'), who: z.string().max(60) }),
+  z.strictObject({ t: z.literal('gameStats'), game: z.string().max(60) }),
+  /** CPU chatter on or off for this room (SPEC 5.14), any time, by anyone seated. */
+  z.strictObject({ t: z.literal('setCpuChat'), on: z.boolean() }),
   z.strictObject({ t: z.literal('setColor'), color: COLOR }),
   z.strictObject({ t: z.literal('leave') }),
   z.strictObject({ t: z.literal('start') }),
@@ -157,7 +184,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   /** `id` makes resends after a dropped connection safe: an id is applied at most once. */
   z.strictObject({ t: z.literal('act'), id: z.string().min(1).max(64), action: ActionSchema }),
   z.strictObject({ t: z.literal('chat'), text: z.string().min(1).max(240) }),
-  z.strictObject({ t: z.literal('resetRequest') }),
+  /** End the game (reset) or "Save and quit" (quit): asks everyone first, then confirm. */
+  z.strictObject({ t: z.literal('resetRequest'), kind: z.enum(['reset', 'quit']).optional() }),
   z.strictObject({ t: z.literal('resetConfirm') }),
   z.strictObject({ t: z.literal('resetCancel') }),
   z.strictObject({ t: z.literal('claim'), seat: z.number().int().min(0).max(3) }),
@@ -171,8 +199,78 @@ export interface SeatInfo {
   nick: string;
   color: Color;
   connected: boolean;
-  /** A CPU player. */
+  /** A CPU player, and how good it is. */
   cpu?: boolean;
+  level?: CpuLevel;
+  /** The person's profile. */
+  profile?: string;
+}
+
+export interface ProfileInfo {
+  id: string;
+  name: string;
+  color: Color;
+  /** Someone is connected with it right now. */
+  inUse: boolean;
+}
+
+/** Dice so far this game (SPEC 5.4), public. */
+export interface DiceInfo {
+  /** Times each total 2–12 was rolled (index = total). */
+  dice: number[];
+  /** Rolls since each total last came up (index = total). */
+  gap: number[];
+  /** Rolls by seat. */
+  rolls: number[];
+  /** Event die faces (C&K). */
+  events: Record<string, number>;
+  chosen: number;
+}
+
+/** A game in the saved list (SPEC 5.7). */
+export interface SavedGame {
+  id: string;
+  players: { name: string; color: Color; cpu?: boolean; vp: number }[];
+  lastAt: number;
+  mode: 'base' | 'seafarers' | 'knights' | 'full';
+  /** Tiles, for the map preview. */
+  hexes: { t: string; n: number }[];
+  /** The room it's open in right now, if any. */
+  room: string | null;
+}
+
+/** One player's line on the Stats page (SPEC 5.6). */
+export interface PlayerRecord {
+  wins: number;
+  games: number;
+  byMode: Record<string, { wins: number; games: number }>;
+  avgPoints: number;
+  vs: { who: string; name: string; wins: number; losses: number }[];
+  got: Record<string, number>;
+  lost: Record<string, number>;
+  robs: number;
+  robbed: number;
+  luck: { got: number; expected: number };
+  dice: number[];
+  events: Record<string, number>;
+  streak: { current: number; best: number };
+  past: {
+    id: string;
+    at: number;
+    mode: string;
+    players: { name: string; color: Color; vp: number; won: boolean }[];
+  }[];
+}
+
+/** A finished game's stats with names (SPEC 5.5). */
+export interface GameStatsInfo {
+  id: string;
+  at: number;
+  mode: string;
+  players: { name: string; color: Color; cpu?: boolean }[];
+  /** Seat order in the stats (the game's seat order). */
+  stats: GameStats;
+  hexes: { t: string; n: number }[];
 }
 
 export interface RoomInfo {
@@ -185,21 +283,38 @@ export interface RoomInfo {
   options: RoomOptions;
   /** Your personal settings, if you're seated (missing fields mean on). */
   mySettings: PlayerSettings | null;
-  pendingReset: { pid: string; nick: string; expiresAt: number } | null;
+  pendingReset: { pid: string; nick: string; expiresAt: number; kind: 'reset' | 'quit' } | null;
+  /** Your profile, if you're seated. */
+  myProfile: string | null;
 }
 
 export type LogItem =
   | { k: 'ev'; seq: number; at: number; e: GameEvent }
-  | { k: 'chat'; id: number; at: number; pid: string; nick: string; text: string }
+  | { k: 'chat'; id: number; at: number; pid: string; nick: string; text: string; cpu?: true }
   | { k: 'sys'; id: number; at: number; text: string };
 
 export type ServerMsg =
   /** You joined or resumed a seat. Store the token; it is your key to the seat. */
   | { t: 'seat'; room: string; pid: string; token: string }
-  /** Full state: replace everything you have. */
-  | { t: 'sync'; room: RoomInfo; game: PlayerView | null; log: LogItem[] }
+  /** Full state: replace everything you have. `dice`: this game's dice so far; `stats` once it's over. */
+  | { t: 'sync'; room: RoomInfo; game: PlayerView | null; log: LogItem[]; dice?: DiceInfo; stats?: GameStats }
   /** Something changed: new state plus new log items to animate. */
-  | { t: 'update'; room: RoomInfo; game: PlayerView | null; log: LogItem[] }
+  | {
+      t: 'update';
+      room: RoomInfo;
+      game: PlayerView | null;
+      log: LogItem[];
+      dice?: DiceInfo;
+      stats?: GameStats;
+    }
+  | { t: 'profiles'; list: ProfileInfo[] }
+  /** A profile was just made for you. */
+  | { t: 'profile'; profile: ProfileInfo }
+  | { t: 'saved'; list: SavedGame[] }
+  | { t: 'stats'; who: string; name: string; record: PlayerRecord }
+  | { t: 'gameStats'; game: GameStatsInfo }
+  /** The room was closed ("Save and quit"); go back to the start screen. */
+  | { t: 'closed'; text: string }
   | { t: 'ack'; id: string; ok: boolean; error?: string }
   | { t: 'error'; text: string }
   | { t: 'notice'; kind: 'info' | 'warn'; text: string }

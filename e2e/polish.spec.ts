@@ -99,7 +99,7 @@ test('three players use the table polish features through a whole game', async (
     await a.click('[data-testid=start]');
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
     const v0 = await view(a);
-    expect(v0.rules.houseRules).toEqual({ handBack: true, handBackSetup: true });
+    expect(v0.rules.houseRules).toEqual({ handBack: true, handBackSetup: true, undo: true });
     // Seats are shuffled at the start; everyone keeps their colour.
     const seats: number[] = [];
     for (const [i, p] of pages.entries()) {

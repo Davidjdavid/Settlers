@@ -18,3 +18,4 @@ export * from './modules/ckProgress';
 export * from './scenarios';
 export * from './clone';
 export * from './stats';
+export * from './chatter';

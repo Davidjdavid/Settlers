@@ -3,8 +3,9 @@
  * about them, so a move a player has seen survives a crash or restart.
  */
 
+import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
-import type { Action, Color, GameConfig, GameEvent, GameState, NewPlayer } from '@settlers/engine';
+import type { Action, Color, CpuLevel, GameConfig, GameEvent, GameState, NewPlayer } from '@settlers/engine';
 
 export interface SeatRow {
   pid: string;
@@ -13,6 +14,26 @@ export interface SeatRow {
   color: Color;
   /** A CPU player (docs/bot.md); its token hash matches nothing. */
   cpu?: true;
+  /** The person's profile (SPEC 5.1); CPUs have none. */
+  profileId?: string;
+  /** A CPU's difficulty (SPEC 5.2). */
+  level?: CpuLevel;
+}
+
+/** A player profile (SPEC 5.1): a name and a favourite colour, no password. */
+export interface ProfileRow {
+  id: string;
+  name: string;
+  color: Color;
+  createdAt: number;
+}
+
+/** Who sat in each seat of a game, for stats: a profile, or a CPU of some level. */
+export interface GamePlayerRow {
+  gameId: string;
+  pid: string;
+  profileId: string | null;
+  cpuLevel: string | null;
 }
 
 export interface RoomRow {
@@ -34,6 +55,8 @@ export interface GameRow {
   createdAt: number;
   endedAt: number | null;
   endReason: string | null;
+  /** When the game last had a move (filled in when loaded). */
+  lastAt?: number;
 }
 
 export interface ActionRow {
@@ -105,6 +128,39 @@ CREATE TABLE IF NOT EXISTS chat (
   at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chat_room ON chat (room_code, id);
+CREATE TABLE IF NOT EXISTS profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  color TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  merged_into TEXT
+);
+CREATE INDEX IF NOT EXISTS profiles_key ON profiles (name_key);
+CREATE TABLE IF NOT EXISTS profile_settings (
+  profile_id TEXT PRIMARY KEY,
+  settings_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS game_players (
+  game_id TEXT NOT NULL,
+  pid TEXT NOT NULL,
+  profile_id TEXT,
+  cpu_level TEXT,
+  PRIMARY KEY (game_id, pid)
+);
+CREATE INDEX IF NOT EXISTS game_players_profile ON game_players (profile_id);
+CREATE TABLE IF NOT EXISTS profile_merges (
+  from_id TEXT NOT NULL,
+  into_id TEXT NOT NULL,
+  at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS game_stats (
+  game_id TEXT PRIMARY KEY,
+  engine_version INTEGER NOT NULL,
+  seq INTEGER NOT NULL,
+  stats_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS player_settings (
   nick_key TEXT PRIMARY KEY,
   settings_json TEXT NOT NULL,
@@ -127,6 +183,83 @@ export class Store {
     const cols = this.db.prepare('PRAGMA table_info(rooms)').all() as { name: string }[];
     if (!cols.some((c) => c.name === 'options_json'))
       this.db.exec('ALTER TABLE rooms ADD COLUMN options_json TEXT');
+    // Schema 3 (SPEC 5.1, 5.7): closed rooms (after "Save and quit"), when a game last moved.
+    if (!cols.some((c) => c.name === 'closed_at'))
+      this.db.exec('ALTER TABLE rooms ADD COLUMN closed_at INTEGER');
+    const gcols = this.db.prepare('PRAGMA table_info(games)').all() as { name: string }[];
+    if (!gcols.some((c) => c.name === 'last_at'))
+      this.db.exec('ALTER TABLE games ADD COLUMN last_at INTEGER');
+    this.migrateProfiles();
+  }
+
+  /**
+   * Once: a profile for every nickname in the database, each game's seats linked to profiles
+   * (CPUs as Easy), and settings moved from nicknames to profiles.
+   */
+  private migrateProfiles() {
+    if (this.getMeta('profiles_migrated')) return;
+    this.tx(() => {
+      const games = this.db
+        .prepare('SELECT id, players_json, created_at FROM games ORDER BY created_at')
+        .all() as {
+        id: string;
+        players_json: string;
+        created_at: number;
+      }[];
+      for (const g of games) {
+        for (const p of JSON.parse(g.players_json) as {
+          pid: string;
+          nick: string;
+          color: Color;
+          cpu?: boolean;
+        }[]) {
+          if (p.cpu) this.linkSeat(g.id, p.pid, null, 'easy');
+          else this.linkSeat(g.id, p.pid, this.profileFor(p.nick, p.color, g.created_at).id, null);
+        }
+      }
+      const rooms = this.db.prepare('SELECT code, seats_json, created_at FROM rooms').all() as {
+        code: string;
+        seats_json: string;
+        created_at: number;
+      }[];
+      for (const r of rooms) {
+        const seats = JSON.parse(r.seats_json) as SeatRow[];
+        for (const st of seats)
+          if (!st.cpu && !st.profileId) st.profileId = this.profileFor(st.nick, st.color, r.created_at).id;
+        this.db.prepare('UPDATE rooms SET seats_json = ? WHERE code = ?').run(JSON.stringify(seats), r.code);
+      }
+      const settings = this.db
+        .prepare('SELECT nick_key, settings_json, updated_at FROM player_settings')
+        .all() as {
+        nick_key: string;
+        settings_json: string;
+        updated_at: number;
+      }[];
+      for (const st of settings) {
+        const prof = this.profileByName(st.nick_key);
+        if (prof)
+          this.db
+            .prepare(
+              'INSERT OR REPLACE INTO profile_settings (profile_id, settings_json, updated_at) VALUES (?, ?, ?)',
+            )
+            .run(prof.id, st.settings_json, st.updated_at);
+      }
+      this.db.prepare("INSERT INTO meta (key, value) VALUES ('profiles_migrated', '1')").run();
+    });
+  }
+
+  /** The profile with this name, creating it if there's none (used by the migration). */
+  private profileFor(nick: string, color: Color, at: number): ProfileRow {
+    const found = this.profileByName(nick);
+    if (found) return found;
+    const p: ProfileRow = {
+      id: `p-${randomUUID()}`,
+      name: nick.trim(),
+      color: color === 'gray' ? 'red' : color,
+      createdAt: at,
+    };
+    this.insertProfile(p);
+    return p;
   }
 
   close() {
@@ -144,7 +277,139 @@ export class Store {
     return this.getMeta(key)!;
   }
 
+  /* ---------- Profiles (SPEC 5.1) ---------- */
+
+  insertProfile(p: ProfileRow) {
+    this.db
+      .prepare('INSERT INTO profiles (id, name, name_key, color, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(p.id, p.name, nickKey(p.name), p.color, p.createdAt);
+  }
+
+  private static profile(r: { id: string; name: string; color: string; created_at: number }): ProfileRow {
+    return { id: r.id, name: r.name, color: r.color as Color, createdAt: r.created_at };
+  }
+
+  /** Every profile still in use (merged ones are gone), by name. */
+  profiles(): ProfileRow[] {
+    const rows = this.db
+      .prepare('SELECT id, name, color, created_at FROM profiles WHERE merged_into IS NULL ORDER BY name_key')
+      .all() as { id: string; name: string; color: string; created_at: number }[];
+    return rows.map(Store.profile);
+  }
+
+  profileById(id: string): ProfileRow | null {
+    const r = this.db
+      .prepare('SELECT id, name, color, created_at FROM profiles WHERE id = ? AND merged_into IS NULL')
+      .get(id) as { id: string; name: string; color: string; created_at: number } | undefined;
+    return r ? Store.profile(r) : null;
+  }
+
+  profileByName(name: string): ProfileRow | null {
+    const r = this.db
+      .prepare('SELECT id, name, color, created_at FROM profiles WHERE name_key = ? AND merged_into IS NULL')
+      .get(nickKey(name)) as { id: string; name: string; color: string; created_at: number } | undefined;
+    return r ? Store.profile(r) : null;
+  }
+
+  linkSeat(gameId: string, pid: string, profileId: string | null, cpuLevel: string | null) {
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO game_players (game_id, pid, profile_id, cpu_level) VALUES (?, ?, ?, ?)',
+      )
+      .run(gameId, pid, profileId, cpuLevel);
+  }
+
+  gamePlayers(gameId?: string): GamePlayerRow[] {
+    const rows = (
+      gameId
+        ? this.db.prepare('SELECT * FROM game_players WHERE game_id = ?').all(gameId)
+        : this.db.prepare('SELECT * FROM game_players').all()
+    ) as { game_id: string; pid: string; profile_id: string | null; cpu_level: string | null }[];
+    return rows.map((r) => ({
+      gameId: r.game_id,
+      pid: r.pid,
+      profileId: r.profile_id,
+      cpuLevel: r.cpu_level,
+    }));
+  }
+
+  /** Games where both profiles sat (merging them would give one person two seats). */
+  sharedGames(a: string, b: string): number {
+    const r = this.db
+      .prepare(
+        'SELECT COUNT(*) AS n FROM game_players x JOIN game_players y ON x.game_id = y.game_id WHERE x.profile_id = ? AND y.profile_id = ?',
+      )
+      .get(a, b) as { n: number };
+    return r.n;
+  }
+
+  /** Move everything of `from` to `into`; `from` disappears. One transaction (the caller's). */
+  mergeProfiles(from: string, into: string, at: number) {
+    this.db.prepare('UPDATE game_players SET profile_id = ? WHERE profile_id = ?').run(into, from);
+    this.db.prepare('UPDATE profiles SET merged_into = ? WHERE id = ?').run(into, from);
+    this.db.prepare('UPDATE profiles SET merged_into = ? WHERE merged_into = ?').run(into, from);
+    this.db.prepare('INSERT INTO profile_merges (from_id, into_id, at) VALUES (?, ?, ?)').run(from, into, at);
+  }
+
+  getProfileSettings(profileId: string): unknown {
+    const row = this.db
+      .prepare('SELECT settings_json FROM profile_settings WHERE profile_id = ?')
+      .get(profileId) as { settings_json: string } | undefined;
+    return row ? JSON.parse(row.settings_json) : null;
+  }
+
+  saveProfileSettings(profileId: string, settings: unknown, at: number) {
+    this.db
+      .prepare(
+        'INSERT INTO profile_settings (profile_id, settings_json, updated_at) VALUES (?, ?, ?) ' +
+          'ON CONFLICT(profile_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at',
+      )
+      .run(profileId, JSON.stringify(settings), at);
+  }
+
+  /* ---------- Stats cache (SPEC 5.6): always rebuildable from the moves ---------- */
+
+  getStats(gameId: string, engineVersion: number, seq: number): unknown {
+    const r = this.db
+      .prepare('SELECT stats_json FROM game_stats WHERE game_id = ? AND engine_version = ? AND seq = ?')
+      .get(gameId, engineVersion, seq) as { stats_json: string } | undefined;
+    return r ? JSON.parse(r.stats_json) : null;
+  }
+
+  saveStats(gameId: string, engineVersion: number, seq: number, stats: unknown) {
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO game_stats (game_id, engine_version, seq, stats_json) VALUES (?, ?, ?, ?)',
+      )
+      .run(gameId, engineVersion, seq, JSON.stringify(stats));
+  }
+
+  clearStats() {
+    this.db.prepare('DELETE FROM game_stats').run();
+  }
+
+  /** All games, newest first (for stats and the saved list). */
+  allGames(): GameRow[] {
+    const ids = this.db.prepare('SELECT id FROM games ORDER BY created_at DESC').all() as { id: string }[];
+    return ids.map((r) => this.loadGame(r.id)!);
+  }
+
+  lastSeq(gameId: string): number {
+    const r = this.db.prepare('SELECT MAX(seq) AS s FROM actions WHERE game_id = ?').get(gameId) as {
+      s: number | null;
+    };
+    return r.s ?? 0;
+  }
+
   /* ---------- Rooms ---------- */
+
+  closeRoom(code: string, at: number) {
+    this.db.prepare('UPDATE rooms SET closed_at = ?, game_id = NULL WHERE code = ?').run(at, code);
+  }
+
+  setGameRoom(gameId: string, code: string) {
+    this.db.prepare('UPDATE games SET room_code = ? WHERE id = ?').run(code, gameId);
+  }
 
   roomExists(code: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM rooms WHERE code = ?').get(code);
@@ -186,7 +451,9 @@ export class Store {
 
   loadRooms(): RoomRow[] {
     const rows = this.db
-      .prepare('SELECT code, created_at, seats_json, game_id, options_json FROM rooms')
+      .prepare(
+        'SELECT code, created_at, seats_json, game_id, options_json FROM rooms WHERE closed_at IS NULL',
+      )
       .all() as {
       code: string;
       created_at: number;
@@ -242,6 +509,7 @@ export class Store {
           created_at: number;
           ended_at: number | null;
           end_reason: string | null;
+          last_at: number | null;
         }
       | undefined;
     if (!r) return null;
@@ -255,6 +523,7 @@ export class Store {
       createdAt: r.created_at,
       endedAt: r.ended_at,
       endReason: r.end_reason,
+      lastAt: r.last_at ?? r.created_at,
     };
   }
 
@@ -274,6 +543,7 @@ export class Store {
         JSON.stringify(a.events),
         a.at,
       );
+    this.db.prepare('UPDATE games SET last_at = ? WHERE id = ?').run(a.at, gameId);
   }
 
   loadActions(gameId: string, afterSeq = 0): ActionRow[] {

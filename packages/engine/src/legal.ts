@@ -18,6 +18,11 @@ export function mustDiscard(s: GameState, seat: Seat): number {
   return s.phase === 'play' && s.stage === 'discard' ? (s.discard?.[seat] ?? 0) : 0;
 }
 
+/** Requests between players (undo, the dice back, rule changes): never picked by a bot or CPU. */
+export const TABLE_TALK: readonly Action['type'][] = [
+  'askUndo', 'answerUndo', 'cancelUndo', 'askBack', 'handBack', 'refuseBack', 'setRule',
+]; // prettier-ignore
+
 export function legalActions(s: GameState, p: Seat): Action[] {
   if (s.phase !== 'play' || p < 0 || p >= s.players.length) return [];
   const out: Action[] = [];
