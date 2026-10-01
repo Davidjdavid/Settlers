@@ -243,6 +243,14 @@ export function eventText(
       };
     case 'refuseBack':
       return { text: `${who(e.p)} kept the dice` };
+    case 'askUndo':
+      return { text: `${who(e.p)} asked to undo their last move` };
+    case 'answerUndo':
+      return { text: e.yes ? `${who(e.p)} agreed to the undo` : `${who(e.p)} said no to the undo` };
+    case 'cancelUndo':
+      return { text: `${who(e.p)} withdrew the undo request` };
+    case 'undo':
+      return { text: `${who(e.p)}’s last move was undone`, big: true };
     case 'rule':
       return { text: `${who(e.p)} ${ruleText(e.rule, e.value)}`, big: true };
   }
@@ -259,6 +267,7 @@ export const RULE_LABEL: Record<RuleKey, string> = {
   barbarianDelay: 'Barbarians and progress cards start after round',
   handBack: 'Players can hand the dice back',
   handBackSetup: 'Hand the dice back during setup too',
+  undo: 'Players can ask to undo a move',
 };
 
 function ruleText(rule: RuleKey, value: boolean | number): string {

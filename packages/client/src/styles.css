@@ -34,6 +34,13 @@ html,
 body {
   height: 100%;
 }
+/* Display size (SPEC 5.12): the page is zoomed, and layouts follow the space actually left
+   (container queries on #root), so nothing overflows at any size. */
+#root {
+  container-type: inline-size;
+  container-name: app;
+  min-height: 100%;
+}
 body {
   margin: 0;
   background:
@@ -70,14 +77,14 @@ input:focus-visible,
   max-width: 1500px;
   margin: 0 auto;
 }
-@media (min-width: 1180px) {
+@container app (min-width: 1180px) {
   .app {
     grid-template-columns: 272px minmax(0, 1fr) 344px;
     grid-template-areas: 'top top top' 'side main tray';
     grid-template-rows: auto 1fr;
   }
 }
-@media (max-width: 920px) {
+@container app (max-width: 920px) {
   .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: 'top' 'main' 'tray' 'side';
@@ -206,7 +213,7 @@ input:focus-visible,
     opacity: 0.3;
   }
 }
-@media (max-width: 560px) {
+@container app (max-width: 560px) {
   .brand span {
     display: none;
   }
@@ -243,7 +250,7 @@ input:focus-visible,
   user-select: none;
   -webkit-user-select: none;
 }
-@media (max-width: 920px) {
+@container app (max-width: 920px) {
   #board {
     max-height: none;
   }
@@ -386,7 +393,7 @@ input:focus-visible,
   padding: 12px;
   pointer-events: none;
 }
-@media (max-width: 560px) {
+@container app (max-width: 560px) {
   .board-wrap.carded .overlay {
     padding: 8px 0;
   }
@@ -935,12 +942,12 @@ input:focus-visible,
   padding: 0 4px 4px;
   overscroll-behavior: contain;
 }
-@media (max-width: 920px) {
+@container app (max-width: 920px) {
   .log {
     max-height: 280px;
   }
 }
-@media (min-width: 1180px) {
+@container app (min-width: 1180px) {
   .log {
     max-height: max(150px, calc(100vh - 600px));
   }
@@ -1010,7 +1017,7 @@ input:focus-visible,
   padding: 16px;
   padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
-@media (min-width: 640px) {
+@container app (min-width: 640px) {
   .back {
     place-items: center;
   }
@@ -1146,7 +1153,7 @@ input:focus-visible,
   font-weight: 500;
   white-space: nowrap;
 }
-@media (max-width: 440px) {
+@container app (max-width: 440px) {
   .tgrid .rl span {
     display: none;
   }
@@ -1311,7 +1318,7 @@ body.noroom .side,
 body.noroom .dock {
   display: none;
 }
-@media (max-width: 560px) {
+@container app (max-width: 560px) {
   #roomchip {
     display: none;
   }
@@ -1440,7 +1447,7 @@ body.noroom .dock {
   color: var(--go);
   font-weight: 700;
 }
-@media (max-width: 560px) {
+@container app (max-width: 560px) {
   .roomchip {
     display: none;
   }

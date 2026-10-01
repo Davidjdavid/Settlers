@@ -11,6 +11,10 @@ export const SETTING_LABEL: Record<SettingKey, string> = {
   confirmEnd: 'Confirm before ending my turn',
   confirmCard: 'Confirm before playing a card',
   confirmTrade: 'Confirm before accepting a trade',
+  turnSound: 'Sound when it’s my turn or I need to act',
+  gameSounds: 'Other game sounds',
+  browserNotify: 'Notify me when the tab is in the background',
+  showBreakdown: 'Always show what scores are made of',
 };
 
 export const SETTING_HELP: Record<SettingKey, string> = {
@@ -24,6 +28,14 @@ export const SETTING_HELP: Record<SettingKey, string> = {
     'Asks before playing a development or progress card (for example “Play Knight?”), showing what the card does, so you never play one by accident.',
   confirmTrade:
     'Shows the trade and asks before you accept someone’s offer, or before you complete a trade someone accepted from you. Bank trades are not affected.',
+  turnSound:
+    'A short chime, only for you, when your turn starts or the game is waiting on you: a starting placement, a discard, a trade offered to you, gold or a Cities & Knights choice, or someone asking for the dice back or an undo.',
+  gameSounds:
+    'Every other sound: the dice rolling (for everyone, whoever rolls), building, and the fanfare when someone wins. The turn chime has its own switch above.',
+  browserNotify:
+    'When it’s your move and this tab is in the background, your browser shows a notification. Switching this on asks your browser for permission. Off by default.',
+  showBreakdown:
+    'Every player’s score shows what it’s made of all the time, for example “5 = 3 settlements (3) + Longest Road (2)”. When off, tap or hover a score to see it.',
 };
 
 export const RULE_HELP: Record<RuleKey, string> = {
@@ -43,6 +55,7 @@ export const RULE_HELP: Record<RuleKey, string> = {
     'Cities & Knights: for this many full rounds the event die isn’t rolled, so the barbarian ship doesn’t move and nobody draws progress cards. 0 means they start at once.',
   handBack:
     'After you end your turn you can ask “Wait, give the dice back” until the next player does anything (rolls, plays a card or anything else). They choose to hand them back or not, and can hand them back without being asked. Your turn comes back exactly as it was: same roll, same cards, cards bought that turn still not playable. Only one step back. A CPU always hands back.',
+  undo: 'Right after your own move you can ask to undo it. Everyone else at the table has to agree (CPUs always do), and one “no” cancels it. Only your most recent move, only before anyone else acts, and never a roll, a steal, a card drawn or played, or anything else that showed something hidden.',
   handBackSetup:
     'Also allows handing the dice back after a starting settlement and road are placed, so the player who just placed can take it back. When off, starting placements are final.',
 };
@@ -60,4 +73,8 @@ export function Help({ text }: { text: string }) {
 }
 
 /** Is a personal setting on? Missing means on. */
-export const settingOn = (s: PlayerSettings | null | undefined, k: SettingKey) => s?.[k] !== false;
+export const settingOn = (s: PlayerSettings | null | undefined, k: SettingKey) =>
+  OFF_BY_DEFAULT.includes(k) ? s?.[k] === true : s?.[k] !== false;
+
+/** Settings that are off unless switched on. */
+export const OFF_BY_DEFAULT: SettingKey[] = ['browserNotify', 'showBreakdown'];

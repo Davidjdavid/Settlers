@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Flights } from './anim';
 import { Game } from './Game';
-import { Home, Lobby, Login } from './Lobby';
+import { Home } from './home';
+import { Lobby, Login } from './Lobby';
 import { client, useClient } from './net';
+import { StatsPage } from './stats';
 
 function roomFromPath(): string | null {
   const m = /^\/r\/([A-Za-z0-9]{4,8})\/?$/.exec(location.pathname);
@@ -17,7 +19,8 @@ export function App() {
     const onPop = () => {
       const code = roomFromPath();
       if (code) client.openRoom(code);
-      else client.leaveRoom();
+      else if (client.state.roomCode) client.leaveRoom();
+      client.popped();
     };
     const nudge = () => client.nudge();
     window.addEventListener('popstate', onPop);
@@ -44,6 +47,7 @@ export function App() {
   let body;
   if (st.auth === 'checking') body = <div className="center">Loading…</div>;
   else if (st.auth === 'needed') body = <Login />;
+  else if (!st.roomCode && st.path.startsWith('/stats')) body = <StatsPage />;
   else if (!st.roomCode || st.roomError) body = <Home error={st.roomError} />;
   else if (!st.room) body = <div className="center">Joining room {st.roomCode}…</div>;
   else if (!st.game) body = <Lobby room={st.room} />;

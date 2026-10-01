@@ -7,13 +7,18 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import type { Action, Color, PlayerView } from '@settlers/engine';
+import type { Action, Color, GameStats, PlayerView } from '@settlers/engine';
 import type {
   ClientMsg,
+  DiceInfo,
+  GameStatsInfo,
   LogItem,
+  PlayerRecord,
   PlayerSettings,
+  ProfileInfo,
   RoomInfo,
   RoomOptions,
+  SavedGame,
   ServerMsg,
 } from '@settlers/server/protocol';
 
@@ -36,6 +41,16 @@ export interface ClientState {
   /** Moves sent but not yet acknowledged. */
   pending: number;
   roomError: string | null;
+  /** Profiles (SPEC 5.1), saved games (5.7), stats (5.6): loaded on request. */
+  profiles: ProfileInfo[] | null;
+  saved: SavedGame[] | null;
+  record: { who: string; name: string; record: PlayerRecord } | null;
+  gameStats: GameStatsInfo | null;
+  /** This game's dice so far, and its full stats once it's over. */
+  dice: DiceInfo | null;
+  stats: GameStats | null;
+  /** The page outside rooms: the start screen or the Stats page. */
+  path: string;
 }
 
 export interface Fresh {
@@ -83,6 +98,13 @@ export class Client {
     toasts: [],
     pending: 0,
     roomError: null,
+    profiles: null,
+    saved: null,
+    record: null,
+    gameStats: null,
+    dice: null,
+    stats: null,
+    path: typeof location === 'undefined' ? '/' : location.pathname,
   };
   private listeners = new Set<() => void>();
   private freshListeners = new Set<(f: Fresh) => void>();
@@ -95,6 +117,8 @@ export class Client {
     { action: Action; resolve: (r: { ok: boolean; error?: string }) => void }
   >();
   private creating = false;
+  /** Resuming a saved game: the next sync is its new room. */
+  private resuming = false;
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -236,11 +260,20 @@ export class Client {
         setStored(tokenKey(m.room), m.token);
         return;
       case 'sync': {
-        if (this.creating) {
+        if (this.creating || this.resuming) {
           this.creating = false;
+          this.resuming = false;
           history.pushState(null, '', `/r/${m.room.code}`);
         }
-        this.set({ roomCode: m.room.code, room: m.room, game: m.game, log: m.log, roomError: null });
+        this.set({
+          roomCode: m.room.code,
+          room: m.room,
+          game: m.game,
+          log: m.log,
+          roomError: null,
+          dice: m.dice ?? null,
+          stats: m.stats ?? null,
+        });
         // Re-send moves that were never acknowledged (safe: ids are applied once).
         for (const [id, w] of this.waiting) this.send({ t: 'act', id, action: w.action });
         return;
@@ -249,7 +282,13 @@ export class Client {
         const before = this.state.game;
         const seen = new Set(this.state.log.map(itemKey));
         const items = m.log.filter((it) => !seen.has(itemKey(it)));
-        this.set({ room: m.room, game: m.game, log: [...this.state.log, ...items].slice(-800) });
+        this.set({
+          room: m.room,
+          game: m.game,
+          log: [...this.state.log, ...items].slice(-800),
+          dice: m.dice ?? null,
+          stats: m.stats ?? null,
+        });
         if (items.length) for (const fn of this.freshListeners) fn({ items, before, after: m.game });
         return;
       }
@@ -271,6 +310,38 @@ export class Client {
         return;
       case 'pong':
         return;
+      case 'profiles':
+        this.set({ profiles: m.list });
+        return;
+      case 'profile':
+        setStored('settlers.profile', m.profile.id);
+        return;
+      case 'saved':
+        this.set({ saved: m.list });
+        return;
+      case 'stats':
+        this.set({ record: { who: m.who, name: m.name, record: m.record } });
+        return;
+      case 'gameStats':
+        this.set({ gameStats: m.game });
+        return;
+      case 'closed':
+        // "Save and quit" (or a deleted game): back to the start screen.
+        this.waiting.clear();
+        history.pushState(null, '', '/');
+        this.set({
+          roomCode: null,
+          room: null,
+          game: null,
+          log: [],
+          pending: 0,
+          dice: null,
+          stats: null,
+          path: '/',
+        });
+        this.toast(m.text);
+        this.send({ t: 'saved' });
+        return;
     }
   }
 
@@ -289,14 +360,58 @@ export class Client {
   }
 
   leaveRoom() {
-    this.set({ roomCode: null, room: null, game: null, log: [], roomError: null });
+    this.set({ roomCode: null, room: null, game: null, log: [], roomError: null, path: '/' });
     history.pushState(null, '', '/');
     this.ws?.close();
   }
 
-  join(nick: string, color: Color) {
-    setStored('settlers.nick', nick);
-    this.send({ t: 'join', nick, color });
+  /** Go to a page outside rooms (the Stats page, or back to the start). */
+  go(path: string) {
+    if (location.pathname !== path) history.pushState(null, '', path);
+    this.set({ path });
+  }
+  /** The browser's back/forward buttons. */
+  popped() {
+    this.set({ path: location.pathname });
+  }
+
+  /** Sit down as a profile (remembered as this browser's last pick). */
+  join(profile: string, color: Color) {
+    setStored('settlers.profile', profile);
+    this.send({ t: 'join', profile, color });
+  }
+  loadProfiles() {
+    this.send({ t: 'profiles' });
+  }
+  newProfile(name: string, color: Color) {
+    this.send({ t: 'newProfile', name, color });
+  }
+  mergeProfiles(from: string, into: string) {
+    this.send({ t: 'mergeProfiles', from, into });
+  }
+  loadSaved() {
+    this.send({ t: 'saved' });
+  }
+  resume(game: string) {
+    this.resuming = true;
+    this.set({ roomError: null });
+    this.send({ t: 'resume', game });
+  }
+  deleteSaved(game: string) {
+    this.send({ t: 'deleteSaved', game });
+  }
+  loadStats(who: string) {
+    this.send({ t: 'stats', who });
+  }
+  loadGameStats(game: string) {
+    this.set({ gameStats: null });
+    this.send({ t: 'gameStats', game });
+  }
+  closeGameStats() {
+    this.set({ gameStats: null });
+  }
+  setCpuChat(on: boolean) {
+    this.send({ t: 'setCpuChat', on });
   }
   setColor(color: Color) {
     this.send({ t: 'setColor', color });
@@ -325,8 +440,8 @@ export class Client {
   chat(text: string) {
     this.send({ t: 'chat', text });
   }
-  resetRequest() {
-    this.send({ t: 'resetRequest' });
+  resetRequest(kind: 'reset' | 'quit' = 'reset') {
+    this.send({ t: 'resetRequest', kind });
   }
   resetConfirm() {
     this.send({ t: 'resetConfirm' });

@@ -6,16 +6,8 @@ import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
 import { BRAND_SVG, PCOL, PEDGE, PNAME, K, cityPath, settlementPath } from './art';
 import { Help, RULE_HELP } from './help';
 import { RULE_LABEL } from './text';
-import { client, getStored } from './net';
-
-function Brand() {
-  return (
-    <div className="brand" style={{ marginBottom: 14 }}>
-      <span dangerouslySetInnerHTML={{ __html: BRAND_SVG }} style={{ display: 'contents' }} />
-      <span>Settlers</span>
-    </div>
-  );
-}
+import { client } from './net';
+import { Brand, ProfilePicker } from './home';
 
 export function Login() {
   const [pass, setPass] = useState('');
@@ -55,63 +47,26 @@ export function Login() {
   );
 }
 
-export function Home({ error }: { error: string | null }) {
-  const [code, setCode] = useState('');
-  return (
-    <div className="center">
-      <div className="card">
-        <Brand />
-        <h2>Start or join a game</h2>
-        <p className="lede">Create a room and share the code, or enter a friend’s code.</p>
-        <div className="row" style={{ marginBottom: 16 }}>
-          <button className="btn primary" onClick={() => client.createRoom()} data-testid="create">
-            Create a room
-          </button>
-        </div>
-        <form
-          className="row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const c = code.trim().toUpperCase();
-            if (c) {
-              history.pushState(null, '', `/r/${c}`);
-              client.openRoom(c);
-            }
-          }}
-        >
-          <input
-            className="text codein"
-            placeholder="CODE"
-            maxLength={8}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/[^a-z0-9]/gi, ''))}
-            aria-label="Room code"
-          />
-          <button className="btn" disabled={!code}>
-            Join
-          </button>
-        </form>
-        {error ? <p className="err">{error}</p> : null}
-      </div>
-    </div>
-  );
-}
-
 export function Lobby({ room }: { room: RoomInfo }) {
   const mine = room.seats.find((s) => s.pid === room.me);
   const taken = new Set(room.seats.map((s) => s.color));
-  const [nick, setNick] = useState(getStored('settlers.nick') ?? '');
+  const [profile, setProfile] = useState<{ id: string; color: Color } | null>(null);
   const [color, setColor] = useState<Color | null>(null);
   const free = PLAYER_COLORS.filter((c) => !taken.has(c));
-  const pick = color && !taken.has(color) ? color : (free[0] ?? null);
+  // Your favourite colour if it's free, else the first free one.
+  const pick =
+    color && !taken.has(color)
+      ? color
+      : profile && !taken.has(profile.color) && profile.color !== 'gray'
+        ? profile.color
+        : (free[0] ?? null);
   const link = `${location.origin}/r/${room.code}`;
   const allowed = playersFor(room.options);
   const fits = allowed.includes(room.seats.length);
   const mode = modeOf(room.options);
-  // A nickname already at the table rejoins that seat (SPEC 4.6).
-  const rejoining = room.seats.some(
-    (s) => !s.cpu && !s.connected && s.nick.trim().toLowerCase() === nick.trim().toLowerCase(),
-  );
+  // A profile already at the table rejoins that seat (SPEC 4.6, 5.1).
+  const rejoining = !!profile && room.seats.some((s) => !s.cpu && !s.connected && s.profile === profile.id);
+  const seated = new Set(room.seats.flatMap((s) => (s.profile && s.connected ? [s.profile] : [])));
   return (
     <div className="center">
       <div className="card" data-testid="lobby">
@@ -199,34 +154,31 @@ export function Lobby({ room }: { room: RoomInfo }) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (nick.trim() && (pick || rejoining)) client.join(nick.trim(), pick ?? 'red');
+              if (profile && (pick || rejoining)) client.join(profile.id, pick ?? 'red');
             }}
           >
             <Options room={room} editable={false} />
             <div className="field">
-              <label htmlFor="nick">Nickname</label>
-              <input
-                id="nick"
-                className="text"
-                maxLength={18}
-                value={nick}
-                onChange={(e) => setNick(e.target.value)}
-                data-testid="nick"
+              <label>Who are you?</label>
+              <ProfilePicker
+                value={profile?.id ?? null}
+                taken={seated}
+                onPick={(p) => setProfile({ id: p.id, color: p.color })}
               />
             </div>
             {rejoining ? (
-              <p className="hint">That name is at this table: you’ll get your seat back.</p>
+              <p className="hint">You’re at this table: you’ll get your seat back.</p>
             ) : room.seats.length < 4 ? (
               <div className="field">
                 <label>Color</label>
                 <ColorPicker colors={PLAYER_COLORS} value={pick} taken={taken} onPick={setColor} />
               </div>
             ) : (
-              <p className="hint">The table is full. Enter your nickname if you were sitting here.</p>
+              <p className="hint">The table is full. Pick your name if you were sitting here.</p>
             )}
             <button
               className="btn primary"
-              disabled={!nick.trim() || (!rejoining && (!pick || room.seats.length >= 4))}
+              disabled={!profile || (!rejoining && (!pick || room.seats.length >= 4))}
               data-testid="sit"
             >
               {rejoining ? 'Rejoin' : 'Take a seat'}

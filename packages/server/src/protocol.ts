@@ -234,7 +234,7 @@ export interface SavedGame {
   lastAt: number;
   mode: 'base' | 'seafarers' | 'knights' | 'full';
   /** Tiles, for the map preview. */
-  hexes: { t: string; n: number }[];
+  hexes: { q: number; r: number; t: string; n: number }[];
   /** The room it's open in right now, if any. */
   room: string | null;
 }
@@ -270,7 +270,7 @@ export interface GameStatsInfo {
   players: { name: string; color: Color; cpu?: boolean }[];
   /** Seat order in the stats (the game's seat order). */
   stats: GameStats;
-  hexes: { t: string; n: number }[];
+  hexes: { q: number; r: number; t: string; n: number }[];
 }
 
 export interface RoomInfo {

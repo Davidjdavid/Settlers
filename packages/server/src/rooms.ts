@@ -498,7 +498,7 @@ export class Rooms {
         }),
         lastAt: row.lastAt ?? row.createdAt,
         mode: modeOf(row.config),
-        hexes: state.board.hexes.map((h) => ({ t: h.t, n: h.n })),
+        hexes: state.board.hexes.map((h) => ({ q: h.q, r: h.r, t: h.t, n: h.n })),
         room: room?.code ?? null,
       });
     }

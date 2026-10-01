@@ -9,6 +9,10 @@ import '@fontsource/figtree/latin-700.css';
 import '@fontsource/figtree/latin-800.css';
 import '@fontsource/young-serif/latin-400.css';
 import './styles.css';
+import { applySize } from './display';
+import { played } from './sound';
+
+applySize();
 
 createRoot(document.getElementById('root')!).render(<App />);
 
@@ -18,6 +22,7 @@ const rng = seedRng(String(Math.random()));
 Object.assign(window, {
   __settlers: {
     state: () => client.state,
+    sounds: () => played.slice(),
     // `byHand`: move types the test will make through the UI instead (returned as 'skip:<type>').
     botStep: async (byHand: string[] = []) => {
       const v = client.state.game;

@@ -131,7 +131,7 @@ export class History {
         ...(seats.who[i]!.startsWith('cpu:') ? { cpu: true } : {}),
       })),
       stats: r.stats,
-      hexes: r.state.board.hexes.map((h) => ({ t: h.t, n: h.n })),
+      hexes: r.state.board.hexes.map((h) => ({ q: h.q, r: h.r, t: h.t, n: h.n })),
     };
   }
 

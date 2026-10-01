@@ -820,9 +820,9 @@ export function Game({
           <div className="banner">
             <span>
               You’re watching.
-              {disconnected.length ? ' Left the game? Enter the same name to get your seat back.' : ''}
+              {disconnected.length ? ' Left the game? Pick your name to get your seat back.' : ''}
             </span>
-            {disconnected.length ? <RejoinForm /> : null}
+            {disconnected.length ? <RejoinForm room={room} /> : null}
             <span className="acts">
               {disconnected.length ? <span className="hint">Or take over a seat:</span> : null}
               {disconnected.map((x) => (
@@ -1109,29 +1109,23 @@ export function Game({
 }
 
 /** Rejoin by nickname (SPEC 4.6): the same name gets a disconnected seat straight back. */
-function RejoinForm() {
-  const [nick, setNick] = useState(() => getStored('settlers.nick') ?? '');
+function RejoinForm({ room }: { room: RoomInfo }) {
+  // Rejoin by picking your name (SPEC 4.6, 5.1): only seats nobody is using.
+  const away = room.seats.filter((x) => !x.cpu && !x.connected && x.profile);
   return (
-    <form
-      className="acts"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (nick.trim()) client.join(nick.trim(), 'red');
-      }}
-    >
-      <input
-        className="text rejoin-nick"
-        value={nick}
-        maxLength={18}
-        placeholder="Your name"
-        aria-label="Your name"
-        data-testid="rejoin-nick"
-        onChange={(e) => setNick(e.target.value)}
-      />
-      <button className="btn small primary" type="submit" data-testid="rejoin">
-        Rejoin
-      </button>
-    </form>
+    <span className="acts">
+      {away.map((x) => (
+        <button
+          key={x.pid}
+          className="btn small primary"
+          data-testid="rejoin"
+          data-name={x.nick}
+          onClick={() => client.join(x.profile!, x.color)}
+        >
+          I’m {x.nick}
+        </button>
+      ))}
+    </span>
   );
 }
 
