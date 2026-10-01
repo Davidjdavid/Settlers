@@ -5,8 +5,8 @@
  */
 
 import {
-  COST, DEV_TYPES, RES, applyAction, cloneJson, checkTransition, devCount, eventsFor, geo, goldDue, legalRoads, legalSettlements, legalShips, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, total,
-  viewFor, waitingOn, type Action, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type NewPlayer, type PartialRes, type RngState, type Seat,
+  COST, DEV_TYPES, RES, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
+  PROGRESS, viewFor, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
 
 export interface SimResult {
@@ -28,11 +28,16 @@ export interface SimOptions {
   /** Play on this map (default: the classic board). */
   map?: MapData;
   houseRules?: HouseRules;
+  /** Modules (default: the map's). */
+  modules?: ModuleId[];
+  winVP?: number;
 }
 
 export function configFor(opts: SimOptions): Partial<GameConfig> {
   const c: Partial<GameConfig> = {};
   if (opts.map) c.map = opts.map;
+  if (opts.modules) c.modules = opts.modules;
+  if (opts.winVP) c.winVP = opts.winVP;
   if (opts.houseRules && Object.keys(opts.houseRules).length) c.houseRules = opts.houseRules;
   return c;
 }
@@ -54,30 +59,35 @@ const WEIGHT: Record<Action['type'], number> = {
   bank: 1.5, end: 3, confirm: 8, cancel: 0.5, respond: 2,
   discard: 1, offer: 1,
   ship: 6, freeShip: 5, moveShip: 1, pirate: 1, chooseGold: 1,
+  improve: 25, wall: 4, knight: 6, promote: 4, activate: 5, moveKnight: 1.5, chase: 3,
+  dropProgress: 1, progress: 4, choose: 1,
 }; // prettier-ignore
 
-function randomDiscard(s: GameState, p: Seat, rng: RngState): Action {
-  const need = mustDiscard(s, p);
+function randomCards(s: GameState, p: Seat, need: number, rng: RngState): Cards {
   const left = { ...s.players[p]!.res };
-  const cards: PartialRes = {};
+  const cards: Cards = {};
   for (let i = 0; i < need; i++) {
-    const pool = RES.filter((r) => left[r] > 0);
+    const pool = cardKinds(s).filter((r) => left[r]! > 0);
     const r = pick(rng, pool);
-    left[r]--;
+    left[r]!--;
     cards[r] = (cards[r] ?? 0) + 1;
   }
-  return { type: 'discard', cards };
+  return cards;
+}
+
+function randomDiscard(s: GameState, p: Seat, rng: RngState): Action {
+  return { type: 'discard', cards: randomCards(s, p, mustDiscard(s, p), rng) };
 }
 
 function randomOffer(s: GameState, p: Seat, rng: RngState): Action | null {
   const res = s.players[p]!.res;
-  const haves = RES.filter((r) => res[r] > 0);
+  const haves = cardKinds(s).filter((r) => res[r]! > 0);
   if (!haves.length) return null;
   const give = pick(rng, haves);
-  const wants = RES.filter((r) => r !== give);
+  const wants = cardKinds(s).filter((r) => r !== give);
   return {
     type: 'offer',
-    give: { [give]: 1 + nextInt(rng, Math.min(2, res[give])) },
+    give: { [give]: 1 + nextInt(rng, Math.min(2, res[give]!)) },
     want: { [pick(rng, wants)]: 1 },
   };
 }
@@ -86,11 +96,12 @@ function randomOffer(s: GameState, p: Seat, rng: RngState): Action | null {
 function usefulBank(s: GameState, p: Seat): Set<string> {
   const res = s.players[p]!.res;
   const out = new Set<string>();
-  for (const cost of [COST.city, COST.settlement, COST.dev, COST.road] as PartialRes[]) {
+  const goals = (s.ck ? [COST.city, COST.settlement, { sheep: 1, ore: 1 }, COST.road] : [COST.city, COST.settlement, COST.dev, COST.road]) as PartialRes[]; // prettier-ignore
+  for (const cost of goals) {
     const missing = RES.filter((r) => res[r] < (cost[r] ?? 0));
     if (!missing.length) return out; // can already afford the best target
-    for (const give of RES) {
-      if (res[give] - (cost[give] ?? 0) < rateFor(s, p, give)) continue;
+    for (const give of cardKinds(s)) {
+      if (res[give]! - ((cost as Cards)[give] ?? 0) < rateFor(s, p, give)) continue;
       for (const get of missing) out.add(`${give}>${get}`);
     }
     if (out.size) return out;
@@ -114,7 +125,7 @@ function piecesToSpots(s: GameState, p: Seat): Set<number> {
 
 function randomGold(s: GameState, p: Seat, rng: RngState): Action {
   const bank = { ...s.bank };
-  const cards: PartialRes = {};
+  const cards: Cards = {};
   for (let i = 0; i < goldDue(s, p); i++) {
     const r = pick(
       rng,
@@ -126,14 +137,23 @@ function randomGold(s: GameState, p: Seat, rng: RngState): Action {
   return { type: 'chooseGold', cards };
 }
 
-function weighted(rng: RngState, acts: Action[], useful: Set<string>, spotRoads: Set<number>): Action {
+function weighted(
+  rng: RngState,
+  acts: Action[],
+  useful: Set<string>,
+  spotRoads: Set<number>,
+  threat = false,
+): Action {
   // Types with many options (ship moves, pirate spots) share their weight instead of multiplying it.
   const explore = !spotRoads.size && !acts.some((a) => a.type === 'settlement');
-  const per: Partial<Record<Action['type'], number>> = {};
-  for (const a of acts)
-    if (a.type === 'moveShip' || a.type === 'pirate') per[a.type] = (per[a.type] ?? 0) + 1;
+  const per: Partial<Record<string, number>> = {};
+  const key = (a: Action) => (a.type === 'progress' ? `progress:${a.card}` : a.type);
+  for (const a of acts) if (SHARED.has(a.type)) per[key(a)] = (per[key(a)] ?? 0) + 1;
   const w = acts.map((a) => {
-    if (a.type === 'moveShip' || a.type === 'pirate') return WEIGHT[a.type] / per[a.type]!;
+    // With the barbarians close, knights matter (Cities & Knights).
+    if (threat && a.type === 'activate') return 30;
+    if (threat && a.type === 'knight') return 20 / per[key(a)]!;
+    if (SHARED.has(a.type)) return WEIGHT[a.type] / per[key(a)]!;
     if (a.type === 'bank') return useful.has(`${a.give}>${a.get}`) ? 30 : 0.1;
     if (a.type === 'road' || a.type === 'freeRoad') return spotRoads.has(a.e) ? 40 : 0.5;
     // Ships reaching a building spot are best; with nowhere left to build, explore by sea.
@@ -149,11 +169,27 @@ function weighted(rng: RngState, acts: Action[], useful: Set<string>, spotRoads:
   return acts[acts.length - 1]!;
 }
 
+const SHARED = new Set<Action['type']>([
+  'moveShip',
+  'pirate',
+  'moveKnight',
+  'chase',
+  'progress',
+  'knight',
+  'choose',
+]);
+
 /** Choose who acts next and what they do. */
 function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
   if (s.stage === 'discard') {
     const p = pick(rng, waitingOn(s));
     return [p, randomDiscard(s, p, rng)];
+  }
+  if (s.stage === 'ck') {
+    const p = pick(rng, waitingOn(s));
+    const due = ckDiscardDue(s, p);
+    if (due) return [p, { type: 'choose', cards: randomCards(s, p, due, rng) }];
+    return [p, pick(rng, legalActions(s, p))];
   }
   if (s.stage === 'gold') {
     const p = pick(rng, waitingOn(s));
@@ -182,6 +218,7 @@ function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
       acts,
       main ? usefulBank(s, p) : new Set(),
       main || s.stage === 'roads' ? piecesToSpots(s, p) : new Set(),
+      !!s.ck && s.ck.barb >= 3,
     ),
   ];
 }
@@ -200,6 +237,11 @@ function fuzzAction(s: GameState, rng: RngState): [Seat, Action] {
     { type: 'playPlenty', r1: 'gold', r2: 'ore' },
     { type: 'confirm', id: 9999, with: 0 },
     { type: 'nonsense' },
+    { type: 'improve', track: 'nope' },
+    { type: 'progress', card: 'printer' },
+    { type: 'progress', card: 'smith', vs: [1, 1] },
+    { type: 'choose', cards: { coin: -2 } },
+    { type: 'moveKnight', from: -1, to: 3 },
     { type: 'roll' },
     { type: 'end' },
     null,
@@ -226,6 +268,20 @@ function randomCandidates(s: GameState, rng: RngState): [Seat, Action][] {
       { type: 'freeRoad', e },
       { type: 'setup', v, e: geo(s).verts[v]!.edges[0]! },
     ];
+    if (s.ck) {
+      const mine = s.ck.knights.flatMap((k, x) => (k && k.p === p ? [x] : []));
+      const kv = mine.length && chance(rng, 0.8) ? pick(rng, mine) : v;
+      cands.push(
+        { type: 'knight', v },
+        { type: 'wall', v },
+        { type: 'promote', v: kv },
+        { type: 'activate', v: kv },
+        { type: 'moveKnight', from: kv, to: v },
+        { type: 'chase', v: kv, hex: h },
+        { type: 'improve', track: pick(rng, TRACKS) },
+        { type: 'improve', track: pick(rng, TRACKS), v },
+      );
+    }
     if (s.sea) {
       const mine = s.sea.ships.flatMap((o, x) => (o === p ? [x] : []));
       const from = mine.length && chance(rng, 0.8) ? pick(rng, mine) : nextInt(rng, nE);
@@ -243,7 +299,7 @@ function randomCandidates(s: GameState, rng: RngState): [Seat, Action][] {
 }
 
 /** A copy of `s` with everything `seat` cannot see changed: other hands, dev cards, deck order. */
-function perturbHidden(s: GameState, seat: Seat, rng: RngState): GameState {
+function perturbHidden(s: GameState, seat: Seat, rng: RngState, decks = true): GameState {
   const t = cloneJson(s);
   if (t.sea) {
     // Fog stays secret: a different stack of the same size must look the same.
@@ -253,14 +309,37 @@ function perturbHidden(s: GameState, seat: Seat, rng: RngState): GameState {
       numbers: t.sea.fog.numbers.map(() => 2 + nextInt(rng, 11)),
     };
   }
+  if (t.ck) {
+    // Deck order is secret; so are other players' progress cards (only their colours show),
+    // except what this seat may see while choosing (Spy, Master Merchant).
+    const o = firstOwe(s, seat);
+    const seen = o?.k === 'spy' || o?.k === 'take' ? o.from : null;
+    if (decks) for (const tr of TRACKS) t.ck.decks[tr] = shuffle(t.ck.decks[tr], rng);
+    t.players.forEach((_, i) => {
+      if (i === seat || (i === seen && o?.k === 'spy')) return;
+      const col = progressColors(s, i);
+      t.ck!.hands[i] = TRACKS.flatMap((tr) =>
+        Array.from(
+          { length: col[tr] },
+          () =>
+            pick(
+              rng,
+              Object.keys(PROGRESS[tr]).filter((k) => k !== 'printer' && k !== 'constitution'),
+            ) as Progress,
+        ),
+      );
+    });
+  }
   const deckSize = Object.values(t.deck).reduce((a, b) => a + b, 0);
   t.deck = { knight: 0, road: 0, plenty: 0, mono: 0, vp: 0 };
   for (let i = 0; i < deckSize; i++) t.deck[pick(rng, DEV_TYPES)]++;
+  const o = t.ck ? firstOwe(s, seat) : null;
   t.players.forEach((pl, i) => {
-    if (i === seat) return;
+    if (i === seat || (o?.k === 'take' && o.from === i)) return;
     const n = total(pl.res);
-    pl.res = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 };
-    for (let k = 0; k < n; k++) pl.res[pick(rng, RES)]++;
+    const kinds = cardKinds(s);
+    for (const k of kinds) pl.res[k] = 0;
+    for (let k = 0; k < n; k++) pl.res[pick(rng, kinds)]!++;
     if (s.phase === 'play') {
       const d = devCount(pl);
       pl.vpCards = 0;
@@ -286,7 +365,25 @@ function leakCheck(s: GameState, seat: Seat, rng: RngState): string | null {
 }
 
 /** Actions whose events must not depend on hidden information (steals, dev draws, dice). */
-const EVENT_LEAK_TYPES = new Set<Action['type']>(['roll', 'robber', 'buyDev', 'pirate']);
+const EVENT_LEAK_TYPES = new Set<Action['type']>([
+  'roll',
+  'robber',
+  'buyDev',
+  'pirate',
+  'chase',
+  'progress',
+  'choose',
+]);
+
+/**
+ * Cards whose effect shows what other players hold, as at the table: monopolies (how many each
+ * gave) and Commercial Harbor (who has a commodity to give back).
+ */
+function revealsByDesign(s: GameState, p: Seat, a: Action): boolean {
+  if (a.type === 'progress')
+    return ['resourceMonopoly', 'tradeMonopoly', 'commercialHarbor'].includes(a.card);
+  return a.type === 'choose' && firstOwe(s, p)?.k === 'harbor';
+}
 
 /** Replaying the action with hidden info changed must give `seat` the same events. */
 function eventLeakCheck(
@@ -297,10 +394,12 @@ function eventLeakCheck(
   seat: Seat,
   rng: RngState,
 ): string | null {
-  if (seat === p) return null;
-  const t = perturbHidden(s, seat, rng);
+  if (seat === p || revealsByDesign(s, p, a)) return null;
+  // The deck stays as it is: a player's own draw shows them the top card, by design.
+  const t = perturbHidden(s, seat, rng, false);
   // The acting player's hand stays as it was, so the action is still legal.
   t.players[p] = cloneJson(s.players[p]!);
+  if (t.ck) t.ck.hands[p] = s.ck!.hands[p]!.slice();
   const r = applyAction(t, p, a);
   if (!r.ok) return null;
   // Winning reveals the winner's VP cards by design.
@@ -351,7 +450,11 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       for (const [cp, ca] of randomCandidates(s, rng)) {
         // A robber/pirate move without a victim is shorthand for the only possible victim.
         const key = (a: Action) =>
-          JSON.stringify(a.type === 'robber' || a.type === 'pirate' ? { ...a, victim: undefined } : a);
+          JSON.stringify(
+            a.type === 'robber' || a.type === 'pirate' || a.type === 'chase'
+              ? { ...a, victim: undefined }
+              : a,
+          );
         const listed = legalActions(s, cp).some((a) => key(a) === key(ca));
         if (!listed && applyAction(s, cp, ca).ok)
           fail(`accepted an unlisted action for ${cp}: ${JSON.stringify(ca)}`);
@@ -377,7 +480,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
     const prev = s;
     s = r.state;
     log.push([p, a]);
-    const bad = [...checkInvariants(s), ...checkTransition(prev, s)];
+    const bad = [...checkInvariants(s, prev), ...checkTransition(prev, s)];
     if (bad.length) bad.forEach((b) => fail(`after ${JSON.stringify(a)}: ${b}`));
   }
 

@@ -4,7 +4,7 @@
  * A game's modules are listed in config.modules and saved with the game.
  */
 
-import type { Action, GameEvent, GameState, ModuleId, Player, Seat } from '../types';
+import type { Action, Card, GameEvent, GameState, ModuleId, Player, Resource, Seat } from '../types';
 import type { PlayerView } from '../view';
 
 /** What a module's action handler and flow hooks get to work with. All writes go to `s`. */
@@ -18,6 +18,15 @@ export interface Ctx {
 
 export interface RuleModule {
   id: ModuleId;
+
+  /** Player counts this module supports (default: whatever the map allows). */
+  players?: readonly number[];
+  /** Card kinds in hand besides resources (e.g. commodities). */
+  cards?: readonly Card[];
+  /** No development cards (or Largest Army) in games with this module. */
+  noDevCards?: boolean;
+  /** Buildings may be left without a road (e.g. a road removed by a card). */
+  looseBuildings?: boolean;
 
   /** Set up the module's state for a new game. */
   init?(s: GameState, fog: { terrain: GameState['board']['hexes'][number]['t'][]; numbers: number[] }): void;
@@ -33,18 +42,43 @@ export interface RuleModule {
   setupVertexOK?(s: GameState, v: number): boolean;
   /** May the robber go on hex h? */
   robberHexOK?(s: GameState, h: number): boolean;
+  /** OR: is vertex v taken by a piece that isn't a building (e.g. a knight)? */
+  vertexTaken?(s: GameState, v: number): boolean;
+  /** OR: does another player's non-building piece at v block p's roads there? */
+  blocks?(s: GameState, p: Seat, v: number): boolean;
+  /** Is the starting piece placed now (the second if `second`) a city? */
+  setupCity?(s: GameState, second: boolean): boolean;
 
   /* ---------- Scoring ---------- */
   /** Extra public victory points for p (summed across modules). */
   extraVP?(s: GameState, p: Seat): number;
   /** Replaces the longest-road length (e.g. roads + ships). */
   routeLen?(s: GameState, p: Seat): number;
+  /** How many of resource t a building of `size` (1 settlement, 2 city) produces. */
+  yieldOf?(s: GameState, t: Resource, size: 1 | 2): number;
+  /** The best bank rate this module gives p for card c, or undefined. */
+  rate?(s: GameState, p: Seat, c: Card): number | undefined;
+  /** Most cards p can hold when a 7 is rolled (the lowest across modules wins). */
+  handLimit?(s: GameState, p: Seat): number;
+  /** Is the robber (and pirate) asleep, so a 7 doesn't move it? */
+  robberAsleep?(s: GameState): boolean;
   /** Extra free-piece supply for Road Building (e.g. ships). */
   freePieceSupply?(s: GameState, p: Seat): number;
   /** OR: can p place some free piece other than a road right now? */
   canPlaceFreePiece?(s: GameState, p: Seat): boolean;
 
   /* ---------- Flow ---------- */
+  /** Production dice chosen in advance (e.g. Alchemist), or null to roll them. */
+  fixedDice?(s: GameState): [number, number] | null;
+  /** Should a rolled 7 be rolled again? */
+  rerollSeven?(s: GameState): boolean;
+  /**
+   * After the production dice are rolled, before production. Return true to hold production
+   * back; the module then calls continueRoll itself when it's ready.
+   */
+  afterRoll?(x: Ctx): boolean;
+  /** Why p can't end their turn yet, or null. */
+  endTurnBlock?(s: GameState, p: Seat): string | null;
   /** After normal production on a roll (e.g. gold). */
   afterProduce?(x: Ctx, roll: number): void;
   /** After a starting settlement at v and its piece on e (a ship if `ship`); `second` when it pays out. */

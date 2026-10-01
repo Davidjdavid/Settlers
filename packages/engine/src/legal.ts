@@ -9,8 +9,8 @@
 
 import { mods } from './modules/api';
 import {
-  COST, canPlaceFreePiece, deckCount, freePieceSupply, has, legalCities, legalRoads, legalSettlements,
-  legalSetupRoads, legalSetupVerts, rateFor, robberHexOK, robberVictims,
+  COST, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, has, legalCities, legalRoads,
+  legalSettlements, legalSetupRoads, legalSetupVerts, rateFor, robberHexOK, robberVictims,
 } from './queries'; // prettier-ignore
 import { RES, type Action, type GameState, type Seat } from './types';
 
@@ -78,7 +78,7 @@ export function legalActions(s: GameState, p: Seat): Action[] {
       pushDevPlays(s, p, out);
       return out;
     case 'main': {
-      out.push({ type: 'end' });
+      if (!mods(s).some((m) => m.endTurnBlock?.(s, p))) out.push({ type: 'end' });
       pushDevPlays(s, p, out);
       if (has(me.res, COST.road) && me.pieces.road > 0) {
         for (const e of legalRoads(s, p)) out.push({ type: 'road', e });
@@ -89,10 +89,11 @@ export function legalActions(s: GameState, p: Seat): Action[] {
       if (has(me.res, COST.city) && me.pieces.city > 0) {
         for (const v of legalCities(s, p)) out.push({ type: 'city', v });
       }
-      if (has(me.res, COST.dev) && deckCount(s) > 0) out.push({ type: 'buyDev' });
-      for (const give of RES) {
-        if (me.res[give] < rateFor(s, p, give)) continue;
-        for (const get of RES) if (get !== give && s.bank[get] > 0) out.push({ type: 'bank', give, get });
+      if (has(me.res, COST.dev) && deckCount(s) > 0 && devCardsOn(s)) out.push({ type: 'buyDev' });
+      const kinds = cardKinds(s);
+      for (const give of kinds) {
+        if ((me.res[give] ?? 0) < rateFor(s, p, give)) continue;
+        for (const get of kinds) if (get !== give && s.bank[get]! > 0) out.push({ type: 'bank', give, get });
       }
       return out;
     }
@@ -103,7 +104,7 @@ export function legalActions(s: GameState, p: Seat): Action[] {
 
 function pushDevPlays(s: GameState, p: Seat, out: Action[]) {
   const me = s.players[p]!;
-  if (s.devPlayed) return;
+  if (s.devPlayed || !devCardsOn(s)) return;
   if (me.dev.knight > 0) out.push({ type: 'playKnight' });
   if (me.dev.road > 0 && freePieceSupply(s, p) > 0 && canPlaceFreePiece(s, p))
     out.push({ type: 'playRoads' });

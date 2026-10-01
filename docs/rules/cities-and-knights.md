@@ -1,6 +1,6 @@
 # Cities & Knights: rules as we will implement them
 
-**Status: draft. Waiting for your answers to the questions at the end (§24). No code until then.**
+**Status: agreed (your answers are recorded under Decisions at the end). Being implemented.**
 
 This document is the contract for the Cities & Knights (C&K) milestone. The engine, the simulator's invariants and the tests will follow it exactly. If something here is wrong, it should be fixed here first.
 
@@ -46,7 +46,7 @@ Everything in the base game (SPEC.md) and, when combined, in Seafarers (docs/rul
 | Component | Count | Notes |
 |---|---|---|
 | Resource cards | 19 of each | unchanged |
-| Commodity cards | 12 of each (paper, cloth, coin) | bank supply; **Q2** |
+| Commodity cards | unlimited (paper, cloth, coin) | anyone can hold any number; **D2** |
 | Progress cards | 54: 18 trade, 18 politics, 18 science | three face-down decks, listed in §14 |
 | Defender of Catan cards | 6 | 1 VP each |
 | Metropolises | 3 (one per track) | |
@@ -109,7 +109,7 @@ Players draw in turn order starting with the player whose turn it is. If the dec
 
 ### 6.3 Progress card hand limit
 
-You may hold at most **4** progress cards (VP cards don't count). If a draw gives you a 5th, you must at once choose one to put face down under its deck. If it's your own turn, you can instead play one of the 5 if it's playable right now (**Q9**).
+You may hold at most **4** progress cards (VP cards don't count). If a draw gives you a 5th on someone else's turn, you must at once choose one to put face down under its deck. If it's your own turn, you keep all 5 and can play them as usual; you just can't end your turn holding more than 4 (play one, or put one under its deck) (**D8, D9**).
 
 ---
 
@@ -126,7 +126,7 @@ The production number works exactly as in the base game (robber blocks its hex, 
 | Fields | 1 wheat | 2 wheat |
 | Gold (Seafarers) | 2 of choice | 2 resources of choice; no commodities (**Q13**) |
 
-- **Bank shortage** applies to each commodity separately, exactly as for resources: if the bank can't give everyone what they're owed of one card type, nobody gets that type, unless only one player is owed it, who then gets what's left.
+- **Commodities never run out** (**D2**). The bank shortage rule still applies to resources.
 - **Aqueduct** (science level 3, §8.2): if a production roll other than 7 gives you nothing at all (no resource, no commodity, no gold), you take 1 resource of your choice from the bank. This is a choice like gold. (**Q10**)
 
 ---
@@ -249,9 +249,11 @@ On a 7, each player with more cards in hand (resources + commodities) than their
   - Bishop can't be played.
 - From the first attack on, it works as usual. It still blocks its hex's production while asleep, as it sits on the desert (or nowhere, if the map has no robber).
 - **With Seafarers:** the pirate sleeps until the first attack too (**Q12**).
-- **House rule "No 7s until the barbarians have attacked"** (the one in SPEC.md):
-  - before the first attack, a production total of 7 is re-rolled. All three dice are re-rolled, as if the 7 never happened, like our "no 7s in the first round" rule.
-  - Alchemist can't be used to choose a 7 while this applies.
+- **House rules for 7s before the first attack** (**D3**), each off by default:
+  - **"Re-roll 7s until the barbarians have attacked":** a production total of 7 is rolled again (the production dice only; the event die is rolled once, after them), like our "no 7s in the first round" rule. Alchemist can't choose a 7 while this applies.
+  - **"No discards until the barbarians have attacked":** a 7 does nothing at all before the first attack.
+  - If both are on, the re-roll wins.
+- **House rule "Barbarians wait N rounds"** (**D3**): for the first N rounds (each player has had N turns) the event die isn't rolled at all, so the barbarians don't move and nobody draws progress cards. 0 by default.
 
 ---
 
@@ -358,7 +360,7 @@ On Heading for New Shores with both modules:
 | Item | Who sees it |
 |---|---|
 | Your resources and commodities | you; others see your total card count |
-| Your progress cards | you; others see how many you hold |
+| Your progress cards | you; others see how many of each colour you hold (**D18**) |
 | Progress decks | everyone sees each deck's size; the order is server-only (in `state`, never in a view) |
 | A drawn progress card | the drawer; others see "drew a trade card" |
 | Card stolen by the robber, Bishop, Master Merchant | the two players involved; others see that a card moved |
@@ -376,7 +378,7 @@ On Heading for New Shores with both modules:
 - **A "Cities & Knights" toggle in the lobby,** next to the scenario buttons. It combines with Classic or Heading for New Shores.
 - **Default points to win:** 13 with Classic, 17 with Heading for New Shores. Adjustable (5–30) as now.
 - **3 or 4 players** (**Q4**).
-- **House rules:** the existing three still apply (the 3:1 rule extends to commodities), plus a new one, shown only with C&K: **"No 7s until the barbarians have attacked"** (§13).
+- **House rules:** the existing three still apply (the 3:1 rule extends to commodities), plus, shown only with C&K: **re-roll 7s** or **no discards** until the barbarians have attacked, and **barbarians wait N rounds** (§13).
 - **Stored in the room's options** like the others. A game's config records the modules it was started with, so it replays the same forever.
 
 ---
@@ -385,7 +387,7 @@ On Heading for New Shores with both modules:
 
 Each new check gets a planted bug to make sure it fails, as before.
 
-1. **Commodity conservation:** for each commodity, bank + all hands = 12.
+1. **Commodity conservation:** commodities are unlimited, so the bank keeps a running count: for each commodity, bank + all hands = a fixed total, and nobody's count is negative.
 2. **Resource conservation** as before (19 each), now with the C&K production rules.
 3. **Progress card conservation:** for each colour, deck + hands + VP cards on the table = 18, and the exact multiset of card types in that colour never changes (no card copied, lost or swapped between decks).
 4. **Deck counts** in every view equal the real deck sizes.
@@ -513,7 +515,7 @@ During steps 1–2 the "Cities & Knights" toggle isn't offered on the live site 
 
 ---
 
-## 24. Questions
+## 24. Questions (answered: see Decisions)
 
 Each has a default. Answer "default" to any you're happy with.
 
@@ -573,3 +575,30 @@ Each has a default. Answer "default" to any you're happy with.
     - **Default:** steps 1 and 2 are deployed with the C&K toggle hidden, so the live site always only offers finished rules. You see each step through the report and screenshots.
     - Alternative: show the toggle as "Cities & Knights (in progress)" so you can play the partial version.
 20. **Q20 Anything Catan Universe does that bugs you in C&K** (for example, how it asks you to pick a city to lose, or Spy/Commercial Harbor flows)? I'll turn each into a requirement.
+
+---
+
+## Decisions
+
+Your answers to the questions in the first draft:
+
+1. **D1 CPU player:** ignore for now; you'll describe it later. The existing test bot learns C&K so the simulator and end-to-end test can play it, nothing more.
+2. **D2 Commodities:** no supply limit. Anyone can hold any number (resources keep their 19-card limit).
+3. **D3 7s before the first attack:** by default players over the limit discard and the robber stays put. Two house rules: re-roll 7s, or no discards, until the barbarians have attacked. A third: the barbarians (event die) wait N rounds before starting.
+4. **D4 Players and points:** 3 or 4 players; 13 VP on Classic, 17 on Heading for New Shores.
+5. **D5 Improvements:** you need a city to buy any level; you can't buy a level that would win a metropolis you have no city for.
+6. **D6 Knights block roads:** yes, like settlements.
+7. **D7 Knights can't act the turn they're activated.**
+8. **D8 Progress cards:** any number per turn, including ones drawn this turn, after rolling (Alchemist before). A 5th card drawn on your own turn can just be played; you don't have to throw one away first.
+9. **D9 Overflow:** on someone else's turn a 5th card means putting one under its deck at once; on your own turn you get back to 4 before ending it.
+10. **D10 Aqueduct:** only when a non-7 roll gives you nothing at all.
+11. **D11 Knights with ships:** built next to roads or ships; move along roads only.
+12. **D12 Pirate:** sleeps until the first attack; knights don't chase it.
+13. **D13 Gold:** a city gets 2 resources of choice, no commodities.
+14. **D14 City lost with no settlement piece left:** it still becomes a settlement.
+15. **D15 Defender cards run out:** the sole winner draws a progress card of their choice.
+16. **D16 Irrigation and Mining** ignore the robber.
+17. **D17 Deserter:** same strength only; active state copied.
+18. **D18 Spy and colours:** everyone always sees how many progress cards of each colour every player holds, and the colour of a card taken with Spy.
+19. **D19 Steps:** build it all; no partial deploys.
+20. **D20 Catan Universe gripes:** later, after playtesting.

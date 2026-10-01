@@ -7,7 +7,7 @@ import { startHexes } from '../map';
 import {
   checkWin, afterFreePiece, cleanCounts, finishRobber, gain, isInt, pay, stealRandom, updateLongest,
 } from '../ops'; // prettier-ignore
-import { geo, has, legalSetupVerts, total } from '../queries';
+import { blockedAt, geo, has, legalSetupVerts, total } from '../queries';
 import {
   RES, isLand, isResource, type GameEvent, type GameState, type PartialRes, type Seat, type Stage, type Terrain,
 } from '../types'; // prettier-ignore
@@ -72,6 +72,7 @@ export function shipOK(s: GameState, p: Seat, e: number): boolean {
     const b = s.verts[v];
     if (b && b[0] === p) return true;
     if (b && b[0] !== p) continue; // an opponent's building blocks the connection
+    if (blockedAt(s, p, v)) continue; // ...and so can other pieces (knights)
     if (g.verts[v]!.edges.some((f) => f !== e && sea(s).ships[f] === p)) return true;
   }
   return false;
@@ -151,7 +152,7 @@ export function tradeRouteLen(s: GameState, p: Seat): number {
   const dfs = (v: number, len: number, last: 'road' | 'ship' | null) => {
     if (len > best) best = len;
     const b = s.verts[v];
-    if (len > 0 && b && b[0] !== p) return;
+    if (len > 0 && ((b && b[0] !== p) || blockedAt(s, p, v))) return;
     const mine = !!b && b[0] === p;
     for (const e of g.verts[v]!.edges) {
       const k = kindAt(e);
@@ -171,7 +172,8 @@ export function tradeRouteLen(s: GameState, p: Seat): number {
 
 /* ---------- Gold and fog ---------- */
 
-const bankTotal = (s: GameState) => total(s.bank);
+/** Resources left in the bank (gold only ever pays resources). */
+const bankTotal = (s: GameState) => RES.reduce((a, r) => a + s.bank[r], 0);
 
 /** Begin (or extend) the gold-choosing step. */
 function owe(s: GameState, owed: Record<number, number>, events: GameEvent[]) {
@@ -498,8 +500,9 @@ export const seafarers: RuleModule = {
     const fogLeft = s.board.hexes.filter((h) => h.t === 'fog').length;
     if (st.fog.terrain.length < fogLeft)
       bad.push(`fog stack ${st.fog.terrain.length} < ${fogLeft} fog hexes`);
-    if ((s.stage === 'gold') !== (st.gold != null))
-      bad.push(`stage ${s.stage} with gold ${JSON.stringify(st.gold)}`);
+    // Gold may wait while another module's choices (Cities & Knights) are made first.
+    const goldWaits = s.stage === 'gold' || (s.stage === 'ck' && s.ck?.back === 'gold');
+    if (goldWaits !== (st.gold != null)) bad.push(`stage ${s.stage} with gold ${JSON.stringify(st.gold)}`);
     if (st.gold && Object.values(st.gold.owed).some((n) => !(n > 0))) bad.push('gold owed must be positive');
     if (st.gold && !Object.keys(st.gold.owed).length) bad.push('gold stage with nobody owed');
     for (const e of st.builtThisTurn)

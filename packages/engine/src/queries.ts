@@ -5,11 +5,13 @@ import { mods } from './modules/api';
 import {
   DEV_PLAY,
   RES,
+  isResource,
+  type Card,
+  type Cards,
   type GameState,
   type PartialRes,
   type Player,
   type PortType,
-  type Resource,
   type ResCounts,
   type Seat,
 } from './types';
@@ -30,10 +32,46 @@ export const MIN_SEATS = 2;
 export const geo = (s: GameState): Geometry => geometryFor(s.board.hexes);
 
 export const zeroRes = (): ResCounts => ({ wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 });
-export const total = (res: PartialRes | null | undefined): number =>
-  RES.reduce((a, r) => a + ((res && res[r]) || 0), 0);
-export const has = (res: PartialRes, cost: PartialRes): boolean =>
-  RES.every((r) => (res[r] || 0) >= (cost[r] || 0));
+/** Number of cards in a hand or cost (resources and any commodities). */
+export function total(res: Cards | null | undefined): number {
+  let a = 0;
+  if (res) for (const k in res) a += res[k as Card] || 0;
+  return a;
+}
+export function has(res: Cards, cost: Cards): boolean {
+  for (const k in cost) if ((res[k as Card] || 0) < (cost[k as Card] || 0)) return false;
+  return true;
+}
+
+/** The kinds of card a hand can hold in this game, resources first. */
+const kindCache = new WeakMap<object, readonly Card[]>();
+export function cardKinds(s: GameState): readonly Card[] {
+  const ms = mods(s);
+  if (!ms.some((m) => m.cards)) return RES;
+  let k = kindCache.get(ms);
+  if (!k) {
+    k = [...RES, ...ms.flatMap((m) => m.cards ?? [])];
+    kindCache.set(ms, k);
+  }
+  return k;
+}
+
+/** Most cards p may hold when a 7 is rolled. */
+export function handLimit(s: GameState, p: Seat): number {
+  const limits = mods(s).flatMap((m) => (m.handLimit ? [m.handLimit(s, p)] : []));
+  return limits.length ? Math.min(...limits) : 7;
+}
+
+/** False while a module keeps the robber (and pirate) from moving. */
+export const robberAwake = (s: GameState): boolean => !mods(s).some((m) => m.robberAsleep?.(s));
+
+export const devCardsOn = (s: GameState): boolean => !mods(s).some((m) => m.noDevCards);
+
+/** Does another player's non-building piece (e.g. a knight) at v block p there? */
+export const blockedAt = (s: GameState, p: Seat, v: number): boolean => {
+  const ms = mods(s);
+  return ms.length > 0 && ms.some((m) => m.blocks?.(s, p, v));
+};
 
 export function snakeOrder(n: number): Seat[] {
   const a: Seat[] = [];
@@ -43,7 +81,9 @@ export function snakeOrder(n: number): Seat[] {
 
 export function vertFree(s: GameState, v: number): boolean {
   const g = geo(s);
-  return !s.verts[v] && g.verts[v]!.adj.every((u) => !s.verts[u]);
+  if (s.verts[v] || !g.verts[v]!.adj.every((u) => !s.verts[u])) return false;
+  const ms = mods(s);
+  return !ms.length || !ms.some((m) => m.vertexTaken?.(s, v));
 }
 
 /** May a settlement go on v at all (modules may require it to touch land)? */
@@ -82,6 +122,7 @@ export function roadOK(s: GameState, p: Seat, e: number): boolean {
     const b = s.verts[v];
     if (b && b[0] === p) return true;
     if (b && b[0] !== p) continue; // an opponent's building blocks the connection
+    if (blockedAt(s, p, v)) continue; // ...and so can other pieces (knights)
     if (g.verts[v]!.edges.some((f) => f !== e && s.edges[f] === p)) return true;
   }
   return false;
@@ -128,9 +169,12 @@ export function portsOf(s: GameState, p: Seat): Set<PortType> {
   return set;
 }
 
-export function rateFor(s: GameState, p: Seat, r: Resource): number {
+/** How many of card c p must give the bank for one card. */
+export function rateFor(s: GameState, p: Seat, r: Card): number {
   const ps = portsOf(s, p);
-  return ps.has(r) ? 2 : ps.has('any') || s.config.houseRules?.bank3to1 ? 3 : 4;
+  let rate = isResource(r) && ps.has(r) ? 2 : ps.has('any') || s.config.houseRules?.bank3to1 ? 3 : 4;
+  for (const m of mods(s)) rate = Math.min(rate, m.rate?.(s, p, r) ?? rate);
+  return rate;
 }
 
 /** Points everyone can see: buildings plus longest road and largest army. */
@@ -175,7 +219,7 @@ export function roadLen(s: GameState, p: Seat): number {
   const dfs = (v: number, len: number) => {
     if (len > best) best = len;
     const b = s.verts[v];
-    if (len > 0 && b && b[0] !== p) return;
+    if (len > 0 && ((b && b[0] !== p) || blockedAt(s, p, v))) return;
     for (const e of g.verts[v]!.edges) {
       if (s.edges[e] !== p || used.has(e)) continue;
       used.add(e);

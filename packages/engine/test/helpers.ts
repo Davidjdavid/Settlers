@@ -1,6 +1,6 @@
 import {
   applyAction, geo, roadLen, legalActions, newGame, nextInt, seedRng, type Action, type GameEvent, type GameState,
-  type PartialRes, type Seat,
+  type Card, type Cards, type Seat,
 } from '../src/index'; // prettier-ignore
 import { seatsFor } from './simulate';
 
@@ -35,12 +35,12 @@ export function rigDice(s: GameState, sum: number): GameState {
 }
 
 /** Replace a player's hand, taking from or returning to the bank so totals stay conserved. */
-export function setHand(s: GameState, p: Seat, res: PartialRes): GameState {
+export function setHand(s: GameState, p: Seat, res: Cards): GameState {
   const t = structuredClone(s);
   const pl = t.players[p]!;
-  for (const r of Object.keys(pl.res) as (keyof typeof pl.res)[]) {
+  for (const r of Object.keys(pl.res) as Card[]) {
     const want = res[r] ?? 0;
-    t.bank[r] += pl.res[r] - want;
+    t.bank[r]! += pl.res[r]! - want;
     pl.res[r] = want;
   }
   return t;

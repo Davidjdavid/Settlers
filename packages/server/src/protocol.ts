@@ -7,16 +7,28 @@ import { z } from 'zod';
 import type { Color, GameEvent, PlayerView } from '@settlers/engine';
 
 const RES = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore']);
+const CARD = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore', 'paper', 'cloth', 'coin']);
+const TRACK = z.enum(['trade', 'politics', 'science']);
+const PROGRESS = z.enum([
+  'commercialHarbor', 'masterMerchant', 'merchant', 'merchantFleet', 'resourceMonopoly', 'tradeMonopoly',
+  'alchemist', 'crane', 'engineer', 'inventor', 'irrigation', 'medicine', 'mining', 'printer', 'roadBuilding', 'smith',
+  'bishop', 'constitution', 'deserter', 'diplomat', 'intrigue', 'saboteur', 'spy', 'warlord', 'wedding',
+]); // prettier-ignore
 const COLOR = z.enum(['red', 'blue', 'white', 'purple', 'orange']);
 const count = z.number().int().min(0).max(95);
+/** Card counts. Commodities only mean something in Cities & Knights; the engine checks. */
 const cards = z.strictObject({
   wood: count.optional(),
   brick: count.optional(),
   sheep: count.optional(),
   wheat: count.optional(),
   ore: count.optional(),
+  paper: count.optional(),
+  cloth: count.optional(),
+  coin: count.optional(),
 });
 const idx = z.number().int().min(0).max(999);
+const die = z.number().int().min(1).max(6);
 
 export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('setup'), v: idx, e: idx, ship: z.boolean().optional() }),
@@ -34,7 +46,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('playMono'), r: RES }),
   z.strictObject({ type: z.literal('freeRoad'), e: idx }),
   z.strictObject({ type: z.literal('skipRoads') }),
-  z.strictObject({ type: z.literal('bank'), give: RES, get: RES }),
+  z.strictObject({ type: z.literal('bank'), give: CARD, get: CARD }),
   z.strictObject({ type: z.literal('offer'), give: cards, want: cards }),
   z.strictObject({ type: z.literal('respond'), id: idx.max(1e6), yes: z.boolean() }),
   z.strictObject({ type: z.literal('confirm'), id: idx.max(1e6), with: idx }),
@@ -44,15 +56,51 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('moveShip'), from: idx, to: idx }),
   z.strictObject({ type: z.literal('pirate'), hex: idx, victim: idx.nullable().optional() }),
   z.strictObject({ type: z.literal('chooseGold'), cards }),
+  z.strictObject({ type: z.literal('improve'), track: TRACK, v: idx.optional() }),
+  z.strictObject({ type: z.literal('wall'), v: idx }),
+  z.strictObject({ type: z.literal('knight'), v: idx }),
+  z.strictObject({ type: z.literal('promote'), v: idx }),
+  z.strictObject({ type: z.literal('activate'), v: idx }),
+  z.strictObject({ type: z.literal('moveKnight'), from: idx, to: idx }),
+  z.strictObject({ type: z.literal('chase'), v: idx, hex: idx, victim: idx.nullable().optional() }),
+  z.strictObject({ type: z.literal('dropProgress'), card: PROGRESS }),
+  z.strictObject({
+    type: z.literal('progress'),
+    card: PROGRESS,
+    d: z.tuple([die, die]).optional(),
+    v: idx.optional(),
+    vs: z.array(idx).max(2).optional(),
+    h: idx.optional(),
+    h2: idx.optional(),
+    e: idx.optional(),
+    to: idx.optional(),
+    r: CARD.optional(),
+  }),
+  z.strictObject({
+    type: z.literal('choose'),
+    v: idx.optional(),
+    e: idx.optional(),
+    track: TRACK.optional(),
+    card: PROGRESS.optional(),
+    r: CARD.optional(),
+    cards: cards.optional(),
+    to: idx.optional(),
+    skip: z.boolean().optional(),
+  }),
 ]);
 
 export const OptionsSchema = z.strictObject({
   scenario: z.enum(['classic', 'heading-for-new-shores']),
+  /** Cities & Knights on top of the scenario. */
+  ck: z.boolean().optional(),
   winVP: z.number().int().min(5).max(30),
   houseRules: z.strictObject({
     no7FirstRound: z.boolean().optional(),
     bank3to1: z.boolean().optional(),
     freeShipMoves: z.boolean().optional(),
+    rerollBeforeAttack: z.boolean().optional(),
+    noDiscardBeforeAttack: z.boolean().optional(),
+    barbarianDelay: z.number().int().min(0).max(10).optional(),
   }),
 });
 export type RoomOptions = z.infer<typeof OptionsSchema>;

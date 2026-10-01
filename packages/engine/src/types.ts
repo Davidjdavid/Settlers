@@ -10,6 +10,40 @@ export const isLand = (t: Terrain) => t !== 'sea' && t !== 'fog';
 export type ResCounts = Record<Resource, number>;
 export type PartialRes = Partial<ResCounts>;
 
+/** Cities & Knights commodities. Only cities produce them; the supply is unlimited. */
+export const COMS = ['paper', 'cloth', 'coin'] as const;
+export type Commodity = (typeof COMS)[number];
+export const isCommodity = (t: string): t is Commodity => (COMS as readonly string[]).includes(t);
+/** A card in hand: a resource, or (with Cities & Knights) a commodity. */
+export type Card = Resource | Commodity;
+export type Cards = Partial<Record<Card, number>>;
+/** A hand of cards. Commodity keys are only present with Cities & Knights. */
+export type Hand = ResCounts & Partial<Record<Commodity, number>>;
+
+/** Cities & Knights improvement tracks, and the commodity each is bought with. */
+export const TRACKS = ['trade', 'politics', 'science'] as const;
+export type Track = (typeof TRACKS)[number];
+export const TRACK_COM: Record<Track, Commodity> = { trade: 'cloth', politics: 'coin', science: 'paper' };
+
+/** Progress cards in each deck, with how many of each. */
+export const PROGRESS = {
+  trade: { commercialHarbor: 2, masterMerchant: 2, merchant: 6, merchantFleet: 2, resourceMonopoly: 4, tradeMonopoly: 2 },
+  science: {
+    alchemist: 2, crane: 2, engineer: 1, inventor: 2, irrigation: 2, medicine: 2, mining: 2, printer: 1,
+    roadBuilding: 2, smith: 2,
+  },
+  politics: {
+    bishop: 2, constitution: 1, deserter: 2, diplomat: 2, intrigue: 2, saboteur: 2, spy: 3, warlord: 2, wedding: 2,
+  },
+} as const; // prettier-ignore
+export type Progress = {
+  [T in Track]: keyof (typeof PROGRESS)[T];
+}[Track];
+export const trackOf = (c: Progress): Track =>
+  c in PROGRESS.trade ? 'trade' : c in PROGRESS.science ? 'science' : 'politics';
+/** Victory-point progress cards are shown at once and never held. */
+export const PROGRESS_VP: readonly Progress[] = ['printer', 'constitution'];
+
 export const DEV_PLAY = ['knight', 'road', 'plenty', 'mono'] as const;
 export type DevPlayable = (typeof DEV_PLAY)[number];
 export const DEV_TYPES = ['knight', 'road', 'plenty', 'mono', 'vp'] as const;
@@ -20,7 +54,7 @@ export type PortType = Resource | 'any';
 export type Seat = number;
 export type PieceKind = 'road' | 'settlement' | 'city';
 export type EdgePiece = 'road' | 'ship';
-export const MODULES = ['seafarers'] as const;
+export const MODULES = ['seafarers', 'citiesKnights'] as const;
 export type ModuleId = (typeof MODULES)[number];
 
 export const COLORS = ['red', 'blue', 'white', 'purple', 'orange'] as const;
@@ -57,7 +91,7 @@ export interface Player {
   pid: string;
   color: Color;
   nick: string;
-  res: ResCounts;
+  res: Hand;
   /** Playable dev cards (bought before this turn). */
   dev: DevCounts;
   /** Dev cards bought this turn; playable from next turn. */
@@ -71,14 +105,17 @@ export interface Player {
   pieces: { road: number; settlement: number; city: number; ship?: number };
 }
 
-/** `gold`: players owed gold-field resources are choosing them (Seafarers). */
-export type Stage = 'setup' | 'preroll' | 'discard' | 'robber' | 'main' | 'roads' | 'gold';
+/**
+ * `gold`: players owed gold-field resources are choosing them (Seafarers).
+ * `ck`: players owe Cities & Knights choices (see CKState.owe).
+ */
+export type Stage = 'setup' | 'preroll' | 'discard' | 'robber' | 'main' | 'roads' | 'gold' | 'ck';
 
 export interface Offer {
   id: number;
   from: Seat;
-  give: ResCounts;
-  want: ResCounts;
+  give: Hand;
+  want: Hand;
   /** Responses: 1 = accepted, 0 = declined. */
   resp: Record<number, 0 | 1>;
 }
@@ -91,6 +128,12 @@ export interface HouseRules {
   bank3to1?: boolean;
   /** Seafarers: no limit on ship moves per turn. */
   freeShipMoves?: boolean;
+  /** Cities & Knights: 7s are rolled again until the barbarians have attacked. */
+  rerollBeforeAttack?: boolean;
+  /** Cities & Knights: a 7 does nothing (no discards) until the barbarians have attacked. */
+  noDiscardBeforeAttack?: boolean;
+  /** Cities & Knights: the event die isn't rolled for this many rounds. */
+  barbarianDelay?: number;
 }
 
 /**
@@ -126,6 +169,87 @@ export interface SeaState {
   fog: { terrain: Terrain[]; numbers: number[] };
 }
 
+/** A Cities & Knights knight. Per-turn flags only ever appear on the turn player's knights. */
+export interface Knight {
+  p: Seat;
+  /** Strength: 1 basic, 2 strong, 3 mighty. */
+  lvl: 1 | 2 | 3;
+  on: boolean;
+  /** Activated this turn: can't act until next turn. */
+  fresh?: true;
+  /** Promoted this turn. */
+  up?: true;
+}
+
+/** A Cities & Knights choice a player owes before play continues. */
+export type Owe =
+  /** Lose a city to the barbarians. */
+  | { k: 'loseCity'; p: Seat }
+  /** Draw a progress card from a deck of your choice (tie against the barbarians). */
+  | { k: 'defenderDraw'; p: Seat }
+  /** Put one progress card under its deck (more than 4 on someone else's turn). */
+  | { k: 'overflow'; p: Seat }
+  /** Aqueduct: take a resource of your choice. */
+  | { k: 'aqueduct'; p: Seat }
+  /** Place your displaced knight (it is off the board until you do). */
+  | { k: 'relocate'; p: Seat; lvl: 1 | 2 | 3; on: boolean; not: number }
+  /** Deserter: remove one of your knights. */
+  | { k: 'desert'; p: Seat; by: Seat }
+  /** Deserter: you may place a knight like the one removed. */
+  | { k: 'deserterPlace'; p: Seat; lvl: 1 | 2 | 3; on: boolean }
+  /** Wedding: give `n` cards of your choice to `to`. */
+  | { k: 'give'; p: Seat; to: Seat; n: number }
+  /** Saboteur: discard `n` cards of your choice. */
+  | { k: 'discard'; p: Seat; n: number }
+  /** Commercial Harbor: offer a resource to each of `left` (or skip them). */
+  | { k: 'harbor'; p: Seat; left: Seat[] }
+  /** Commercial Harbor: give `to` a commodity for the resource `r` they gave you. */
+  | { k: 'harborGive'; p: Seat; to: Seat; r: Resource }
+  /** Master Merchant: take `n` cards from `from`'s hand (you can see it). */
+  | { k: 'take'; p: Seat; from: Seat; n: number }
+  /** Spy: take a progress card from `from` (you can see them). */
+  | { k: 'spy'; p: Seat; from: Seat }
+  /** Diplomat: you may rebuild your removed road for free. */
+  | { k: 'rebuild'; p: Seat };
+
+/** Cities & Knights state. Only present when the citiesKnights module is on. */
+export interface CKState {
+  /** Improvement levels per player. */
+  lvl: Record<Track, number>[];
+  /** Vertex of each metropolis (its owner is the city's owner), or null. */
+  metro: Record<Track, number | null>;
+  /** Vertices of cities with a wall. */
+  walls: number[];
+  /** Knight per vertex. */
+  knights: (Knight | null)[];
+  /** Barbarian ship position, 0 to 6 (it attacks on reaching 7). */
+  barb: number;
+  attacks: number;
+  /** Progress decks, top first. Order is server-only; sizes are public. */
+  decks: Record<Track, Progress[]>;
+  /** Progress cards in each player's hand (private; colour counts public). */
+  hands: Progress[][];
+  /** Victory-point progress cards on the table. */
+  shown: Progress[][];
+  /** Defender of Catan cards per player. */
+  defender: number[];
+  merchant: { h: number; p: Seat } | null;
+  /** Merchant Fleet: cards the turn player trades 2:1 this turn. */
+  fleet: Card[];
+  /** Crane: improvements this turn that cost 1 less. */
+  crane: number;
+  /** Alchemist: the production dice chosen for this turn's roll. */
+  alchemy: [number, number] | null;
+  /** The event die on the last roll, or null if it wasn't rolled. */
+  event: 'ship' | Track | null;
+  /** Choices owed, answered in any order (each player's in sequence). */
+  owe: Owe[];
+  /** Stage to return to when nothing is owed. */
+  back: Stage | null;
+  /** What happens when nothing is owed: finish the roll, or just go back. */
+  then: 'produce' | null;
+}
+
 export interface GameState {
   /** State schema version. */
   v: 1;
@@ -140,7 +264,7 @@ export interface GameState {
   verts: (Building | null)[];
   edges: (Seat | null)[];
   players: Player[];
-  bank: ResCounts;
+  bank: Hand;
   /** Remaining dev cards by type. Composition is server-only; the count is public. */
   deck: Record<DevType, number>;
   turn: Seat;
@@ -161,6 +285,8 @@ export interface GameState {
   winner: Seat | null;
   /** Seafarers state; absent without Seafarers. */
   sea?: SeaState;
+  /** Cities & Knights state; absent without it. */
+  ck?: CKState;
 }
 
 /* ---------- Actions (what a seat asks to do) ---------- */
@@ -182,7 +308,7 @@ export type Action =
   | { type: 'playMono'; r: Resource }
   | { type: 'freeRoad'; e: number }
   | { type: 'skipRoads' }
-  | { type: 'bank'; give: Resource; get: Resource }
+  | { type: 'bank'; give: Card; get: Card }
   | { type: 'offer'; give: PartialRes; want: PartialRes }
   | { type: 'respond'; id: number; yes: boolean }
   | { type: 'confirm'; id: number; with: Seat }
@@ -192,7 +318,43 @@ export type Action =
   | { type: 'freeShip'; e: number }
   | { type: 'moveShip'; from: number; to: number }
   | { type: 'pirate'; hex: number; victim?: Seat | null }
-  | { type: 'chooseGold'; cards: PartialRes };
+  | { type: 'chooseGold'; cards: PartialRes }
+  /* Cities & Knights */
+  | { type: 'improve'; track: Track; v?: number }
+  | { type: 'wall'; v: number }
+  | { type: 'knight'; v: number }
+  | { type: 'promote'; v: number }
+  | { type: 'activate'; v: number }
+  /** Move an active knight; onto a weaker opponent's knight, this displaces it. */
+  | { type: 'moveKnight'; from: number; to: number }
+  | { type: 'chase'; v: number; hex: number; victim?: Seat | null }
+  /** Put a progress card under its deck (your own turn, holding more than 4). */
+  | { type: 'dropProgress'; card: Progress }
+  /** Play a progress card. Which fields matter depends on the card (docs/rules/cities-and-knights.md). */
+  | {
+      type: 'progress';
+      card: Progress;
+      d?: [number, number];
+      v?: number;
+      vs?: number[];
+      h?: number;
+      h2?: number;
+      e?: number;
+      to?: Seat;
+      r?: Card;
+    }
+  /** Answer the first choice you owe. Which fields matter depends on the choice. */
+  | {
+      type: 'choose';
+      v?: number;
+      e?: number;
+      track?: Track;
+      card?: Progress;
+      r?: Card;
+      cards?: Cards;
+      to?: Seat;
+      skip?: boolean;
+    };
 
 export type ActionType = Action['type'];
 
@@ -206,21 +368,21 @@ export type GameEvent =
   | { k: 'roll'; p: Seat; d: [number, number]; redo?: boolean }
   | { k: 'produce'; gains: Record<number, PartialRes>; short: Resource[] }
   | { k: 'mustDiscard'; need: Record<number, number> }
-  | { k: 'discard'; p: Seat; c: ResCounts }
+  | { k: 'discard'; p: Seat; c: Hand }
   | { k: 'robber'; p: Seat; h: number; victim: Seat | null }
   /** `r` is null for seats that may not see which card was stolen. */
-  | { k: 'steal'; p: Seat; from: Seat; r: Resource | null }
+  | { k: 'steal'; p: Seat; from: Seat; r: Card | null }
   | { k: 'build'; p: Seat; what: PieceKind | 'ship'; at: number; free?: boolean }
   /** `card` is null for everyone but the buyer. */
   | { k: 'buyDev'; p: Seat; card: DevType | null }
   | { k: 'playDev'; p: Seat; card: DevPlayable }
   | { k: 'plenty'; p: Seat; got: PartialRes }
   | { k: 'mono'; p: Seat; r: Resource; from: Record<number, number> }
-  | { k: 'bank'; p: Seat; give: Resource; n: number; get: Resource }
+  | { k: 'bank'; p: Seat; give: Card; n: number; get: Card }
   | { k: 'offer'; offer: Offer }
   | { k: 'respond'; id: number; p: Seat; yes: boolean }
   | { k: 'cancelOffer'; id: number }
-  | { k: 'trade'; a: Seat; b: Seat; give: ResCounts; want: ResCounts }
+  | { k: 'trade'; a: Seat; b: Seat; give: Hand; want: Hand }
   | { k: 'longest'; p: Seat | null; n: number; from: Seat | null }
   | { k: 'largest'; p: Seat; n: number; from: Seat | null }
   | { k: 'win'; p: Seat; vp: number }
@@ -232,6 +394,51 @@ export type GameEvent =
   | { k: 'gold'; p: Seat; got: PartialRes }
   /** A fog hex was discovered. `got` is the discoverer's reward (gold is chosen separately). */
   | { k: 'discover'; p: Seat; h: number; t: Terrain; n: number; got: PartialRes | null }
-  | { k: 'islandBonus'; p: Seat; vp: number };
+  | { k: 'islandBonus'; p: Seat; vp: number }
+  /* Cities & Knights */
+  | { k: 'eventDie'; face: 'ship' | Track }
+  | { k: 'barbarians'; at: number }
+  | {
+      k: 'attack';
+      strength: number;
+      defense: number;
+      /** Seats that lose a city (barbarians won). */
+      losers: Seat[];
+      /** The sole best defender (Catan won), or null. */
+      defender: Seat | null;
+      /** Tied best defenders, who draw a progress card each. */
+      tied: Seat[];
+    }
+  | { k: 'cityLost'; p: Seat; v: number }
+  /** A progress card drawn. `card` is null for others, except victory-point cards. */
+  | { k: 'draw'; p: Seat; track: Track; card: Progress | null }
+  | { k: 'commodities'; gains: Record<number, Cards> }
+  | { k: 'improve'; p: Seat; track: Track; lvl: number }
+  | { k: 'metropolis'; p: Seat; track: Track; v: number; from: Seat | null }
+  | { k: 'wall'; p: Seat; v: number; free?: boolean }
+  | { k: 'knight'; p: Seat; v: number }
+  | { k: 'promote'; p: Seat; v: number; lvl: number; free?: boolean }
+  | { k: 'activate'; p: Seat; v: number }
+  | { k: 'activateAll'; p: Seat; n: number }
+  | { k: 'moveKnight'; p: Seat; from: number; to: number; displaced: Seat | null }
+  /** A displaced or deserting knight placed again (`to`), or removed (null). */
+  | { k: 'relocate'; p: Seat; to: number | null }
+  | { k: 'knightRemoved'; p: Seat; v: number }
+  | { k: 'chase'; p: Seat; v: number }
+  | { k: 'progress'; p: Seat; card: Progress }
+  /** A progress card put under its deck. */
+  | { k: 'progressBack'; p: Seat; track: Track }
+  | { k: 'aqueduct'; p: Seat; r: Resource }
+  /** Cards handed over (Wedding, Master Merchant, Commercial Harbor). `cards` is null for others. */
+  | { k: 'give'; from: Seat; to: Seat; n: number; cards: Cards | null }
+  /** Spy: `card` is null for others; its colour is public. */
+  | { k: 'spy'; p: Seat; from: Seat; track: Track; card: Progress | null }
+  | { k: 'merchant'; p: Seat; h: number }
+  | { k: 'inventor'; p: Seat; h: number; h2: number }
+  /** Cards taken from the bank or from players by a progress card. */
+  | { k: 'gain'; p: Seat; cards: Cards; from: Record<number, number> | null }
+  | { k: 'roadRemoved'; p: Seat; e: number; by: Seat }
+  /** Owed choices begin (the UI shows each its sheet). */
+  | { k: 'owe'; owe: Owe[] };
 
 export type ApplyResult = { ok: true; state: GameState; events: GameEvent[] } | { ok: false; error: string };

@@ -9,23 +9,26 @@ import {
   stateFromView,
   viewFor,
   legalActions,
+  type GameConfig,
 } from '../src/index';
 import { seatsFor } from './simulate';
 
 describe('bot (plays from its own view only)', () => {
   it('finishes games, and every move it picks is accepted by the real engine', () => {
-    for (let g = 0; g < 16; g++) {
-      const seafarers = g >= 12;
-      const n = seafarers ? 3 + (g % 2) : 2 + (g % 3);
-      let s = newGame(
-        `bot-${g}`,
-        seatsFor(n),
-        seafarers ? { map: SCENARIOS['heading-for-new-shores']! } : {},
-      );
+    for (let g = 0; g < 20; g++) {
+      const seafarers = g >= 12 && g < 16;
+      const ck = g >= 16;
+      const n = seafarers || ck ? 3 + (g % 2) : 2 + (g % 3);
+      const hfns = { map: SCENARIOS['heading-for-new-shores']! };
+      const ckCfg: Partial<GameConfig> =
+        g < 18
+          ? { modules: ['citiesKnights'], winVP: 13 }
+          : { ...hfns, modules: ['seafarers', 'citiesKnights'], winVP: 17 };
+      let s = newGame(`bot-${g}`, seatsFor(n), seafarers ? hfns : ck ? ckCfg : {});
       const rng = seedRng(`botrng-${g}`);
       let steps = 0;
       while (s.phase === 'play') {
-        if (++steps > 20000) throw new Error('bot game did not finish');
+        if (++steps > 100000) throw new Error('bot game did not finish');
         let moved = false;
         for (let p = 0; p < n && !moved; p++) {
           const a = botMove(viewFor(s, p), rng);
@@ -40,19 +43,25 @@ describe('bot (plays from its own view only)', () => {
       }
       expect(s.winner).not.toBeNull();
     }
-  });
+  }, 120000);
 
   it.each([
     ['classic', {}],
     ['seafarers', { map: SCENARIOS['heading-for-new-shores']! }],
+    ['cities & knights', { modules: ['citiesKnights'], winVP: 13 }],
+    [
+      'cities & knights + seafarers',
+      { map: SCENARIOS['heading-for-new-shores']!, modules: ['seafarers', 'citiesKnights'], winVP: 17 },
+    ],
   ] as const)(
     'stateFromView gives the same legal moves for your own turn as the real state (%s)',
     (_name, cfg) => {
-      let s = newGame('sfv', seatsFor(3), cfg);
+      let s = newGame('sfv', seatsFor(3), cfg as Partial<GameConfig>);
       const rng = seedRng('sfv');
-      for (let i = 0; i < 300 && s.phase === 'play'; i++) {
+      for (let i = 0; i < 1500 && s.phase === 'play'; i++) {
         let p = s.stage === 'discard' ? Number(Object.keys(s.discard!)[0]) : s.turn;
         if (s.stage === 'gold') p = Number(Object.keys(s.sea!.gold!.owed)[0]);
+        if (s.stage === 'ck') p = s.ck!.owe[0]!.p;
         if (s.stage !== 'discard' && s.stage !== 'gold') {
           const real = legalActions(s, p).filter((a) => a.type !== 'respond' && a.type !== 'confirm');
           const approx = legalActions(stateFromView(viewFor(s, p)), p).filter(

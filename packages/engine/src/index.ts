@@ -12,5 +12,7 @@ export * from './map';
 export * from './ops';
 export * from './modules/api';
 export * from './modules/seafarers';
+export * from './modules/citiesKnights';
+export * from './modules/ckProgress';
 export * from './scenarios';
 export * from './clone';

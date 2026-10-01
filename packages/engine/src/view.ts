@@ -4,10 +4,12 @@
  */
 
 import { cloneJson } from './clone';
+import { PROGRESS_VP } from './types';
 import { mods } from './modules/api';
+import type { CKView } from './modules/citiesKnights';
 import { deckCount, devCount, publicVP, total, totalVP } from './queries';
 import type {
-  Board, Building, Color, DevCounts, GameEvent, GameState, HouseRules, ModuleId, Offer, ResCounts, Seat, Stage,
+  Board, Building, Color, DevCounts, GameEvent, GameState, Hand, HouseRules, ModuleId, Offer, Seat, Stage,
 } from './types'; // prettier-ignore
 
 export interface PublicPlayer {
@@ -26,7 +28,7 @@ export interface PublicPlayer {
 }
 
 export interface PrivateHand {
-  res: ResCounts;
+  res: Hand;
   dev: DevCounts;
   fresh: DevCounts;
   vpCards: number;
@@ -45,7 +47,7 @@ export interface PlayerView {
   edges: (Seat | null)[];
   players: PublicPlayer[];
   hand: PrivateHand | null;
-  bank: ResCounts;
+  bank: Hand;
   deckCount: number;
   turn: Seat;
   turnN: number;
@@ -70,6 +72,8 @@ export interface PlayerView {
   };
   /** Seafarers (public parts only). */
   sea?: SeaView;
+  /** Cities & Knights (public parts, plus the viewer's own cards). */
+  ck?: CKView;
 }
 
 export interface SeaView {
@@ -146,6 +150,12 @@ export function eventFor(e: GameEvent, seat: Seat | null): GameEvent {
       return seat === e.p || seat === e.from ? { ...e } : { ...e, r: null };
     case 'buyDev':
       return seat === e.p ? { ...e } : { ...e, card: null };
+    case 'draw':
+      return seat === e.p || (e.card && PROGRESS_VP.includes(e.card)) ? { ...e } : { ...e, card: null };
+    case 'give':
+      return seat === e.from || seat === e.to ? cloneJson(e) : { ...e, cards: null };
+    case 'spy':
+      return seat === e.p || seat === e.from ? { ...e } : { ...e, card: null };
     default:
       return cloneJson(e);
   }

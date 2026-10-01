@@ -8,7 +8,26 @@ import { mods } from './modules/api';
 import { BANK_EACH, DEV_COUNTS, PIECES, geo, robberHexOK, routeLen, totalVP } from './queries';
 import { DEV_PLAY, RES, type GameState } from './types';
 
-export function checkInvariants(s: GameState): string[] {
+/** Same pieces on the board (so route lengths can't have changed)? */
+function samePieces(a: GameState, b: GameState): boolean {
+  const eq = <T>(
+    x: readonly T[] | undefined,
+    y: readonly T[] | undefined,
+    f: (t: T | undefined) => unknown,
+  ) => x === y || (!!x && !!y && x.length === y.length && x.every((v, i) => f(v) === f(y[i])));
+  return (
+    eq(a.edges, b.edges, (x) => x) &&
+    eq(a.verts, b.verts, (x) => (x ? x[0] * 4 + x[1] : -1)) &&
+    eq(a.sea?.ships, b.sea?.ships, (x) => x) &&
+    eq(a.ck?.knights, b.ck?.knights, (x) => (x ? x.p : -1))
+  );
+}
+
+/**
+ * `prev` (optional, already checked) lets the simulator skip recomputing route lengths when no
+ * piece moved; the result is the same.
+ */
+export function checkInvariants(s: GameState, prev?: GameState): string[] {
   const bad: string[] = [];
   const g = geo(s);
   const n = s.players.length;
@@ -52,7 +71,10 @@ export function checkInvariants(s: GameState): string[] {
     if (g.verts[v]!.adj.some((u) => s.verts[u])) bad.push(`distance rule broken at vertex ${v}`);
     // Base game: a building always touches its owner's road. (Expansions where other pieces
     // can support a settlement, such as ships that may later sail away, check their own rules.)
-    if (!mods(s).some((m) => m.settleSupport) && !g.verts[v]!.edges.some((e) => s.edges[e] === b[0])) {
+    if (
+      !mods(s).some((m) => m.settleSupport || m.looseBuildings) &&
+      !g.verts[v]!.edges.some((e) => s.edges[e] === b[0])
+    ) {
       bad.push(`building at ${v} has no road`);
     }
   });
@@ -83,7 +105,7 @@ export function checkInvariants(s: GameState): string[] {
   }
 
   // Longest road.
-  const lens = s.players.map((_, p) => routeLen(s, p));
+  const lens = prev && samePieces(prev, s) ? prev.roadLens : s.players.map((_, p) => routeLen(s, p));
   if (lens.some((l, p) => l !== s.roadLens[p])) bad.push(`roadLens ${s.roadLens} != ${lens}`);
   const max = Math.max(...lens);
   const atMax = lens.filter((l) => l === max).length;

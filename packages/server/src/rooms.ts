@@ -336,8 +336,10 @@ export class Rooms {
       return conn.send({ t: 'error', text: 'Take a seat first' });
     if (room.seats.length < 2) return conn.send({ t: 'error', text: 'You need at least 2 players' });
     const map = SCENARIOS[room.options.scenario]!;
-    if (!map.players.includes(room.seats.length)) {
-      return conn.send({ t: 'error', text: `${map.name} needs ${map.players.join(' or ')} players` });
+    const allowed = playersFor(room.options);
+    if (!allowed.includes(room.seats.length)) {
+      const name = room.options.ck ? `${map.name} with Cities & Knights` : map.name;
+      return conn.send({ t: 'error', text: `${name} needs ${allowed.join(' or ')} players` });
     }
     const players: NewPlayer[] = room.seats.map((s) => ({ pid: s.pid, color: s.color, nick: s.nick }));
     const row: GameRow = {
@@ -580,11 +582,23 @@ export function gameConfigFor(o: RoomOptions): Partial<GameConfig> {
   if (o.houseRules.no7FirstRound) hr.no7FirstRound = true;
   if (o.houseRules.bank3to1) hr.bank3to1 = true;
   if (o.houseRules.freeShipMoves && seafarers) hr.freeShipMoves = true;
+  if (o.ck) {
+    if (o.houseRules.rerollBeforeAttack) hr.rerollBeforeAttack = true;
+    if (o.houseRules.noDiscardBeforeAttack) hr.noDiscardBeforeAttack = true;
+    if (o.houseRules.barbarianDelay) hr.barbarianDelay = o.houseRules.barbarianDelay;
+  }
   const c: Partial<GameConfig> = {};
   if (o.scenario !== 'classic') c.map = map;
-  if (o.winVP !== map.winVP || o.scenario !== 'classic') c.winVP = o.winVP;
+  if (o.ck) c.modules = [...map.modules, 'citiesKnights'];
+  if (o.winVP !== map.winVP || o.scenario !== 'classic' || o.ck) c.winVP = o.winVP;
   if (Object.keys(hr).length) c.houseRules = hr;
   return c;
+}
+
+/** Player counts a room's options allow. */
+export function playersFor(o: RoomOptions): number[] {
+  const map = SCENARIOS[o.scenario]!;
+  return o.ck ? map.players.filter((n) => n >= 3) : map.players;
 }
 
 function chatItem(r: ChatRow): LogItem {

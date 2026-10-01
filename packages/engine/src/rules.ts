@@ -7,17 +7,18 @@ import { boardFromMap, type MapData } from './map';
 import { mods, type Ctx } from './modules/api';
 import './modules';
 import {
-  afterFreePiece, checkWin, cleanCounts, finishFreePieces, finishRobber, gain, isInt, isRes, pay, stealRandom, updateLargest,
-  updateLongest,
+  afterFreePiece, checkWin, cleanCounts, continueRoll, finishFreePieces, finishRobber, gain, isInt, isRes, pay,
+  stealRandom, updateLargest, updateLongest,
 } from './ops'; // prettier-ignore
 import {
-  BANK_EACH, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, deckCount, freePieceSupply, geo, has, rateFor,
-  roadEdgeOK, roadOK, robberHexOK, robberVictims, routeLen, settlementOK, setupVertOK, snakeOrder, total, zeroRes,
+  BANK_EACH, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, geo, has,
+  rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, settlementOK, setupVertOK, snakeOrder, total,
+  zeroRes,
 } from './queries'; // prettier-ignore
 import { nextInt, seedRng, shuffle, type RngState } from './rng';
 import {
-  COLORS, DEV_PLAY, DEV_TYPES, RES, isResource, type Action, type ApplyResult, type Color, type DevCounts,
-  type GameConfig, type GameEvent, type GameState, type PartialRes, type Player, type Resource, type ResCounts, type Seat,
+  COLORS, DEV_PLAY, DEV_TYPES, isResource, type Action, type ApplyResult, type Card, type Color, type DevCounts,
+  type GameConfig, type GameEvent, type GameState, type Hand, type PartialRes, type Player, type Seat,
 } from './types'; // prettier-ignore
 
 /** Bump when a rules change would replay saved games differently. */
@@ -48,6 +49,10 @@ export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameCo
   }
   const cfg: GameConfig = { winVP: config.map ? map.winVP : 10, ...config };
   if (config.map && !config.modules && map.modules.length) cfg.modules = map.modules;
+  for (const m of mods({ config: cfg })) {
+    if (m.players && !m.players.includes(seats.length))
+      throw new Error(`This game is for ${m.players.join(' or ')} players`);
+  }
   const rng: RngState = seedRng(seed);
   const order = shuffle(seats.slice(), rng);
   const { board, fog } = boardFromMap(map, rng);
@@ -111,54 +116,19 @@ export function applyAction(s0: GameState, seat: Seat, action: Action): ApplyRes
   return { ok: true, state: s, events };
 }
 
-function produce(s: GameState, roll: number): { gains: Record<number, PartialRes>; short: Resource[] } {
-  const g = geo(s);
-  const owed = s.players.map(() => zeroRes());
-  s.board.hexes.forEach((h, hi) => {
-    if (h.n !== roll || hi === s.board.robber || !isResource(h.t)) return;
-    for (const v of g.hexVerts[hi]!) {
-      const b = s.verts[v];
-      if (b) owed[b[0]]![h.t] += b[1];
-    }
-  });
-  const gains: Record<number, PartialRes> = {};
-  const short: Resource[] = [];
-  for (const r of RES) {
-    const need = owed.reduce((a, o) => a + o[r], 0);
-    if (!need) continue;
-    const who = owed.flatMap((o, p) => (o[r] ? [p] : []));
-    if (need <= s.bank[r]) {
-      for (const p of who) {
-        gain(s, p, r, owed[p]![r]);
-        (gains[p] ??= {})[r] = owed[p]![r];
-      }
-    } else if (who.length === 1 && s.bank[r] > 0) {
-      // Only one player is owed this resource: they get what's left.
-      const p = who[0]!;
-      const n = s.bank[r];
-      gain(s, p, r, n);
-      (gains[p] ??= {})[r] = n;
-      short.push(r);
-    } else {
-      short.push(r);
-    }
-  }
-  return { gains, short };
-}
-
 function doTrade(
   s: GameState,
   a: Seat,
   b: Seat,
-  giveA: ResCounts,
-  wantA: ResCounts,
+  giveA: Hand,
+  wantA: Hand,
   events: GameEvent[],
 ): string | null {
   if (!has(s.players[a]!.res, giveA)) return 'The offer no longer has those cards';
   if (!has(s.players[b]!.res, wantA)) return 'The other side no longer has those cards';
-  for (const r of RES) {
-    s.players[a]!.res[r] += wantA[r] - giveA[r];
-    s.players[b]!.res[r] += giveA[r] - wantA[r];
+  for (const r of cardKinds(s)) {
+    s.players[a]!.res[r]! += (wantA[r] ?? 0) - (giveA[r] ?? 0);
+    s.players[b]!.res[r]! += (giveA[r] ?? 0) - (wantA[r] ?? 0);
   }
   events.push({ k: 'trade', a, b, give: giveA, want: wantA });
   return null;
@@ -193,23 +163,25 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
         return 'Settlements need a free corner with no neighbor next to it';
       }
       if (!isInt(e) || !g.verts[v]!.edges.includes(e)) return 'The road must touch your new settlement';
+      const second = s.setupI >= s.players.length;
+      const size = mods(s).some((m) => m.setupCity?.(s, second)) ? 2 : 1;
       if (a.ship) {
         const place = mods(s).find((m) => m.placeSetupPiece);
         if (!place) return 'Ships need the Seafarers expansion';
-        s.verts[v] = [p, 1];
+        s.verts[v] = [p, size];
         const err = place.placeSetupPiece!(x, v, e);
         if (err) return err;
       } else {
         if (!roadEdgeOK(s, e)) return 'The road must touch your new settlement';
-        s.verts[v] = [p, 1];
+        s.verts[v] = [p, size];
         s.edges[e] = p;
         me.pieces.road--;
       }
-      me.pieces.settlement--;
-      const second = s.setupI >= s.players.length;
+      if (size === 2) me.pieces.city--;
+      else me.pieces.settlement--;
       let got: PartialRes | null = null;
       if (second) {
-        // Second settlement pays out its neighbors.
+        // The second settlement (or city) pays out its neighbors.
         got = {};
         for (const h of g.verts[v]!.hexes) {
           const t = s.board.hexes[h]!.t;
@@ -239,43 +211,37 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     case 'roll': {
       if (!myTurn) return 'Wait for your turn';
       if (s.stage !== 'preroll') return s.stage === 'setup' ? 'Finish setup first' : 'You already rolled';
-      let d1 = 1 + nextInt(s.rng, 6);
-      let d2 = 1 + nextInt(s.rng, 6);
-      // House rule: no 7s while it is anyone's first turn; the 7 is shown, then rolled again.
-      while (d1 + d2 === 7 && s.config.houseRules?.no7FirstRound && s.turnN <= s.players.length) {
-        events.push({ k: 'roll', p, d: [d1, d2], redo: true });
+      const fixed = mods(s).reduce<[number, number] | null>((d, m) => d ?? m.fixedDice?.(s) ?? null, null);
+      let d1: number;
+      let d2: number;
+      if (fixed) [d1, d2] = fixed;
+      else {
         d1 = 1 + nextInt(s.rng, 6);
         d2 = 1 + nextInt(s.rng, 6);
+        // House rules: no 7s while it is anyone's first turn (or while a module says so); the 7
+        // is shown, then rolled again.
+        const again = () =>
+          (s.config.houseRules?.no7FirstRound && s.turnN <= s.players.length) ||
+          mods(s).some((m) => m.rerollSeven?.(s));
+        while (d1 + d2 === 7 && again()) {
+          events.push({ k: 'roll', p, d: [d1, d2], redo: true });
+          d1 = 1 + nextInt(s.rng, 6);
+          d2 = 1 + nextInt(s.rng, 6);
+        }
       }
       s.dice = [d1, d2];
       events.push({ k: 'roll', p, d: [d1, d2] });
-      if (d1 + d2 === 7) {
-        const need: Record<number, number> = {};
-        s.players.forEach((pl, i) => {
-          const t = total(pl.res);
-          if (t > 7) need[i] = Math.floor(t / 2);
-        });
-        s.robberReturn = 'main';
-        if (Object.keys(need).length) {
-          s.discard = need;
-          s.stage = 'discard';
-          events.push({ k: 'mustDiscard', need });
-        } else {
-          s.stage = 'robber';
-        }
-      } else {
-        const out = produce(s, d1 + d2);
-        events.push({ k: 'produce', gains: out.gains, short: out.short });
-        s.stage = 'main';
-        for (const m of mods(s)) m.afterProduce?.(x, d1 + d2);
-      }
+      let held = false;
+      for (const m of mods(s)) if (m.afterRoll?.(x)) held = true;
+      if (!held) continueRoll(x);
+      checkWin(s, events);
       return null;
     }
 
     case 'discard': {
       const need = s.discard?.[p];
       if (s.stage !== 'discard' || need == null) return 'You don’t need to discard';
-      const c = cleanCounts(a.cards);
+      const c = cleanCounts(a.cards, cardKinds(s));
       if (!c) return 'Pick cards to discard';
       if (total(c) !== need) return `Choose exactly ${need} cards to discard`;
       if (!has(me.res, c)) return 'You don’t have those cards';
@@ -285,6 +251,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       if (!Object.keys(s.discard!).length) {
         s.discard = null;
         s.stage = 'robber';
+        if (!robberAwake(s)) finishRobber(s);
       }
       return null;
     }
@@ -314,6 +281,10 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     case 'end': {
       if (!myTurn) return 'Wait for your turn';
       if (s.stage !== 'main') return notMain(s);
+      for (const m of mods(s)) {
+        const why = m.endTurnBlock?.(s, p);
+        if (why) return why;
+      }
       for (const k of DEV_PLAY) {
         me.dev[k] += me.fresh[k];
         me.fresh[k] = 0;
@@ -380,6 +351,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     case 'buyDev': {
       if (!myTurn) return 'Wait for your turn';
       if (s.stage !== 'main') return notMain(s);
+      if (!devCardsOn(s)) return 'There are no development cards in this game';
       if (!has(me.res, COST.dev)) return 'A development card costs sheep, wheat and ore';
       const left = deckCount(s);
       if (!left) return 'The development deck is empty';
@@ -407,6 +379,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     case 'playMono': {
       if (!myTurn) return 'Wait for your turn';
       if (s.stage !== 'preroll' && s.stage !== 'main') return 'You can’t play a card right now';
+      if (!devCardsOn(s)) return 'There are no development cards in this game';
       if (s.devPlayed) return 'You can play one development card per turn';
       const c = (
         { playKnight: 'knight', playRoads: 'road', playPlenty: 'plenty', playMono: 'mono' } as const
@@ -496,13 +469,15 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     case 'bank': {
       if (!myTurn) return 'Trade with the bank on your own turn';
       if (s.stage !== 'main') return notMain(s);
-      const { give, get } = a;
-      if (!isRes(give) || !isRes(get) || give === get) return 'Pick two different resources';
+      const give = a.give as Card;
+      const get = a.get as Card;
+      const kinds = cardKinds(s);
+      if (!kinds.includes(give) || !kinds.includes(get) || give === get) return 'Pick two different cards';
       const rate = rateFor(s, p, give);
-      if (me.res[give] < rate) return `You need ${rate} ${give} for this trade`;
-      if (s.bank[get] < 1) return `The bank is out of ${get}`;
-      me.res[give] -= rate;
-      s.bank[give] += rate;
+      if (me.res[give]! < rate) return `You need ${rate} ${give} for this trade`;
+      if (s.bank[get]! < 1) return `The bank is out of ${get}`;
+      me.res[give]! -= rate;
+      s.bank[give]! += rate;
       gain(s, p, get, 1);
       events.push({ k: 'bank', p, give, n: rate, get });
       return null;
@@ -510,10 +485,10 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
 
     case 'offer': {
       if (s.stage !== 'main') return 'Trading opens after the roll';
-      const give = cleanCounts(a.give);
-      const want = cleanCounts(a.want);
+      const give = cleanCounts(a.give, cardKinds(s));
+      const want = cleanCounts(a.want, cardKinds(s));
       if (!give || !want || !total(give) || !total(want)) return 'Choose what you give and what you want';
-      if (RES.some((r) => give[r] && want[r])) return 'You can’t give and ask for the same resource';
+      if (cardKinds(s).some((r) => give[r] && want[r])) return 'You can’t give and ask for the same resource';
       if (!has(me.res, give)) return 'You don’t have those cards';
       s.offers = s.offers.filter((o) => o.from !== p);
       s.offerN++;

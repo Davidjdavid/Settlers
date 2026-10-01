@@ -116,6 +116,28 @@ describe('room options', () => {
     expect(sea.houseRules).toEqual({ freeShipMoves: true });
   });
 
+  it('Cities & Knights adds its module, needs 3 or 4 players, and only then takes its house rules', () => {
+    const ck: RoomOptions = {
+      scenario: 'classic',
+      ck: true,
+      winVP: 13,
+      houseRules: { rerollBeforeAttack: true, barbarianDelay: 2, freeShipMoves: true },
+    };
+    expect(gameConfigFor(ck)).toEqual({
+      modules: ['citiesKnights'],
+      winVP: 13,
+      houseRules: { rerollBeforeAttack: true, barbarianDelay: 2 },
+    });
+    const both = gameConfigFor({ ...HFNS, ck: true, winVP: 17 });
+    expect(both.modules).toEqual(['seafarers', 'citiesKnights']);
+    expect(gameConfigFor({ ...DEFAULT_OPTIONS, houseRules: { rerollBeforeAttack: true } })).toEqual({});
+    const { conns, code } = table(2);
+    send(conns[0]!, { t: 'setOptions', options: ck });
+    send(conns[0]!, { t: 'start' });
+    expect(conns[0]!.last('error').text).toMatch(/Cities & Knights needs 3 or 4 players/);
+    expect(rooms.getRoom(code)!.game).toBeNull();
+  });
+
   it('options and the scenario survive a restart', () => {
     const { conns, code } = table(3);
     send(conns[0]!, { t: 'setOptions', options: { ...HFNS, winVP: 12 } });
@@ -167,4 +189,40 @@ describe('a Seafarers game through the server', () => {
     rooms = new Rooms(store, { log: quiet });
     expect(JSON.stringify(state(code))).toBe(final);
   });
+});
+
+describe('a Cities & Knights game through the server', () => {
+  it.each([
+    ['alone', { scenario: 'classic', ck: true, winVP: 13, houseRules: { barbarianDelay: 1 } }],
+    ['with Seafarers', { scenario: 'heading-for-new-shores', ck: true, winVP: 17, houseRules: {} }],
+  ] as const)(
+    'plays to the end %s, leaks nothing, and replays identically',
+    (_name, options) => {
+      const { conns, code } = table(3);
+      send(conns[0]!, { t: 'setOptions', options: options as RoomOptions });
+      send(conns[0]!, { t: 'start' });
+      expect(state(code).ck).toBeTruthy();
+      playOut(code, conns, `srv-ck-${_name}`, 60000);
+      expect(state(code).phase).toBe('over');
+      const final = JSON.stringify(state(code));
+      for (const c of conns) {
+        for (const m of c.msgs) {
+          if (m.t !== 'update' && m.t !== 'sync') continue;
+          const json = JSON.stringify(m);
+          expect(json).not.toContain('"rng"');
+          // Deck order never leaves the server: decks are sent as counts.
+          expect(json).not.toMatch(/"decks":\{"trade":\[/);
+          for (const it of m.log) {
+            if (it.k === 'ev' && it.e.k === 'draw' && it.e.p !== m.game?.me && it.e.card)
+              expect(['printer', 'constitution']).toContain(it.e.card);
+          }
+        }
+      }
+      store.close();
+      store = new Store(join(dir, 'test.db'));
+      rooms = new Rooms(store, { log: quiet });
+      expect(JSON.stringify(state(code))).toBe(final);
+    },
+    120000,
+  );
 });

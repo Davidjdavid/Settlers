@@ -10,38 +10,81 @@
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import fogTest from '../test/fixtures/fog-test.json';
-import { SCENARIOS, type HouseRules, type MapData } from '../src/index';
+import { SCENARIOS, type HouseRules, type MapData, type ModuleId } from '../src/index';
 import { simulate, type SimResult } from '../test/simulate';
 
-const MAPS: Record<string, MapData> = { ...SCENARIOS, 'fog-test': fogTest as unknown as MapData };
+interface Scenario {
+  map?: MapData;
+  modules?: ModuleId[];
+  players: number[];
+  winVP?: number;
+  /** Random players are slow at Cities & Knights; allow longer games before calling one stuck. */
+  maxTurns?: number;
+  /** House-rule mixes to cycle through (letters as in parseSeed). */
+  rules: string[];
+}
+const HFNS = SCENARIOS['heading-for-new-shores']!;
+const SIMS: Record<string, Scenario> = {
+  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb'] },
+  'heading-for-new-shores': { map: HFNS, players: HFNS.players, rules: ['n', 'b', 'nb', 'f', 'nbf'] },
+  'fog-test': { map: fogTest as unknown as MapData, players: [3, 4], rules: ['n', 'b', 'nb', 'f', 'nbf'] },
+  ck: {
+    modules: ['citiesKnights'],
+    players: [3, 4],
+    winVP: 13,
+    maxTurns: 3000,
+    rules: ['r', 'd', 'w', 'b', 'nrw', 'bdw'],
+  },
+  'ck-sea': {
+    map: HFNS,
+    modules: ['seafarers', 'citiesKnights'],
+    players: [3, 4],
+    winVP: 17,
+    maxTurns: 5000,
+    rules: ['r', 'd', 'w', 'f', 'nbf', 'rdw'],
+  },
+};
 const DEFAULT_GAMES: Record<string, number> = {
   classic: 1000,
   'heading-for-new-shores': 1000,
   'fog-test': 200,
+  ck: 1000,
+  'ck-sea': 1000,
 };
 
-/** Seed format: base.scenario.index.<n>p.<house rules: n b f or ->. */
+/**
+ * Seed format: base.scenario.index.<n>p.<house rules or ->. House rules: n no 7s in round 1,
+ * b 3:1 bank, f free ship moves, r re-roll 7s / d no discards until the barbarians attack,
+ * w barbarians wait 2 rounds.
+ */
 function makeSeed(base: string, scenario: string, i: number): string {
-  const map = MAPS[scenario]!;
-  const n = map.players[i % map.players.length]!;
-  const hr = i % 3 === 2 ? ['n', 'b', 'nb', 'f', 'nbf'][((i / 3) % 5) | 0]! : '-';
-  return `${base}.${scenario}.${i}.${n}p.${scenario === 'classic' ? hr.replace('f', '') || '-' : hr}`;
+  const sc = SIMS[scenario]!;
+  const n = sc.players[i % sc.players.length]!;
+  const hr = i % 3 === 2 ? sc.rules[((i / 3) | 0) % sc.rules.length]! : '-';
+  return `${base}.${scenario}.${i}.${n}p.${hr}`;
 }
 
 function parseSeed(seed: string): { scenario: string; n: number; houseRules: HouseRules } {
   const [, scenario, , np, hr] = seed.split('.');
-  if (!scenario || !MAPS[scenario] || !np) throw new Error(`can't parse seed ${seed}`);
+  if (!scenario || !SIMS[scenario] || !np) throw new Error(`can't parse seed ${seed}`);
   const houseRules: HouseRules = {};
   if (hr?.includes('n')) houseRules.no7FirstRound = true;
   if (hr?.includes('b')) houseRules.bank3to1 = true;
   if (hr?.includes('f')) houseRules.freeShipMoves = true;
+  if (hr?.includes('r')) houseRules.rerollBeforeAttack = true;
+  if (hr?.includes('d')) houseRules.noDiscardBeforeAttack = true;
+  if (hr?.includes('w')) houseRules.barbarianDelay = 2;
   return { scenario, n: Number(np.replace('p', '')), houseRules };
 }
 
 function run(seed: string, deepCheckRate?: number): SimResult {
   const { scenario, n, houseRules } = parseSeed(seed);
+  const sc = SIMS[scenario]!;
   return simulate(seed, n, {
-    ...(scenario === 'classic' ? {} : { map: MAPS[scenario]! }),
+    ...(sc.map ? { map: sc.map } : {}),
+    ...(sc.modules ? { modules: sc.modules } : {}),
+    ...(sc.winVP ? { winVP: sc.winVP } : {}),
+    ...(sc.maxTurns ? { maxTurns: sc.maxTurns } : {}),
     houseRules,
     ...(deepCheckRate != null ? { deepCheckRate } : {}),
   });
