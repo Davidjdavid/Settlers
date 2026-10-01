@@ -17,3 +17,4 @@ export * from './modules/citiesKnights';
 export * from './modules/ckProgress';
 export * from './scenarios';
 export * from './clone';
+export * from './stats';

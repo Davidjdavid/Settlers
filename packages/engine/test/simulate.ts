@@ -6,7 +6,7 @@
 
 import {
   COST, DEV_TYPES, RES, RULE_KEYS, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
-  PROGRESS, piecesLeft, stateFromView, viewFor, vpBreakdown, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
+  PROGRESS, GAIN_SOURCES, LOSS_SOURCES, StatsFold, statsFromLog, sumCards, totalVP, type GameStats, piecesLeft, stateFromView, viewFor, vpBreakdown, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
 
 export interface SimResult {
@@ -496,6 +496,57 @@ const UNDOABLE_TYPES = new Set([
 ]); // prettier-ignore
 const SECRET_EVENTS = new Set(['roll', 'steal', 'buyDev', 'draw', 'discover', 'spy', 'give', 'gold']);
 
+/**
+ * Stats agree with what happened (SPEC 5.6): rebuilt from the move log they equal the live
+ * totals; every card in every hand is accounted for; production is credited to tiles; points
+ * add up; every roll is counted once.
+ */
+export function statsCheck(
+  seed: string,
+  nPlayers: number,
+  config: Partial<GameConfig>,
+  log: [Seat, Action][],
+  live: GameStats,
+  s: GameState,
+): string[] {
+  const bad: string[] = [];
+  const re = statsFromLog(
+    seed,
+    seatsFor(nPlayers),
+    config,
+    log.map(([seat, action]) => ({ seat, action })),
+  );
+  if (JSON.stringify(re.stats) !== JSON.stringify(live))
+    bad.push('stats rebuilt from the log differ from the live stats');
+  live.players.forEach((ps, p) => {
+    if (ps.unexplained) bad.push(`player ${p}: ${ps.unexplained} card changes no event explains`);
+    for (const r of cardKinds(s)) {
+      const got = GAIN_SOURCES.reduce((a, k) => a + (ps.got[k][r] ?? 0), 0);
+      const lost = LOSS_SOURCES.reduce((a, k) => a + (ps.lost[k][r] ?? 0), 0);
+      if (got - lost !== (s.players[p]!.res[r] ?? 0))
+        bad.push(`player ${p} ${r}: got ${got} - lost ${lost} != hand ${s.players[p]!.res[r]}`);
+    }
+    if (ps.tiles[-1]) bad.push(`player ${p}: ${ps.tiles[-1]} produced cards with no tile`);
+    const tiles = Object.entries(ps.tiles).reduce((a, [, k]) => a + k, 0);
+    if (tiles > sumCards(ps.got.production)) bad.push(`player ${p}: tiles credited ${tiles} > produced`);
+    const pts = ps.points.reduce((a, x) => a + x.vp, 0);
+    if (pts !== totalVP(s, p)) bad.push(`player ${p}: points breakdown ${pts} != ${totalVP(s, p)}`);
+    const last = live.pointsByTurn[live.pointsByTurn.length - 1];
+    if (last && last[p] !== totalVP(s, p)) bad.push(`player ${p}: points chart ends at ${last[p]}`);
+    if (!s.ck && ps.built.road !== undefined && !s.sea) {
+      // Base game: roads built = roads on the board.
+      const onBoard = s.edges.filter((x) => x === p).length;
+      if ((ps.built.road ?? 0) !== onBoard)
+        bad.push(`player ${p}: ${ps.built.road} roads built, ${onBoard} on the board`);
+    }
+  });
+  const rolls = live.dice.reduce((a, b) => a + b, 0);
+  if (rolls !== live.rollLog.length) bad.push(`dice chart ${rolls} rolls, log ${live.rollLog.length}`);
+  if (live.dice[0] || live.dice[1]) bad.push('dice chart has totals below 2');
+  if (live.winner !== s.winner) bad.push(`stats winner ${live.winner} != ${s.winner}`);
+  return bad;
+}
+
 export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}): SimResult {
   const maxTurns = opts.maxTurns ?? 1500;
   const deep = opts.deepCheckRate ?? 0.03;
@@ -507,6 +558,8 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
   const log: [Seat, Action][] = [];
   const config = configFor(opts);
   let s = newGame(seed, seatsFor(nPlayers), config);
+  // Stats kept move by move, as the server does during play (SPEC 5.6).
+  const live = new StatsFold(s);
   const fail = (msg: string) => errors.push(`seq ${s.seq} turn ${s.turnN}: ${msg}`);
 
   let guard = 0;
@@ -522,6 +575,11 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       if (!r.ok && r.error.startsWith('Something went wrong'))
         fail(`fuzz crashed: ${r.error} ${JSON.stringify(fa)}`);
       if (r.ok) {
+        try {
+          live.step(s, fp, fa, r.events, r.state);
+        } catch (e) {
+          fail(`stats: ${String(e)}`);
+        }
         s = r.state;
         log.push([fp, fa]);
       }
@@ -570,6 +628,11 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       if (leak) fail(leak);
     }
     const prev = s;
+    try {
+      live.step(prev, p, a, r.events, r.state);
+    } catch (e) {
+      fail(`stats: ${String(e)}`);
+    }
     s = r.state;
     log.push([p, a]);
     // A hand-back restores the earlier turn exactly (only the move count and the rules move on).
@@ -615,6 +678,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
     }
     if (JSON.stringify(t) !== JSON.stringify(s)) fail('replay produced a different state');
   }
+  if (!errors.length) for (const b of statsCheck(seed, nPlayers, config, log, live.st, s)) fail(b);
 
   return {
     seed,
