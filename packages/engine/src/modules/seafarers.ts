@@ -33,10 +33,27 @@ function known(s: GameState, e: number): Terrain[] | null {
   return k.length ? k : null; // fog on both sides: nothing can be built
 }
 
+/** Per-board cache of which edges can take a road or a ship (kinds only change when fog lifts). */
+const kindCache = new WeakMap<object, { road: Uint8Array; ship: Uint8Array }>();
+function kinds(s: GameState) {
+  let k = kindCache.get(s.board.hexes);
+  if (!k) {
+    const n = s.edges.length;
+    k = { road: new Uint8Array(n), ship: new Uint8Array(n) };
+    for (let e = 0; e < n; e++) {
+      const kn = known(s, e);
+      k.road[e] = kn?.some(isLand) ? 1 : 0;
+      k.ship[e] = kn?.includes('sea') ? 1 : 0;
+    }
+    kindCache.set(s.board.hexes, k);
+  }
+  return k;
+}
+
 /** The edge's kind allows a road: a known land side (land, coast, or land next to fog). */
-export const roadKindOK = (s: GameState, e: number) => !!known(s, e)?.some(isLand);
+export const roadKindOK = (s: GameState, e: number) => kinds(s).road[e] === 1;
 /** The edge's kind allows a ship: a known sea side (sea, coast, or sea next to fog). */
-export const shipKindOK = (s: GameState, e: number) => !!known(s, e)?.includes('sea');
+export const shipKindOK = (s: GameState, e: number) => kinds(s).ship[e] === 1;
 
 export const onPirateHex = (s: GameState, e: number) =>
   (s.board.pirate ?? -1) >= 0 && geo(s).edges[e]!.hexes.includes(s.board.pirate!);
@@ -182,7 +199,8 @@ function discover(x: Ctx, e: number) {
     if (s.board.hexes[h]!.t !== 'fog') continue;
     const t = st.fog.terrain.shift() ?? 'sea';
     const n = produces(t) ? (st.fog.numbers.shift() ?? 0) : 0;
-    s.board.hexes[h] = { ...s.board.hexes[h]!, t, n };
+    // A new array, so caches keyed on the hex list (edge kinds) see the change.
+    s.board.hexes = s.board.hexes.map((x, i) => (i === h ? { ...x, t, n } : x));
     let got: PartialRes | null = null;
     if (isResource(t) && s.bank[t] > 0) {
       gain(s, p, t, 1);
@@ -428,9 +446,12 @@ export const seafarers: RuleModule = {
     s.edges.forEach((o, e) => {
       if (o != null && !roadKindOK(s, e)) bad.push(`road on water edge ${e}`);
     });
-    for (let e = 0; e < s.edges.length; e++) {
-      if ((s.edges[e] != null || st.ships[e] != null) && edgeSides(s, e).includes('fog'))
-        bad.push(`piece next to fog at ${e}`);
+    if (s.board.hexes.some((h) => h.t === 'fog')) {
+      for (let e = 0; e < s.edges.length; e++) {
+        if ((s.edges[e] != null || st.ships[e] != null) && edgeSides(s, e).includes('fog')) {
+          bad.push(`piece next to fog at ${e}`);
+        }
+      }
     }
     s.verts.forEach((b, v) => {
       if (b && !g.verts[v]!.hexes.some((h) => isLand(s.board.hexes[h]!.t)))

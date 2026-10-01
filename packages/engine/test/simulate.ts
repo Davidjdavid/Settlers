@@ -5,8 +5,8 @@
  */
 
 import {
-  COST, DEV_TYPES, RES, applyAction, checkTransition, devCount, eventsFor, geo, legalRoads, legalSettlements, vertFree, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, total,
-  viewFor, waitingOn, type Action, type GameEvent, type GameState, type NewPlayer, type PartialRes, type RngState, type Seat,
+  COST, DEV_TYPES, RES, applyAction, cloneJson, checkTransition, devCount, eventsFor, geo, goldDue, legalRoads, legalSettlements, legalShips, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, total,
+  viewFor, waitingOn, type Action, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type NewPlayer, type PartialRes, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
 
 export interface SimResult {
@@ -25,6 +25,16 @@ export interface SimOptions {
   maxTurns?: number;
   /** Fraction of steps on which to run the expensive checks. */
   deepCheckRate?: number;
+  /** Play on this map (default: the classic board). */
+  map?: MapData;
+  houseRules?: HouseRules;
+}
+
+export function configFor(opts: SimOptions): Partial<GameConfig> {
+  const c: Partial<GameConfig> = {};
+  if (opts.map) c.map = opts.map;
+  if (opts.houseRules && Object.keys(opts.houseRules).length) c.houseRules = opts.houseRules;
+  return c;
 }
 
 const COLORS = ['red', 'blue', 'white', 'purple'] as const;
@@ -88,22 +98,47 @@ function usefulBank(s: GameState, p: Seat): Set<string> {
   return out;
 }
 
-/** Roads (paid or free) that reach a corner where a settlement could go. */
-function roadsToSpots(s: GameState, p: Seat): Set<number> {
+/** Roads and ships (paid or free) that reach a corner where a settlement could go. */
+function piecesToSpots(s: GameState, p: Seat): Set<number> {
   const g = geo(s);
   const out = new Set<number>();
   if (legalSettlements(s, p).length) return out; // already have somewhere to build
-  for (const e of legalRoads(s, p)) {
+  const spot = (v: number) => vertFree(s, v) && vertexOK(s, v);
+  const edges = s.sea ? [...legalRoads(s, p), ...legalShips(s, p)] : legalRoads(s, p);
+  for (const e of edges) {
     const E = g.edges[e]!;
-    if (vertFree(s, E.a) || vertFree(s, E.b)) out.add(e);
+    if (spot(E.a) || spot(E.b)) out.add(e);
   }
   return out;
 }
 
+function randomGold(s: GameState, p: Seat, rng: RngState): Action {
+  const bank = { ...s.bank };
+  const cards: PartialRes = {};
+  for (let i = 0; i < goldDue(s, p); i++) {
+    const r = pick(
+      rng,
+      RES.filter((x) => bank[x] > 0),
+    );
+    bank[r]--;
+    cards[r] = (cards[r] ?? 0) + 1;
+  }
+  return { type: 'chooseGold', cards };
+}
+
 function weighted(rng: RngState, acts: Action[], useful: Set<string>, spotRoads: Set<number>): Action {
+  // Types with many options (ship moves, pirate spots) share their weight instead of multiplying it.
+  const explore = !spotRoads.size && !acts.some((a) => a.type === 'settlement');
+  const per: Partial<Record<Action['type'], number>> = {};
+  for (const a of acts)
+    if (a.type === 'moveShip' || a.type === 'pirate') per[a.type] = (per[a.type] ?? 0) + 1;
   const w = acts.map((a) => {
+    if (a.type === 'moveShip' || a.type === 'pirate') return WEIGHT[a.type] / per[a.type]!;
     if (a.type === 'bank') return useful.has(`${a.give}>${a.get}`) ? 30 : 0.1;
     if (a.type === 'road' || a.type === 'freeRoad') return spotRoads.has(a.e) ? 40 : 0.5;
+    // Ships reaching a building spot are best; with nowhere left to build, explore by sea.
+    if (a.type === 'ship' || a.type === 'freeShip') return spotRoads.has(a.e) ? 40 : explore ? 25 : 0.5;
+    if (a.type === 'setup' && a.ship) return 0.3;
     return WEIGHT[a.type];
   });
   let x = nextFloat(rng) * w.reduce((a, b) => a + b, 0);
@@ -119,6 +154,10 @@ function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
   if (s.stage === 'discard') {
     const p = pick(rng, waitingOn(s));
     return [p, randomDiscard(s, p, rng)];
+  }
+  if (s.stage === 'gold') {
+    const p = pick(rng, waitingOn(s));
+    return [p, randomGold(s, p, rng)];
   }
   // Sometimes let a non-turn player answer or make an offer.
   if (s.stage === 'main' && chance(rng, 0.15)) {
@@ -142,7 +181,7 @@ function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
       rng,
       acts,
       main ? usefulBank(s, p) : new Set(),
-      main || s.stage === 'roads' ? roadsToSpots(s, p) : new Set(),
+      main || s.stage === 'roads' ? piecesToSpots(s, p) : new Set(),
     ),
   ];
 }
@@ -168,9 +207,52 @@ function fuzzAction(s: GameState, rng: RngState): [Seat, Action] {
   return [nextInt(rng, s.players.length + 2) - 1, pick(rng, junk) as Action];
 }
 
+/** Random placement-type actions (most are illegal) for checking the reducer rejects them. */
+function randomCandidates(s: GameState, rng: RngState): [Seat, Action][] {
+  const nE = s.edges.length;
+  const nV = s.verts.length;
+  const nH = s.board.hexes.length;
+  const out: [Seat, Action][] = [];
+  for (let i = 0; i < 12; i++) {
+    const p = chance(rng, 0.7) ? s.turn : nextInt(rng, s.players.length);
+    const e = nextInt(rng, nE);
+    const v = nextInt(rng, nV);
+    const h = nextInt(rng, nH);
+    const cands: Action[] = [
+      { type: 'road', e },
+      { type: 'settlement', v },
+      { type: 'city', v },
+      { type: 'robber', hex: h },
+      { type: 'freeRoad', e },
+      { type: 'setup', v, e: geo(s).verts[v]!.edges[0]! },
+    ];
+    if (s.sea) {
+      const mine = s.sea.ships.flatMap((o, x) => (o === p ? [x] : []));
+      const from = mine.length && chance(rng, 0.8) ? pick(rng, mine) : nextInt(rng, nE);
+      cands.push(
+        { type: 'ship', e },
+        { type: 'freeShip', e },
+        { type: 'moveShip', from, to: e },
+        { type: 'pirate', hex: h },
+        { type: 'setup', v, e: geo(s).verts[v]!.edges[0]!, ship: true },
+      );
+    }
+    out.push([p, pick(rng, cands)]);
+  }
+  return out;
+}
+
 /** A copy of `s` with everything `seat` cannot see changed: other hands, dev cards, deck order. */
 function perturbHidden(s: GameState, seat: Seat, rng: RngState): GameState {
-  const t = structuredClone(s);
+  const t = cloneJson(s);
+  if (t.sea) {
+    // Fog stays secret: a different stack of the same size must look the same.
+    const terr = ['sea', 'gold', ...RES, 'desert'] as const;
+    t.sea.fog = {
+      terrain: t.sea.fog.terrain.map(() => pick(rng, terr)),
+      numbers: t.sea.fog.numbers.map(() => 2 + nextInt(rng, 11)),
+    };
+  }
   const deckSize = Object.values(t.deck).reduce((a, b) => a + b, 0);
   t.deck = { knight: 0, road: 0, plenty: 0, mono: 0, vp: 0 };
   for (let i = 0; i < deckSize; i++) t.deck[pick(rng, DEV_TYPES)]++;
@@ -204,7 +286,7 @@ function leakCheck(s: GameState, seat: Seat, rng: RngState): string | null {
 }
 
 /** Actions whose events must not depend on hidden information (steals, dev draws, dice). */
-const EVENT_LEAK_TYPES = new Set<Action['type']>(['roll', 'robber', 'buyDev']);
+const EVENT_LEAK_TYPES = new Set<Action['type']>(['roll', 'robber', 'buyDev', 'pirate']);
 
 /** Replaying the action with hidden info changed must give `seat` the same events. */
 function eventLeakCheck(
@@ -218,7 +300,7 @@ function eventLeakCheck(
   if (seat === p) return null;
   const t = perturbHidden(s, seat, rng);
   // The acting player's hand stays as it was, so the action is still legal.
-  t.players[p] = structuredClone(s.players[p]!);
+  t.players[p] = cloneJson(s.players[p]!);
   const r = applyAction(t, p, a);
   if (!r.ok) return null;
   // Winning reveals the winner's VP cards by design.
@@ -235,7 +317,8 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
   const rng = seedRng(`agent:${seed}`);
   const errors: string[] = [];
   const log: [Seat, Action][] = [];
-  let s = newGame(seed, seatsFor(nPlayers));
+  const config = configFor(opts);
+  let s = newGame(seed, seatsFor(nPlayers), config);
   const fail = (msg: string) => errors.push(`seq ${s.seq} turn ${s.turnN}: ${msg}`);
 
   let guard = 0;
@@ -264,6 +347,15 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
           if (!r.ok) fail(`legal action rejected for ${p}: ${JSON.stringify(a)} -> ${r.error}`);
         }
       }
+      // ...and nothing outside the list may be accepted (handler and list must agree).
+      for (const [cp, ca] of randomCandidates(s, rng)) {
+        // A robber/pirate move without a victim is shorthand for the only possible victim.
+        const key = (a: Action) =>
+          JSON.stringify(a.type === 'robber' || a.type === 'pirate' ? { ...a, victim: undefined } : a);
+        const listed = legalActions(s, cp).some((a) => key(a) === key(ca));
+        if (!listed && applyAction(s, cp, ca).ok)
+          fail(`accepted an unlisted action for ${cp}: ${JSON.stringify(ca)}`);
+      }
       const leak = leakCheck(s, nextInt(rng, nPlayers), rng);
       if (leak) fail(leak);
     }
@@ -277,7 +369,8 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       if (a.type !== 'offer') fail(`chosen action rejected for ${p}: ${JSON.stringify(a)} -> ${r.error}`);
       continue;
     }
-    if (EVENT_LEAK_TYPES.has(a.type)) {
+    // Steals and dev draws are checked every time; rolls (very frequent) on sampled steps.
+    if (EVENT_LEAK_TYPES.has(a.type) && (a.type !== 'roll' || chance(rng, deep * 3))) {
       const leak = eventLeakCheck(s, p, a, r.events, (p + 1 + nextInt(rng, nPlayers - 1)) % nPlayers, rng);
       if (leak) fail(leak);
     }
@@ -293,7 +386,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
 
   // Determinism: replaying the log from the seed gives the identical state.
   if (!errors.length) {
-    let t = newGame(seed, seatsFor(nPlayers));
+    let t = newGame(seed, seatsFor(nPlayers), config);
     for (const [rp, ra] of log) {
       const r = applyAction(t, rp, ra);
       if (!r.ok) {

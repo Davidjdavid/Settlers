@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  SCENARIOS,
   applyAction,
   botMove,
   checkInvariants,
@@ -13,9 +14,14 @@ import { seatsFor } from './simulate';
 
 describe('bot (plays from its own view only)', () => {
   it('finishes games, and every move it picks is accepted by the real engine', () => {
-    for (let g = 0; g < 12; g++) {
-      const n = 2 + (g % 3);
-      let s = newGame(`bot-${g}`, seatsFor(n));
+    for (let g = 0; g < 16; g++) {
+      const seafarers = g >= 12;
+      const n = seafarers ? 3 + (g % 2) : 2 + (g % 3);
+      let s = newGame(
+        `bot-${g}`,
+        seatsFor(n),
+        seafarers ? { map: SCENARIOS['heading-for-new-shores']! } : {},
+      );
       const rng = seedRng(`botrng-${g}`);
       let steps = 0;
       while (s.phase === 'play') {
@@ -36,21 +42,28 @@ describe('bot (plays from its own view only)', () => {
     }
   });
 
-  it('stateFromView gives the same legal moves for your own turn as the real state', () => {
-    let s = newGame('sfv', seatsFor(3));
-    const rng = seedRng('sfv');
-    for (let i = 0; i < 300 && s.phase === 'play'; i++) {
-      const p = s.stage === 'discard' ? Number(Object.keys(s.discard!)[0]) : s.turn;
-      if (s.stage !== 'discard') {
-        const real = legalActions(s, p).filter((a) => a.type !== 'respond' && a.type !== 'confirm');
-        const approx = legalActions(stateFromView(viewFor(s, p)), p).filter(
-          (a) => a.type !== 'respond' && a.type !== 'confirm',
-        );
-        // Robber choices depend on others' card counts only, which the view has.
-        expect(approx).toEqual(real);
+  it.each([
+    ['classic', {}],
+    ['seafarers', { map: SCENARIOS['heading-for-new-shores']! }],
+  ] as const)(
+    'stateFromView gives the same legal moves for your own turn as the real state (%s)',
+    (_name, cfg) => {
+      let s = newGame('sfv', seatsFor(3), cfg);
+      const rng = seedRng('sfv');
+      for (let i = 0; i < 300 && s.phase === 'play'; i++) {
+        let p = s.stage === 'discard' ? Number(Object.keys(s.discard!)[0]) : s.turn;
+        if (s.stage === 'gold') p = Number(Object.keys(s.sea!.gold!.owed)[0]);
+        if (s.stage !== 'discard' && s.stage !== 'gold') {
+          const real = legalActions(s, p).filter((a) => a.type !== 'respond' && a.type !== 'confirm');
+          const approx = legalActions(stateFromView(viewFor(s, p)), p).filter(
+            (a) => a.type !== 'respond' && a.type !== 'confirm',
+          );
+          // Robber choices depend on others' card counts only, which the view has.
+          expect(approx).toEqual(real);
+        }
+        const a = botMove(viewFor(s, p), rng)!;
+        s = (applyAction(s, p, a) as { ok: true; state: typeof s }).state;
       }
-      const a = botMove(viewFor(s, p), rng)!;
-      s = (applyAction(s, p, a) as { ok: true; state: typeof s }).state;
-    }
-  });
+    },
+  );
 });

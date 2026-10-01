@@ -50,7 +50,11 @@ export function checkInvariants(s: GameState): string[] {
   s.verts.forEach((b, v) => {
     if (!b) return;
     if (g.verts[v]!.adj.some((u) => s.verts[u])) bad.push(`distance rule broken at vertex ${v}`);
-    if (!g.verts[v]!.edges.some((e) => s.edges[e] === b[0])) bad.push(`building at ${v} has no road`);
+    // Base game: a building always touches its owner's road. (Expansions where other pieces
+    // can support a settlement, such as ships that may later sail away, check their own rules.)
+    if (!mods(s).some((m) => m.settleSupport) && !g.verts[v]!.edges.some((e) => s.edges[e] === b[0])) {
+      bad.push(`building at ${v} has no road`);
+    }
   });
 
   // Every road is connected to its owner's network, which starts at their buildings.

@@ -4,7 +4,8 @@
  */
 
 import { legalActions, mustDiscard } from './legal';
-import { COST, geo, has, legalSettlements, rateFor, vertFree } from './queries';
+import { goldDue } from './modules/seafarers';
+import { COST, geo, has, legalSettlements, rateFor, vertFree, vertexOK } from './queries';
 import { nextFloat, nextInt, type RngState } from './rng';
 import { RES, type Action, type PartialRes } from './types';
 import { stateFromView, type PlayerView } from './view';
@@ -13,6 +14,7 @@ const WEIGHT: Partial<Record<Action['type'], number>> = {
   setup: 1, roll: 1, robber: 1, freeRoad: 5, skipRoads: 0.1,
   city: 40, settlement: 40, buyDev: 6, road: 1,
   playKnight: 3, playRoads: 2, playPlenty: 2, playMono: 1, end: 3,
+  ship: 1, freeShip: 3, moveShip: 0.5, pirate: 1,
 }; // prettier-ignore
 
 /** The bot's move, or null if it has nothing to do right now. */
@@ -31,6 +33,19 @@ export function botMove(v: PlayerView, rng: RngState): Action | null {
     }
     return { type: 'discard', cards };
   }
+  // Gold: take whatever the bank has most of.
+  const gold = goldDue(s, me);
+  if (gold) {
+    const bank = { ...v.bank };
+    const cards: PartialRes = {};
+    for (let i = 0; i < gold; i++) {
+      const r = RES.filter((x) => bank[x] > 0).sort((a, b) => bank[b] - bank[a])[0]!;
+      bank[r]--;
+      cards[r] = (cards[r] ?? 0) + 1;
+    }
+    return { type: 'chooseGold', cards };
+  }
+  if (v.stage === 'gold') return null;
   // Answer trade offers aimed at us: decline (a weak, polite bot).
   for (const o of v.offers) {
     if (o.from !== me && o.from === v.turn && o.resp[me] == null)
@@ -52,12 +67,20 @@ export function botMove(v: PlayerView, rng: RngState): Action | null {
     }
     if (useful.size) break;
   }
+  const spot = (x: number) => vertFree(s, x) && vertexOK(s, x);
+  const moves = acts.filter((a) => a.type === 'moveShip' || a.type === 'pirate').length || 1;
   const w = acts.map((a) => {
     if (a.type === 'bank') return useful.has(`${a.give}>${a.get}`) ? 30 : 0;
-    if (a.type === 'road' || a.type === 'freeRoad') {
+    if (a.type === 'road' || a.type === 'freeRoad' || a.type === 'ship' || a.type === 'freeShip') {
       const E = g.edges[a.e]!;
-      return noSpots && (vertFree(s, E.a) || vertFree(s, E.b)) ? 40 : 0.3;
+      const reach = spot(E.a) || spot(E.b);
+      if (noSpots && reach) return 40;
+      // With nowhere to build on land, sail out to explore.
+      if (noSpots && (a.type === 'ship' || a.type === 'freeShip')) return 15;
+      return 0.3;
     }
+    if (a.type === 'moveShip' || a.type === 'pirate') return (WEIGHT[a.type] ?? 1) / moves;
+    if (a.type === 'setup' && a.ship) return 0.2;
     if (a.type === 'robber') return a.victim != null ? 3 : 1;
     return WEIGHT[a.type] ?? 1;
   });

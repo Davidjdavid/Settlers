@@ -12,3 +12,5 @@ export * from './map';
 export * from './ops';
 export * from './modules/api';
 export * from './modules/seafarers';
+export * from './scenarios';
+export * from './clone';
