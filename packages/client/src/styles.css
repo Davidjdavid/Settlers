@@ -1451,3 +1451,110 @@ body.noroom .dock {
     flex: 1 1 auto;
   }
 }
+
+/* Cities & Knights */
+.rcard.com {
+  border-radius: 9px 9px 18px 18px;
+}
+.player .ckstats {
+  grid-column: 2 / -1;
+  grid-row: 3;
+  align-items: center;
+}
+.player .ckstats ~ .badges {
+  grid-row: 4;
+}
+.ckstats .lvl {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--c);
+  color: #0b1418;
+  font-weight: 750;
+}
+.ckstats .pcols {
+  display: inline-flex;
+  gap: 3px;
+}
+.ckstats .pcols i {
+  display: block;
+  width: 9px;
+  height: 13px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+.ckbox .track {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+.ckbox .step {
+  height: 24px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+.ckbox .step.ship {
+  background: #3a2a2a;
+  border-color: var(--alarm);
+}
+.ckbox .step.land {
+  background: var(--panel-3);
+}
+.ckline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.ckline b {
+  color: var(--ink);
+}
+.ckline .deck {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--c);
+  color: var(--ink);
+}
+.eventdie {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--c);
+  border: 1px solid #0a1b23;
+  font-size: 17px;
+  margin-left: 6px;
+}
+.improve {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+.ibtn {
+  border-left: 4px solid var(--c);
+}
+.ibtn .cost {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.pcard {
+  border-left: 4px solid var(--c);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pcard .row {
+  display: flex;
+  gap: 6px;
+}

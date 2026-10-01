@@ -20,18 +20,26 @@ interface Scenario {
   winVP?: number;
   /** Random players are slow at Cities & Knights; allow longer games before calling one stuck. */
   maxTurns?: number;
+  /** Points to win in odd-numbered games, to keep the run quick (even ones use winVP). */
+  quickVP?: number;
   /** House-rule mixes to cycle through (letters as in parseSeed). */
   rules: string[];
 }
 const HFNS = SCENARIOS['heading-for-new-shores']!;
 const SIMS: Record<string, Scenario> = {
   classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb'] },
-  'heading-for-new-shores': { map: HFNS, players: HFNS.players, rules: ['n', 'b', 'nb', 'f', 'nbf'] },
+  'heading-for-new-shores': {
+    map: HFNS,
+    players: HFNS.players,
+    maxTurns: 3000,
+    rules: ['n', 'b', 'nb', 'f', 'nbf'],
+  },
   'fog-test': { map: fogTest as unknown as MapData, players: [3, 4], rules: ['n', 'b', 'nb', 'f', 'nbf'] },
   ck: {
     modules: ['citiesKnights'],
     players: [3, 4],
     winVP: 13,
+    quickVP: 10,
     maxTurns: 3000,
     rules: ['r', 'd', 'w', 'b', 'nrw', 'bdw'],
   },
@@ -40,6 +48,7 @@ const SIMS: Record<string, Scenario> = {
     modules: ['seafarers', 'citiesKnights'],
     players: [3, 4],
     winVP: 17,
+    quickVP: 13,
     maxTurns: 5000,
     rules: ['r', 'd', 'w', 'f', 'nbf', 'rdw'],
   },
@@ -80,10 +89,12 @@ function parseSeed(seed: string): { scenario: string; n: number; houseRules: Hou
 function run(seed: string, deepCheckRate?: number): SimResult {
   const { scenario, n, houseRules } = parseSeed(seed);
   const sc = SIMS[scenario]!;
+  const index = Number(seed.split('.')[2]);
+  const winVP = sc.quickVP && index % 2 ? sc.quickVP : sc.winVP;
   return simulate(seed, n, {
     ...(sc.map ? { map: sc.map } : {}),
     ...(sc.modules ? { modules: sc.modules } : {}),
-    ...(sc.winVP ? { winVP: sc.winVP } : {}),
+    ...(winVP ? { winVP } : {}),
     ...(sc.maxTurns ? { maxTurns: sc.maxTurns } : {}),
     houseRules,
     ...(deepCheckRate != null ? { deepCheckRate } : {}),

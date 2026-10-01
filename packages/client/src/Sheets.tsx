@@ -2,17 +2,20 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  COMS,
   RES,
   rateFor,
   stateFromView,
   total,
   type Action,
+  type Card,
+  type Cards,
   type PartialRes,
   type PlayerView,
   type Resource,
   type Seat,
 } from '@settlers/engine';
-import { RES_LABEL, TILE_COLOR, iconSVG } from './art';
+import { CARD_COLOR, CARD_LABEL, RES_LABEL, TILE_COLOR, cardIcon } from './art';
 import { client } from './net';
 import { cardsText, nameOf } from './text';
 
@@ -40,28 +43,33 @@ export function Sheet(props: {
   );
 }
 
-const Icon = ({ r }: { r: Resource }) => (
+export const Icon = ({ r }: { r: Card }) => (
   <span
     className="ic"
-    style={{ ['--c' as string]: TILE_COLOR[r] }}
-    dangerouslySetInnerHTML={{ __html: iconSVG(r) }}
+    style={{ ['--c' as string]: CARD_COLOR[r] }}
+    dangerouslySetInnerHTML={{ __html: cardIcon(r) }}
   />
 );
 
-export function Chips({ c }: { c: PartialRes }) {
+/** The kinds of card in hands in this game (commodities with Cities & Knights). */
+export const kindsOf = (v: PlayerView): readonly Card[] => (v.ck ? [...RES, ...COMS] : RES);
+
+export function Chips({ c }: { c: Cards }) {
   return (
     <span className="chips">
-      {RES.filter((r) => (c[r] ?? 0) > 0).map((r) => (
-        <span key={r} className="chip" style={{ ['--c' as string]: TILE_COLOR[r] }}>
-          <span dangerouslySetInnerHTML={{ __html: iconSVG(r) }} style={{ display: 'contents' }} />
-          {c[r]} {RES_LABEL[r]}
-        </span>
-      ))}
+      {[...RES, ...COMS]
+        .filter((r) => (c[r] ?? 0) > 0)
+        .map((r) => (
+          <span key={r} className="chip" style={{ ['--c' as string]: CARD_COLOR[r] }}>
+            <span dangerouslySetInnerHTML={{ __html: cardIcon(r) }} style={{ display: 'contents' }} />
+            {c[r]} {CARD_LABEL[r]}
+          </span>
+        ))}
     </span>
   );
 }
 
-function Ctl(props: { value: number; max: number; onChange: (n: number) => void; label: string }) {
+export function Ctl(props: { value: number; max: number; onChange: (n: number) => void; label: string }) {
   return (
     <div className="ctl">
       <button
@@ -89,39 +97,67 @@ function Ctl(props: { value: number; max: number; onChange: (n: number) => void;
 
 export function DiscardSheet({ v, onClose }: { v: PlayerView; onClose: () => void }) {
   const need = v.discard?.[v.me ?? -1] ?? 0;
-  const hand = v.hand!.res;
-  const [pick, setPick] = useState<PartialRes>({});
+  const limit = v.ck ? `your limit (7, +2 per city wall)` : '7';
+  return (
+    <CountSheet
+      title={`Discard ${need} cards`}
+      sub={`You have more than ${limit} cards. Choose ${need} to give back.`}
+      kinds={kindsOf(v)}
+      from={v.hand!.res}
+      need={need}
+      verb="Discard"
+      onPick={(cards) => void client.act({ type: 'discard', cards })}
+      onClose={onClose}
+    />
+  );
+}
+
+/** Pick exactly `need` cards from `from` (a hand). */
+export function CountSheet(props: {
+  title: string;
+  sub: string;
+  kinds: readonly Card[];
+  from: Cards;
+  need: number;
+  verb: string;
+  onPick: (c: Cards) => void;
+  onClose: () => void;
+  testid?: string;
+}) {
+  const { need, from } = props;
+  const [pick, setPick] = useState<Cards>({});
   const n = total(pick);
   return (
     <Sheet
-      title={`Discard ${need} cards`}
-      sub={`You have more than 7 cards. Choose ${need} to give back. Picked ${n} of ${need}.`}
-      onClose={onClose}
+      title={props.title}
+      sub={`${props.sub} Picked ${n} of ${need}.`}
+      onClose={props.onClose}
       foot={
         <button
           className="btn primary"
           disabled={n !== need}
+          data-testid={props.testid}
           onClick={() => {
-            void client.act({ type: 'discard', cards: pick });
-            onClose();
+            props.onPick(pick);
+            props.onClose();
           }}
         >
-          Discard {n}
+          {props.verb} {n}
         </button>
       }
     >
       <div className="steppers">
-        {RES.map((r) => (
-          <div className="stepper" key={r} style={{ ['--c' as string]: TILE_COLOR[r] }}>
+        {props.kinds.map((r) => (
+          <div className="stepper" key={r} style={{ ['--c' as string]: CARD_COLOR[r] }}>
             <Icon r={r} />
             <span className="lbl">
-              {RES_LABEL[r]}
-              <small>you have {hand[r]}</small>
+              {CARD_LABEL[r]}
+              <small>has {from[r] ?? 0}</small>
             </span>
             <Ctl
               label={r}
               value={pick[r] ?? 0}
-              max={Math.min(hand[r], (pick[r] ?? 0) + need - n)}
+              max={Math.min(from[r] ?? 0, (pick[r] ?? 0) + need - n)}
               onChange={(x) => setPick({ ...pick, [r]: x })}
             />
           </div>
@@ -137,14 +173,17 @@ export function TradeSheet({ v, onClose }: { v: PlayerView; onClose: () => void 
   const me = v.me!;
   const myTurn = v.turn === me;
   const [tab, setTab] = useState<'players' | 'bank'>('players');
-  const [give, setGive] = useState<PartialRes>({});
-  const [want, setWant] = useState<PartialRes>({});
-  const [bg, setBg] = useState<Resource | null>(null);
-  const [bw, setBw] = useState<Resource | null>(null);
+  const [give, setGive] = useState<Cards>({});
+  const [want, setWant] = useState<Cards>({});
+  const [bg, setBg] = useState<Card | null>(null);
+  const [bw, setBw] = useState<Card | null>(null);
   const hand = v.hand!.res;
   const s = stateFromView(v);
+  const kinds = kindsOf(v);
+  const has = (r: Card) => hand[r] ?? 0;
+  const bankHas = (r: Card) => v.bank[r] ?? 0;
   const canOffer =
-    total(give) > 0 && total(want) > 0 && !RES.some((r) => (give[r] ?? 0) > 0 && (want[r] ?? 0) > 0);
+    total(give) > 0 && total(want) > 0 && !kinds.some((r) => (give[r] ?? 0) > 0 && (want[r] ?? 0) > 0);
   const rate = bg ? rateFor(s, me, bg) : 4;
 
   return (
@@ -171,7 +210,7 @@ export function TradeSheet({ v, onClose }: { v: PlayerView; onClose: () => void 
         ) : (
           <button
             className="btn primary"
-            disabled={!bg || !bw || hand[bg] < rate || v.bank[bw] < 1}
+            disabled={!bg || !bw || has(bg) < rate || bankHas(bw) < 1}
             onClick={() => {
               if (bg && bw) void client.act({ type: 'bank', give: bg, get: bw });
             }}
@@ -196,17 +235,17 @@ export function TradeSheet({ v, onClose }: { v: PlayerView; onClose: () => void 
           <span />
           <span className="hd">Give</span>
           <span className="hd">Want</span>
-          {RES.map((r) => (
+          {kinds.map((r) => (
             <div key={r} style={{ display: 'contents' }}>
-              <div className="rl" style={{ ['--c' as string]: TILE_COLOR[r] }}>
+              <div className="rl" style={{ ['--c' as string]: CARD_COLOR[r] }}>
                 <Icon r={r} />
-                <span>{RES_LABEL[r]}</span>
-                <small>×{hand[r]}</small>
+                <span>{CARD_LABEL[r]}</span>
+                <small>×{has(r)}</small>
               </div>
               <Ctl
                 label={`give ${r}`}
                 value={give[r] ?? 0}
-                max={hand[r]}
+                max={has(r)}
                 onChange={(x) => setGive({ ...give, [r]: x })}
               />
               <Ctl
@@ -223,21 +262,21 @@ export function TradeSheet({ v, onClose }: { v: PlayerView; onClose: () => void 
           <div className="group">
             <span className="eyebrow">You give</span>
             <div className="pickgrid">
-              {RES.map((r) => {
+              {kinds.map((r) => {
                 const rr = rateFor(s, me, r);
                 return (
                   <button
                     key={r}
                     className="pick"
                     aria-pressed={bg === r}
-                    disabled={hand[r] < rr}
+                    disabled={has(r) < rr}
                     onClick={() => setBg(r)}
-                    style={{ ['--c' as string]: TILE_COLOR[r] }}
+                    style={{ ['--c' as string]: CARD_COLOR[r] }}
                   >
                     <Icon r={r} />
-                    {RES_LABEL[r]}
+                    {CARD_LABEL[r]}
                     <small>
-                      {rr}:1 · have {hand[r]}
+                      {rr}:1 · have {has(r)}
                     </small>
                   </button>
                 );
@@ -247,18 +286,18 @@ export function TradeSheet({ v, onClose }: { v: PlayerView; onClose: () => void 
           <div className="group">
             <span className="eyebrow">You get</span>
             <div className="pickgrid">
-              {RES.map((r) => (
+              {kinds.map((r) => (
                 <button
                   key={r}
                   className="pick"
                   aria-pressed={bw === r}
-                  disabled={r === bg || v.bank[r] < 1}
+                  disabled={r === bg || bankHas(r) < 1}
                   onClick={() => setBw(r)}
-                  style={{ ['--c' as string]: TILE_COLOR[r] }}
+                  style={{ ['--c' as string]: CARD_COLOR[r] }}
                 >
                   <Icon r={r} />
-                  {RES_LABEL[r]}
-                  <small>bank {v.bank[r]}</small>
+                  {CARD_LABEL[r]}
+                  {(RES as readonly string[]).includes(r) ? <small>bank {bankHas(r)}</small> : null}
                 </button>
               ))}
             </div>
@@ -359,12 +398,15 @@ export function VictimSheet({
   hex,
   victims,
   kind = 'robber',
+  make,
   onClose,
 }: {
   v: PlayerView;
   hex: number;
   victims: Seat[];
   kind?: 'robber' | 'pirate';
+  /** Build the action for a victim (default: a robber or pirate move). */
+  make?: (p: Seat) => Action;
   onClose: () => void;
 }) {
   return (
@@ -384,7 +426,7 @@ export function VictimSheet({
             key={p}
             className="btn"
             onClick={() => {
-              void client.act({ type: kind, hex, victim: p });
+              void client.act(make ? make(p) : { type: kind, hex, victim: p });
               onClose();
             }}
           >
@@ -487,9 +529,24 @@ export function MenuSheet({
             <div>
               City <Chips c={{ wheat: 2, ore: 3 }} />
             </div>
-            <div>
-              Development card <Chips c={{ sheep: 1, wheat: 1, ore: 1 }} />
-            </div>
+            {v?.ck ? (
+              <>
+                <div>
+                  Knight, or promoting one <Chips c={{ sheep: 1, ore: 1 }} />
+                </div>
+                <div>
+                  Activating a knight <Chips c={{ wheat: 1 }} />
+                </div>
+                <div>
+                  City wall <Chips c={{ brick: 2 }} />
+                </div>
+                <div>Improvement level n: n cloth (trade), coin (politics) or paper (science)</div>
+              </>
+            ) : (
+              <div>
+                Development card <Chips c={{ sheep: 1, wheat: 1, ore: 1 }} />
+              </div>
+            )}
           </div>
         </div>
         {v && seated && v.phase === 'play' ? (

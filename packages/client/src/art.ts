@@ -1,6 +1,6 @@
 /* Colors, glyphs and shapes, ported from the prototype. Board units: K pixels per hex radius. */
 
-import type { Color, DevType, Resource, Terrain } from '@settlers/engine';
+import type { Card, Color, Commodity, DevType, Progress, Resource, Terrain, Track } from '@settlers/engine';
 
 export const K = 60;
 export const RES_LABEL: Record<Resource, string> = {
@@ -67,6 +67,107 @@ export const GLYPH: Record<Terrain, string> = {
     '<g fill="#6f7f3f"><path d="M-2 11V-8a2 2 0 0 1 4 0v19z"/><path d="M2 1h3.5A1.5 1.5 0 0 0 7-.5V-5a1.5 1.5 0 0 1 3 0v4.5A4.5 4.5 0 0 1 5.5 4H2z"/><path d="M-2 4h-3a4 4 0 0 1-4-4v-2.5a1.5 1.5 0 0 1 3 0V0a1 1 0 0 0 1 1h3z"/></g>',
 };
 export const iconSVG = (r: Terrain) => `<svg viewBox="-12 -12 24 24" aria-hidden="true">${GLYPH[r]}</svg>`;
+
+/* ---------- Cities & Knights ---------- */
+
+export const COM_GLYPH: Record<Commodity, string> = {
+  paper:
+    '<rect x="-7" y="-9" width="14" height="18" rx="1.5" fill="#fbf4dc" stroke="#6b5a2e" stroke-width="1.2"/><path d="M-4-4h8M-4 0h8M-4 4h5" stroke="#6b5a2e" stroke-width="1.3" stroke-linecap="round"/>',
+  cloth:
+    '<path d="M-9-6c3-2 6 2 9 0s6-2 9 0v12c-3-2-6 2-9 0s-6-2-9 0z" fill="#e9c7ee" stroke="#5c2a63" stroke-width="1.2"/><path d="M-9-1c3-2 6 2 9 0s6-2 9 0" fill="none" stroke="#5c2a63" stroke-width="1" opacity=".6"/>',
+  coin: '<circle r="8.5" fill="#ffd54a" stroke="#6b4a00" stroke-width="1.4"/><circle r="5.5" fill="none" stroke="#6b4a00" stroke-width="1" opacity=".7"/><path d="M0-3v6M-2 0h4" stroke="#6b4a00" stroke-width="1.4" stroke-linecap="round"/>',
+};
+export const CARD_LABEL: Record<Card, string> = {
+  ...RES_LABEL,
+  paper: 'Paper',
+  cloth: 'Cloth',
+  coin: 'Coin',
+};
+export const CARD_COLOR: Record<Card, string> = {
+  wood: TILE_COLOR.wood,
+  brick: TILE_COLOR.brick,
+  sheep: TILE_COLOR.sheep,
+  wheat: TILE_COLOR.wheat,
+  ore: TILE_COLOR.ore,
+  paper: '#d8c58f',
+  cloth: '#a35aa8',
+  coin: '#c79a1c',
+};
+export const cardIcon = (c: Card) =>
+  `<svg viewBox="-12 -12 24 24" aria-hidden="true">${c in COM_GLYPH ? COM_GLYPH[c as Commodity] : GLYPH[c as Resource]}</svg>`;
+
+export const TRACK_COLOR: Record<Track, string> = {
+  trade: '#e9b94a',
+  politics: '#3b82f6',
+  science: '#3fa34d',
+};
+export const TRACK_LABEL: Record<Track, string> = {
+  trade: 'Trade',
+  politics: 'Politics',
+  science: 'Science',
+};
+/** What level 3 of each track unlocks. */
+export const TRACK_ABILITY: Record<Track, string> = {
+  trade: 'Trade commodities 2:1 with the bank',
+  politics: 'Promote knights to mighty',
+  science: 'A roll that gives you nothing gives you a resource of your choice',
+};
+
+export const PROGRESS_LABEL: Record<Progress, string> = {
+  commercialHarbor: 'Commercial Harbor',
+  masterMerchant: 'Master Merchant',
+  merchant: 'Merchant',
+  merchantFleet: 'Merchant Fleet',
+  resourceMonopoly: 'Resource Monopoly',
+  tradeMonopoly: 'Trade Monopoly',
+  alchemist: 'Alchemist',
+  crane: 'Crane',
+  engineer: 'Engineer',
+  inventor: 'Inventor',
+  irrigation: 'Irrigation',
+  medicine: 'Medicine',
+  mining: 'Mining',
+  printer: 'Printer',
+  roadBuilding: 'Road Building',
+  smith: 'Smith',
+  bishop: 'Bishop',
+  constitution: 'Constitution',
+  deserter: 'Deserter',
+  diplomat: 'Diplomat',
+  intrigue: 'Intrigue',
+  saboteur: 'Saboteur',
+  spy: 'Spy',
+  warlord: 'Warlord',
+  wedding: 'Wedding',
+};
+export const PROGRESS_HELP: Record<Progress, string> = {
+  commercialHarbor:
+    'Offer each player with a commodity one of your resources; they give you a commodity back.',
+  masterMerchant: 'Look at the hand of a player with more points and take 2 cards.',
+  merchant: 'Put the merchant next to your town: 1 point, and 2:1 trades of that tile’s resource.',
+  merchantFleet: 'Pick a card: trade it 2:1 with the bank for the rest of this turn.',
+  resourceMonopoly: 'Name a resource: everyone gives you 2 of it.',
+  tradeMonopoly: 'Name a commodity: everyone gives you 1 of it.',
+  alchemist: 'Before you roll: choose both production dice.',
+  crane: 'Your next improvement this turn costs 1 commodity less.',
+  engineer: 'Build a city wall for free.',
+  inventor: 'Swap two number tokens (not 2, 12, 6 or 8).',
+  irrigation: 'Take 2 wheat for each field next to your towns.',
+  medicine: 'Upgrade a settlement to a city for 2 ore and 1 wheat.',
+  mining: 'Take 2 ore for each mountain next to your towns.',
+  printer: '1 point.',
+  roadBuilding: 'Build 2 roads for free.',
+  smith: 'Promote up to 2 knights for free.',
+  bishop: 'Move the robber and steal a card from everyone next to it.',
+  constitution: '1 point.',
+  deserter: 'A player removes one of their knights; you may place one like it.',
+  diplomat: 'Remove an open road. If it’s yours, you may build it again elsewhere.',
+  intrigue: 'Chase away an opponent’s knight that stands on your road.',
+  saboteur: 'Everyone with as many points as you discards half their cards.',
+  spy: 'Look at a player’s progress cards and take one.',
+  warlord: 'Activate all your knights for free.',
+  wedding: 'Everyone with more points than you gives you 2 cards.',
+};
 
 export const f1 = (n: number) => Math.round(n * 10) / 10;
 

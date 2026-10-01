@@ -5,7 +5,7 @@
  * - the first starting settlement is placed by clicking, with a ship chosen in the
  *   "Road or ship?" sheet when the edge is on the coast;
  * - points to win are lowered to 10 in the lobby, to keep the test quick;
- * - gold is picked through the gold sheet whenever it appears; the rest is played by each
+ * - gold is picked through the gold sheet whenever it appears (if the dice give any); the rest is played by each
  *   browser's bot, which sees only that browser's view;
  * - mid-game a player reloads; every WebSocket frame is checked for hidden information.
  */
@@ -105,7 +105,13 @@ test('three players play a full Seafarers game', async ({ browser }) => {
       `Seafarers game over after ${finals[0].seq} moves, ${finals[0].turnN} turns; ${ships} ships; gold picked by UI ${goldByUI} times; first setup piece a ship: ${placedShip}`,
     );
     expect(ships).toBeGreaterThan(0);
-    expect(goldByUI).toBeGreaterThan(0);
+    // Whether gold comes up at all is down to the dice; every gold choice that did must have
+    // gone through the sheet (the bots never got to answer one).
+    const goldSeqs = new Set<number>();
+    for (const f of t.frames[0]!)
+      for (const it of f.log ?? [])
+        if (it.k === 'ev' && it.e?.k === 'gold') goldSeqs.add((it as { seq: number }).seq);
+    expect(goldByUI).toBe(goldSeqs.size);
     checkFrames(
       t,
       finals.map((f) => f.me),

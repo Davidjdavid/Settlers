@@ -1,7 +1,7 @@
 /* Turning events into short sentences for the log. Wording follows the prototype. */
 
-import { RES, type GameEvent, type PartialRes, type PlayerView, type Seat } from '@settlers/engine';
-import { DEV_LABEL } from './art';
+import { COMS, RES, type Cards, type GameEvent, type PlayerView, type Seat } from '@settlers/engine';
+import { DEV_LABEL, PROGRESS_LABEL, TRACK_LABEL } from './art';
 
 export function nameOf(v: PlayerView, p: Seat | null): string {
   if (p == null) return 'Nobody';
@@ -9,8 +9,8 @@ export function nameOf(v: PlayerView, p: Seat | null): string {
   return v.players[p]?.nick || 'Someone';
 }
 
-export function cardsText(c: PartialRes | null | undefined): string {
-  const parts = RES.filter((r) => (c?.[r] ?? 0) > 0).map((r) => `${c![r]} ${r}`);
+export function cardsText(c: Cards | null | undefined): string {
+  const parts = [...RES, ...COMS].filter((r) => (c?.[r] ?? 0) > 0).map((r) => `${c![r]} ${r}`);
   return parts.length ? parts.join(', ') : 'nothing';
 }
 
@@ -33,17 +33,21 @@ export function eventText(
   switch (e.k) {
     case 'start':
       return { text: 'The game started', big: true };
-    case 'setup':
+    case 'setup': {
+      const what = v.verts[e.v]?.[1] === 2 && v.ck ? 'a city' : 'a settlement';
       return {
-        text: e.got
-          ? `${who(e.p)} placed a settlement and got ${cardsText(e.got)}`
-          : `${who(e.p)} placed a settlement`,
+        text: e.got ? `${who(e.p)} placed ${what} and got ${cardsText(e.got)}` : `${who(e.p)} placed ${what}`,
       };
+    }
     case 'turn':
       return { text: `${who(e.p) === 'You' ? 'Your' : `${who(e.p)}’s`} turn`, sep: true };
     case 'roll':
       if (e.redo)
-        return { text: `${who(e.p)} rolled 7, but there are no 7s in the first round: rolling again` };
+        return {
+          text: v.ck
+            ? `${who(e.p)} rolled 7, but there are no 7s yet: rolling again`
+            : `${who(e.p)} rolled 7, but there are no 7s in the first round: rolling again`,
+        };
       return { text: `${who(e.p)} rolled ${e.d[0] + e.d[1]}`, big: e.d[0] + e.d[1] === 7 };
     case 'produce': {
       const lines = Object.entries(e.gains).map(([p, g]) => `${who(Number(p))} got ${cardsText(g)}`);
@@ -114,5 +118,113 @@ export function eventText(
       };
     case 'islandBonus':
       return { text: `${who(e.p)} settled a new island: +${e.vp} points`, big: true };
+    /* Cities & Knights */
+    case 'eventDie':
+      return {
+        text:
+          e.face === 'ship'
+            ? 'Event die: the barbarian ship'
+            : `Event die: ${TRACK_LABEL[e.face].toLowerCase()} gate`,
+      };
+    case 'barbarians':
+      return {
+        text: e.at >= 7 ? 'The barbarians land!' : `The barbarians sail closer (${e.at} of 7)`,
+        big: e.at >= 7,
+      };
+    case 'attack':
+      return {
+        text:
+          e.strength > e.defense
+            ? `The barbarians (${e.strength}) beat the knights (${e.defense})${e.losers.length ? `: ${listNames(v, e.losers)} ${e.losers.length === 1 && e.losers[0] !== v.me ? 'loses' : 'lose'} a city` : ''}`
+            : `The knights (${e.defense}) drive off the barbarians (${e.strength})${e.defender != null ? `: ${who(e.defender)} ${e.defender === v.me ? 'are' : 'is'} Defender of Catan (+1 point)` : e.tied.length ? `: ${listNames(v, e.tied)} each draw a progress card` : ''}`,
+        big: true,
+      };
+    case 'cityLost':
+      return { text: `${who(e.p)} lost a city to the barbarians` };
+    case 'draw':
+      return {
+        text: e.card
+          ? `${who(e.p)} drew ${PROGRESS_LABEL[e.card]}${e.card === 'printer' || e.card === 'constitution' ? ' (+1 point)' : ''}`
+          : `${who(e.p)} drew a ${TRACK_LABEL[e.track].toLowerCase()} card`,
+        big: e.card === 'printer' || e.card === 'constitution',
+      };
+    case 'commodities': {
+      const lines = Object.entries(e.gains).map(([p, g]) => `${who(Number(p))} got ${cardsText(g)}`);
+      return { text: lines.join('. ') + '.' };
+    }
+    case 'improve':
+      return { text: `${who(e.p)} raised ${TRACK_LABEL[e.track].toLowerCase()} to level ${e.lvl}` };
+    case 'metropolis':
+      return {
+        text:
+          e.from != null
+            ? `${who(e.p)} took the ${TRACK_LABEL[e.track].toLowerCase()} metropolis from ${who(e.from)}`
+            : `${who(e.p)} built the ${TRACK_LABEL[e.track].toLowerCase()} metropolis`,
+        big: true,
+      };
+    case 'wall':
+      return { text: `${who(e.p)} built a city wall${e.free ? ' (free)' : ''}` };
+    case 'knight':
+      return { text: `${who(e.p)} built a knight` };
+    case 'promote':
+      return {
+        text: `${who(e.p)} promoted a knight to ${['', 'basic', 'strong', 'mighty'][e.lvl]}${e.free ? ' (free)' : ''}`,
+      };
+    case 'activate':
+      return { text: `${who(e.p)} activated a knight` };
+    case 'activateAll':
+      return { text: `${who(e.p)} activated ${e.n} knight${e.n === 1 ? '' : 's'}` };
+    case 'moveKnight':
+      return {
+        text:
+          e.displaced != null
+            ? `${who(e.p)}’s knight chased away ${who(e.displaced) === 'You' ? 'your' : `${who(e.displaced)}’s`} knight`
+            : `${who(e.p)} moved a knight`,
+      };
+    case 'relocate':
+      return {
+        text:
+          e.to == null
+            ? `${who(e.p)}’s knight had nowhere to go and went home`
+            : `${who(e.p)} placed a knight`,
+      };
+    case 'knightRemoved':
+      return { text: `${who(e.p)} lost a knight` };
+    case 'chase':
+      return { text: `${who(e.p)}’s knight chased the robber` };
+    case 'progress':
+      return { text: `${who(e.p)} played ${PROGRESS_LABEL[e.card]}`, big: true };
+    case 'progressBack':
+      return { text: `${who(e.p)} put a ${TRACK_LABEL[e.track].toLowerCase()} card back` };
+    case 'aqueduct':
+      return { text: `${who(e.p)} took 1 ${e.r} (aqueduct)` };
+    case 'give':
+      return {
+        text: e.cards
+          ? `${who(e.from)} gave ${cardsText(e.cards)} to ${who(e.to)}`
+          : `${who(e.from)} gave ${e.n} card${e.n === 1 ? '' : 's'} to ${who(e.to)}`,
+      };
+    case 'spy':
+      return {
+        text: e.card
+          ? `${who(e.p)} took ${PROGRESS_LABEL[e.card]} from ${who(e.from)}`
+          : `${who(e.p)} took a ${TRACK_LABEL[e.track].toLowerCase()} card from ${who(e.from)}`,
+      };
+    case 'merchant':
+      return { text: `${who(e.p)} placed the merchant` };
+    case 'inventor':
+      return { text: `${who(e.p)} swapped two number tokens` };
+    case 'gain':
+      return {
+        text: e.from
+          ? `${who(e.p)} took ${cardsText(e.cards)} from everyone`
+          : `${who(e.p)} took ${cardsText(e.cards)} from the bank`,
+      };
+    case 'roadRemoved':
+      return {
+        text: `${who(e.by)} removed ${e.p === e.by ? 'their own' : who(e.p) === 'You' ? 'your' : `${who(e.p)}’s`} road`,
+      };
+    case 'owe':
+      return null;
   }
 }

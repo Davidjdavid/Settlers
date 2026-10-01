@@ -104,7 +104,8 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const pick = color && !taken.has(color) ? color : (free[0] ?? null);
   const link = `${location.origin}/r/${room.code}`;
   const scenario = SCENARIOS[room.options.scenario]!;
-  const fits = scenario.players.includes(room.seats.length);
+  const allowed = playersFor(room.options);
+  const fits = allowed.includes(room.seats.length);
   return (
     <div className="center">
       <div className="card" data-testid="lobby">
@@ -178,7 +179,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
             <p className="hint">
               {fits
                 ? 'Anyone seated can start when everyone is here.'
-                : `${scenario.name} needs ${scenario.players.join(' or ')} players.`}
+                : `${scenario.name}${room.options.ck ? ' with Cities & Knights' : ''} needs ${allowed.join(' or ')} players.`}
             </p>
           </>
         ) : room.seats.length < 4 ? (
@@ -234,11 +235,22 @@ const SCENARIO_LIST: { id: RoomOptions['scenario']; label: string }[] = [
   { id: 'heading-for-new-shores', label: 'Seafarers: Heading for New Shores' },
 ];
 
-const HOUSE_RULES: { k: keyof RoomOptions['houseRules']; label: string; seafarers?: boolean }[] = [
+type Flag = 'no7FirstRound' | 'bank3to1' | 'freeShipMoves' | 'rerollBeforeAttack' | 'noDiscardBeforeAttack';
+const HOUSE_RULES: { k: Flag; label: string; seafarers?: boolean; ck?: boolean }[] = [
   { k: 'no7FirstRound', label: 'No 7s in the first round' },
   { k: 'bank3to1', label: '3:1 bank trades for everyone' },
   { k: 'freeShipMoves', label: 'Move ships as often as you like', seafarers: true },
+  { k: 'rerollBeforeAttack', label: 'Re-roll 7s until the barbarians have attacked', ck: true },
+  { k: 'noDiscardBeforeAttack', label: 'No discards on a 7 until the barbarians have attacked', ck: true },
 ];
+
+/** Cities & Knights adds 3 points to a scenario's target and needs 3 or 4 players. */
+const CK_EXTRA_VP = 3;
+const defaultVP = (o: RoomOptions) => SCENARIOS[o.scenario]!.winVP + (o.ck ? CK_EXTRA_VP : 0);
+export function playersFor(o: RoomOptions): number[] {
+  const players = SCENARIOS[o.scenario]!.players;
+  return o.ck ? players.filter((n) => n >= 3) : players;
+}
 
 /** Scenario, points to win and house rules. Seated players edit; everyone sees them. */
 function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
@@ -258,14 +270,27 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
             className={`btn small${o.scenario === x.id ? ' on' : ''}`}
             disabled={!editable}
             data-testid={`scenario-${x.id}`}
-            onClick={() => set({ ...o, scenario: x.id, winVP: SCENARIOS[x.id]!.winVP })}
+            onClick={() => set({ ...o, scenario: x.id, winVP: defaultVP({ ...o, scenario: x.id }) })}
           >
             {x.label}
           </button>
         ))}
       </div>
+      <label style={check}>
+        <input
+          type="checkbox"
+          checked={!!o.ck}
+          disabled={!editable}
+          data-testid="ck"
+          onChange={(e) => {
+            const next = { ...o, ck: e.target.checked };
+            set({ ...next, winVP: defaultVP(next) });
+          }}
+        />
+        Cities &amp; Knights
+      </label>
       <p className="hint" style={{ margin: '2px 0 6px' }}>
-        {scenario.players.join(' or ')} players
+        {playersFor(o).join(' or ')} players
         {sea && scenario.specialVP?.newIsland
           ? ` · ${scenario.specialVP.newIsland} points for each new island you settle`
           : ''}
@@ -292,7 +317,7 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
       </div>
       <label>House rules</label>
       <div style={{ display: 'grid', gap: 6 }}>
-        {HOUSE_RULES.filter((h) => !h.seafarers || sea).map((h) => (
+        {HOUSE_RULES.filter((h) => (!h.seafarers || sea) && (!h.ck || o.ck)).map((h) => (
           <label key={h.k} style={check}>
             <input
               type="checkbox"
@@ -304,6 +329,40 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
             {h.label}
           </label>
         ))}
+        {o.ck ? (
+          <div style={{ ...check, justifyContent: 'space-between' }}>
+            <span>Barbarians and progress cards start after round</span>
+            <div className="ctl">
+              <button
+                type="button"
+                disabled={!editable || !o.houseRules.barbarianDelay}
+                aria-label="Earlier barbarians"
+                onClick={() =>
+                  set({
+                    ...o,
+                    houseRules: { ...o.houseRules, barbarianDelay: (o.houseRules.barbarianDelay ?? 0) - 1 },
+                  })
+                }
+              >
+                −
+              </button>
+              <output data-testid="barbarian-delay">{o.houseRules.barbarianDelay ?? 0}</output>
+              <button
+                type="button"
+                disabled={!editable || (o.houseRules.barbarianDelay ?? 0) >= 10}
+                aria-label="Later barbarians"
+                onClick={() =>
+                  set({
+                    ...o,
+                    houseRules: { ...o.houseRules, barbarianDelay: (o.houseRules.barbarianDelay ?? 0) + 1 },
+                  })
+                }
+              >
+                +
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

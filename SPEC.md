@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestone 1 (base game) done and deployed. Milestone 2 (Seafarers: Heading for New Shores) — see below.**
+Status: **Milestones 1 (base game) and 2 (Seafarers: Heading for New Shores) done and deployed. Milestone 3 (Cities & Knights) — see below.**
 
 ## Milestone 1: base game
 
@@ -106,12 +106,19 @@ The rules are written down, with your decisions, in **docs/rules/seafarers.md**.
 - **Seafarers rules:** ships, moving ships, the pirate, gold fields (pick any resource), fog discovery, longest trade route, and 2 VP for each new island settled. Starting settlements may go on any island; islands you start on are home islands.
 - **Done means:** 1,000+ random Seafarers games in the simulator with the new invariants, the base-game tests still passing, a 3-browser Seafarers end-to-end test, and it deployed.
 
+## Milestone 3: Cities & Knights
+
+The rules are written down, with your decisions, in **docs/rules/cities-and-knights.md**.
+
+- **A rule module** that works alone (Classic, 13 points) and with Seafarers (Heading for New Shores, 17 points); 3–4 players. Turned on with a "Cities & Knights" box in the lobby.
+- Commodities (unlimited), the three improvement tracks with their level-3 abilities and metropolises, the event die, 54 progress cards in three decks, the barbarians and their attacks, knights, city walls, the merchant, Defender of Catan points, and the robber asleep until the first attack.
+- **House rules** (C&K only, each off by default): re-roll 7s, or no discards on a 7, until the barbarians have attacked; barbarians and progress cards wait N rounds.
+- **Done means:** 1,000+ random C&K games and 1,000+ C&K + Seafarers games in the simulator with invariants for commodity and card conservation, deck counts, the barbarian track and knight limits; all earlier tests passing; a 3-browser C&K end-to-end test; deployed. The test bot plays it (badly).
+
 ## Later milestones (design for these now, don't build them)
 - Map editor (custom boards, saved and shared).
 - More Seafarers scenarios: The Four Islands, The Fog Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan.
-- Cities & Knights (commodities, city improvements, barbarians, progress cards).
 - A deliberately weak CPU player. It joins as a normal client and sees only its own view, and never targets a human player.
-- Cities & Knights house rule: no 7s until the barbarians have attacked once.
 - Accounts and game history / stats.
 - A replay viewer.
 

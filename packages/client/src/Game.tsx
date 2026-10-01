@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  COST, DEV_PLAY, SHIP_COST, goldDue, has, legalActions, RES, stateFromView, type Action, type DevPlayable,
-  type PlayerView, type Seat,
+  COMS, COST, DEV_PLAY, KNIGHT_COST, SHIP_COST, WALL_COST, goldDue, has, legalActions, RES, stateFromView,
+  type Action, type DevPlayable, type PlayerView, type Progress, type Seat,
 } from '@settlers/engine'; // prettier-ignore
 import type { LogItem, RoomInfo } from '@settlers/server/protocol';
-import { BRAND_SVG, DEV_HELP, DEV_LABEL, PCOL, RES_LABEL, TILE_COLOR, iconSVG } from './art';
+import {
+  BRAND_SVG, CARD_COLOR, CARD_LABEL, DEV_HELP, DEV_LABEL, PCOL, PROGRESS_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR,
+  TRACK_LABEL, cardIcon,
+} from './art'; // prettier-ignore
 import { Board, NO_TARGETS, type Targets } from './Board';
 import { Dice } from './anim';
 import { client, type Status } from './net';
@@ -15,15 +18,37 @@ import {
   VictimSheet,
 } from './Sheets'; // prettier-ignore
 import { eventText, listNames, nameOf, routeName } from './text';
+import {
+  BOARD_OWES, BarbarianBox, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
+  myOwe, owePrompt, paramOf,
+} from './ck'; // prettier-ignore
 
-type Mode = null | 'road' | 'settlement' | 'city' | 'ship' | 'move';
+type Play = Extract<Action, { type: 'progress' }>;
+type Mode =
+  | null
+  | 'road'
+  | 'settlement'
+  | 'city'
+  | 'ship'
+  | 'move'
+  /* Cities & Knights */
+  | 'knight'
+  | 'wall'
+  | 'knights'
+  | 'kmove'
+  | 'chase'
+  | 'metro'
+  | 'card';
 type SheetState =
   | null
   | { k: 'trade' }
   | { k: 'discard' }
   | { k: 'plenty' }
   | { k: 'mono' }
-  | { k: 'victim'; hex: number; victims: Seat[]; kind: 'robber' | 'pirate' }
+  | { k: 'victim'; hex: number; victims: Seat[]; kind: 'robber' | 'pirate'; make?: (p: Seat) => Action }
+  | { k: 'knightAct'; at: number }
+  | { k: 'owe' }
+  | { k: 'cardParam'; card: Progress; plays: Play[] }
   | { k: 'piece'; options: Action[] }
   | { k: 'gold' }
   | { k: 'menu' }
@@ -39,6 +64,13 @@ const MODE_TEXT: Record<Exclude<Mode, null>, [string, string]> = {
     'It needs your road and an empty corner with no neighbor.',
   ],
   city: ['Choose a settlement to upgrade', 'A city produces 2 cards instead of 1.'],
+  knight: ['Choose where to put a knight', 'Knights go on an empty corner next to your road.'],
+  wall: ['Choose a city for the wall', 'Each wall lets you hold 2 more cards when a 7 is rolled.'],
+  knights: ['Choose one of your knights', 'Activate, promote, move it, or chase the robber.'],
+  kmove: ['Choose where the knight goes', 'Along your roads, to an empty corner or onto a weaker knight.'],
+  chase: ['Choose where the robber goes', 'You steal a card from someone next to it.'],
+  metro: ['Choose a city for the metropolis', 'It is worth 2 more points and the barbarians can’t touch it.'],
+  card: ['Choose where', ''],
 };
 
 export function Game({
@@ -58,6 +90,10 @@ export function Game({
   const [sel, setSel] = useState<number | null>(null);
   const [moveFrom, setMoveFrom] = useState<number | null>(null);
   const [sheet, setSheet] = useState<SheetState>(null);
+  // Cities & Knights: the knight being moved or chasing, the card being played, the track being raised.
+  const [kFrom, setKFrom] = useState<number | null>(null);
+  const [card, setCard] = useState<{ card: Progress; plays: Play[]; picks: number[] } | null>(null);
+  const [metroOpts, setMetroOpts] = useState<Action[]>([]);
   const [hideOver, setHideOver] = useState(false);
   const me = v.me;
   const mine = me != null && v.turn === me && v.phase === 'play';
@@ -70,6 +106,10 @@ export function Game({
     if (!mine || v.stage !== 'setup') setSel(null);
     setMoveFrom(null);
   }, [mine, v.stage, v.seq]);
+  useEffect(() => {
+    if (mode !== 'kmove' && mode !== 'chase') setKFrom(null);
+    if (mode !== 'card') setCard(null);
+  }, [mode]);
   useEffect(() => {
     if (v.phase === 'play') setHideOver(false);
   }, [v.phase]);
@@ -89,8 +129,18 @@ export function Game({
     else setSheet((x) => (x?.k === 'discard' ? null : x));
   }, [owes]);
 
+  // Cities & Knights choices owed: board picks glow; others open their sheet.
+  const owe = myOwe(v);
+  const oweKey = owe ? `${v.seq}:${JSON.stringify(owe)}` : '';
+  useEffect(() => {
+    if (owe && !BOARD_OWES.has(owe.k)) setSheet({ k: 'owe' });
+    else setSheet((x) => (x?.k === 'owe' ? null : x));
+  }, [oweKey]);
+
   /* ---------- Board targets: whatever the engine says this seat can do ---------- */
-  const acts = mine && !busy ? legalActions(s, me) : [];
+  const myActs = me != null && !busy && v.phase === 'play' ? legalActions(s, me) : [];
+  const acts = mine ? myActs : [];
+  const owed = myActs.filter((a): a is Extract<Action, { type: 'choose' }> => a.type === 'choose');
   const edgeActs = (e: number): Action[] => {
     if (v.stage === 'setup') return acts.filter((a) => a.type === 'setup' && a.v === sel && a.e === e);
     if (v.stage === 'roads')
@@ -128,6 +178,58 @@ export function Game({
         edges: uniq(acts.flatMap((a) => (a.type === 'freeRoad' || a.type === 'freeShip' ? [a.e] : []))),
       };
     } else if (v.stage === 'main' && mode) {
+      if (mode === 'knight' || mode === 'wall')
+        targets = { ...NO_TARGETS, verts: acts.flatMap((a) => (a.type === mode ? [a.v] : [])) };
+      if (mode === 'metro')
+        targets = {
+          ...NO_TARGETS,
+          verts: metroOpts.flatMap((a) => (a.type === 'improve' && a.v != null ? [a.v] : [])),
+        };
+      if (mode === 'knights')
+        targets = {
+          ...NO_TARGETS,
+          verts: uniq(
+            acts.flatMap((a) =>
+              a.type === 'activate' || a.type === 'promote' || a.type === 'chase'
+                ? [a.v]
+                : a.type === 'moveKnight'
+                  ? [a.from]
+                  : [],
+            ),
+          ),
+        };
+      if (mode === 'kmove')
+        targets = {
+          ...NO_TARGETS,
+          verts: acts.flatMap((a) => (a.type === 'moveKnight' && a.from === kFrom ? [a.to] : [])),
+          ghostVert: kFrom,
+        };
+      if (mode === 'chase')
+        targets = {
+          ...NO_TARGETS,
+          hexes: uniq(acts.flatMap((a) => (a.type === 'chase' && a.v === kFrom ? [a.hex] : []))),
+        };
+      if (mode === 'card' && card) {
+        const kind = paramOf(card.plays);
+        const open = card.plays.filter((a) => {
+          if (kind === 'vs') return card.picks.every((x) => a.vs!.includes(x));
+          if (kind === 'hh') return card.picks.every((x) => a.h === x || a.h2 === x);
+          return true;
+        });
+        if (kind === 'v') targets = { ...NO_TARGETS, verts: uniq(open.map((a) => a.v!)) };
+        if (kind === 'vs')
+          targets = {
+            ...NO_TARGETS,
+            verts: uniq(open.flatMap((a) => a.vs!.filter((x) => !card.picks.includes(x)))),
+          };
+        if (kind === 'h') targets = { ...NO_TARGETS, hexes: uniq(open.map((a) => a.h!)) };
+        if (kind === 'hh')
+          targets = {
+            ...NO_TARGETS,
+            hexes: uniq(open.flatMap((a) => [a.h!, a.h2!].filter((x) => !card.picks.includes(x)))),
+          };
+        if (kind === 'e') targets = { ...NO_TARGETS, edges: uniq(open.map((a) => a.e!)) };
+      }
       if (mode === 'road' || mode === 'ship') {
         targets = { ...NO_TARGETS, edges: uniq(acts.flatMap((a) => (a.type === mode ? [a.e] : []))) };
       }
@@ -150,14 +252,58 @@ export function Game({
     }
   }
 
+  // Choices owed that are made on the board.
+  if (owe && BOARD_OWES.has(owe.k) && owed.length) {
+    targets = {
+      ...NO_TARGETS,
+      verts: uniq(owed.flatMap((a) => (a.v != null ? [a.v] : []))),
+      edges: uniq(owed.flatMap((a) => (a.e != null ? [a.e] : []))),
+    };
+  }
+
   const doAct = (a: Action, after?: () => void) => void client.act(a).then((r) => r.ok && after?.());
+  /** Play a progress card once its targets are picked (or show which picks remain). */
+  const cardPick = (x: number) => {
+    if (!card) return;
+    const kind = paramOf(card.plays);
+    const picks = [...card.picks, x];
+    const done = () => setMode(null);
+    if (kind === 'v') return doAct({ type: 'progress', card: card.card, v: x }, done);
+    if (kind === 'h') return doAct({ type: 'progress', card: card.card, h: x }, done);
+    if (kind === 'e') return doAct({ type: 'progress', card: card.card, e: x }, done);
+    if (kind === 'hh') {
+      if (picks.length < 2) return setCard({ ...card, picks });
+      const a = card.plays.find(
+        (p) => (p.h === picks[0] && p.h2 === picks[1]) || (p.h === picks[1] && p.h2 === picks[0]),
+      );
+      if (a) doAct(a, done);
+      return;
+    }
+    if (kind === 'vs') {
+      const full = card.plays.find((p) => p.vs!.length === 2 && picks.every((y) => p.vs!.includes(y)));
+      if (picks.length === 2 && full) return doAct(full, done);
+      return setCard({ ...card, picks });
+    }
+  };
   const onVert = (x: number) => {
+    if (owe && BOARD_OWES.has(owe.k)) return doAct({ type: 'choose', v: x });
     if (!mine) return;
     if (v.stage === 'setup') setSel(x);
     else if (mode === 'settlement') doAct({ type: 'settlement', v: x }, () => setMode(null));
     else if (mode === 'city') doAct({ type: 'city', v: x }, () => setMode(null));
+    else if (mode === 'knight') doAct({ type: 'knight', v: x }, () => setMode(null));
+    else if (mode === 'wall') doAct({ type: 'wall', v: x }, () => setMode(null));
+    else if (mode === 'metro') {
+      const a = metroOpts.find((m) => m.type === 'improve' && m.v === x);
+      if (a) doAct(a, () => setMode(null));
+    } else if (mode === 'knights') setSheet({ k: 'knightAct', at: x });
+    else if (mode === 'kmove' && kFrom != null)
+      doAct({ type: 'moveKnight', from: kFrom, to: x }, () => setMode(null));
+    else if (mode === 'card') cardPick(x);
   };
   const onEdge = (e: number) => {
+    if (owe && BOARD_OWES.has(owe.k)) return doAct({ type: 'choose', e });
+    if (mode === 'card') return cardPick(e);
     if (!mine) return;
     if (mode === 'move' && moveFrom == null) return setMoveFrom(e);
     const options = edgeActs(e);
@@ -169,6 +315,23 @@ export function Game({
     else if (options.length > 1) setSheet({ k: 'piece', options });
   };
   const onHex = (h: number) => {
+    if (mine && mode === 'card') return cardPick(h);
+    if (mine && mode === 'chase' && kFrom != null) {
+      const here = acts.filter(
+        (a): a is Extract<Action, { type: 'chase' }> => a.type === 'chase' && a.v === kFrom && a.hex === h,
+      );
+      const victims = uniq(here.flatMap((a) => (a.victim != null ? [a.victim] : [])));
+      if (victims.length > 1)
+        setSheet({
+          k: 'victim',
+          hex: h,
+          victims,
+          kind: 'robber',
+          make: (p) => ({ type: 'chase', v: kFrom, hex: h, victim: p }),
+        });
+      else if (here[0]) doAct(here[0], () => setMode(null));
+      return;
+    }
     if (!mine || v.stage !== 'robber') return;
     const here = acts.filter((a) => (a.type === 'robber' || a.type === 'pirate') && a.hex === h);
     const kind = here[0]?.type === 'pirate' ? 'pirate' : 'robber';
@@ -186,6 +349,19 @@ export function Game({
       (a) =>
         a.type === { knight: 'playKnight', road: 'playRoads', plenty: 'playPlenty', mono: 'playMono' }[c],
     );
+  /** Start playing a progress card: at once, in a sheet, or by picking on the board. */
+  const playProgress = (c: Progress, plays: Play[]) => {
+    const kind = paramOf(plays);
+    if (kind === 'none') return void client.act(plays[0]!);
+    if (kind === 'to' || kind === 'r' || kind === 'd') return setSheet({ k: 'cardParam', card: c, plays });
+    setCard({ card: c, plays, picks: [] });
+    setMode('card');
+  };
+  const improve = (opts: Action[]) => {
+    if (opts.length === 1) return void client.act(opts[0]!);
+    setMetroOpts(opts);
+    setMode('metro');
+  };
   const play = (c: DevPlayable) => {
     if (c === 'knight') void client.act({ type: 'playKnight' });
     if (c === 'road') void client.act({ type: 'playRoads' });
@@ -288,13 +464,43 @@ export function Game({
           buttons: [{ label: 'Done', on: () => void client.act({ type: 'skipRoads' }) }],
         }
       : { title: `${cur} is placing free roads`, sub: '' };
+  } else if (v.stage === 'ck') {
+    const op = owePrompt(v, owe);
+    const buttons: { label: string; on: () => void; primary?: boolean; testid?: string }[] = [];
+    if (owe && !BOARD_OWES.has(owe.k))
+      buttons.push({ label: 'Choose', on: () => setSheet({ k: 'owe' }), primary: true });
+    if (owe && owed.some((a) => a.skip))
+      buttons.push({ label: 'Skip', on: () => void client.act({ type: 'choose', skip: true }) });
+    pm = { ...op, buttons };
   } else if (mine) {
+    const cardText: [string, string] | null =
+      mode === 'card' && card
+        ? [
+            `${PROGRESS_LABEL[card.card]}: ${{ v: 'tap a corner', vs: 'tap up to 2 knights', h: 'tap a tile', hh: card.picks.length ? 'tap the second tile' : 'tap the first tile', e: 'tap a road', none: '', to: '', r: '', d: '' }[paramOf(card.plays)]}`,
+            '',
+          ]
+        : null;
+    const smithOne =
+      mode === 'card' && card?.card === 'smith' && card.picks.length === 1
+        ? card.plays.find((a) => a.vs!.length === 1 && a.vs![0] === card.picks[0])
+        : undefined;
     pm = mode
       ? {
-          title: MODE_TEXT[mode][0],
-          sub: MODE_TEXT[mode][1],
+          title: (cardText ?? MODE_TEXT[mode])[0],
+          sub: (cardText ?? MODE_TEXT[mode])[1],
           mine: true,
-          buttons: [{ label: 'Cancel', on: () => setMode(null) }],
+          buttons: [
+            ...(smithOne
+              ? [
+                  {
+                    label: 'Promote just this one',
+                    on: () => doAct(smithOne, () => setMode(null)),
+                    primary: true,
+                  },
+                ]
+              : []),
+            { label: 'Cancel', on: () => setMode(null) },
+          ],
         }
       : {
           title: `You rolled ${sum}`,
@@ -345,6 +551,7 @@ export function Game({
                     roads: 'building',
                     main: 'playing',
                     gold: 'choosing gold',
+                    ck: 'choosing',
                   }[v.stage]
                 }
               </span>
@@ -362,6 +569,7 @@ export function Game({
           data-testid="sync"
         />
         <Dice dice={v.dice} />
+        <EventDie v={v} />
         <button className="iconbtn" type="button" aria-label="Menu" onClick={() => setSheet({ k: 'menu' })}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -466,11 +674,15 @@ export function Game({
             canPlay={canPlay}
             play={play}
             canMove={acts.some((a) => a.type === 'moveShip')}
+            acts={acts}
+            onImprove={improve}
+            onPlayProgress={playProgress}
           />
         ) : null}
       </section>
 
       <aside className="side">
+        {v.ck ? <BarbarianBox v={v} /> : null}
         <section className="box" aria-label="Players">
           <span className="eyebrow">Players</span>
           <div className="players">
@@ -502,22 +714,42 @@ export function Game({
                   <span>
                     <b data-testid={`cards-${i}`}>{p.resCount}</b> cards
                   </span>
-                  <span>
-                    <b>{p.devCount}</b> dev
-                  </span>
-                  <span>
-                    <b>{p.knights}</b> knights
-                  </span>
+                  {v.ck ? null : (
+                    <>
+                      <span>
+                        <b>{p.devCount}</b> dev
+                      </span>
+                      <span>
+                        <b>{p.knights}</b> knights
+                      </span>
+                    </>
+                  )}
                   <span>
                     <b>{p.roadLen}</b> road
                   </span>
                 </span>
-                {v.longest === i || v.largest === i ? (
-                  <span className="badges">
-                    {v.longest === i ? <span className="badge">{routeName(v)}</span> : null}
-                    {v.largest === i ? <span className="badge">Largest Army</span> : null}
-                  </span>
-                ) : null}
+                {v.ck ? <PlayerCK v={v} p={i} /> : null}
+                {(() => {
+                  const metros = v.ck
+                    ? (Object.entries(v.ck.metro) as [keyof typeof TRACK_COLOR, number | null][]).filter(
+                        ([, at]) => at != null && v.verts[at]?.[0] === i,
+                      )
+                    : [];
+                  const merchant = v.ck?.merchant?.p === i;
+                  if (!(v.longest === i || v.largest === i || metros.length || merchant)) return null;
+                  return (
+                    <span className="badges">
+                      {v.longest === i ? <span className="badge">{routeName(v)}</span> : null}
+                      {v.largest === i ? <span className="badge">Largest Army</span> : null}
+                      {metros.map(([t]) => (
+                        <span key={t} className="badge" style={{ borderColor: TRACK_COLOR[t] }}>
+                          {TRACK_LABEL[t]} metropolis
+                        </span>
+                      ))}
+                      {merchant ? <span className="badge">Merchant</span> : null}
+                    </span>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -537,7 +769,7 @@ export function Game({
                 {v.bank[r]}
               </span>
             ))}
-            <span>Dev deck {v.deckCount}</span>
+            {v.ck ? null : <span>Dev deck {v.deckCount}</span>}
           </div>
         </section>
         <section className="box" aria-label="Table talk">
@@ -574,8 +806,37 @@ export function Game({
           hex={sheet.hex}
           victims={sheet.victims}
           kind={sheet.kind}
-          onClose={() => setSheet(null)}
+          make={sheet.make}
+          onClose={() => {
+            setSheet(null);
+            if (mode === 'chase') setMode(null);
+          }}
         />
+      ) : null}
+      {sheet?.k === 'knightAct' ? (
+        <KnightSheet
+          v={v}
+          at={sheet.at}
+          acts={acts}
+          onMove={() => {
+            setMode('kmove');
+            setKFrom(sheet.at);
+          }}
+          onChase={() => {
+            setMode('chase');
+            setKFrom(sheet.at);
+          }}
+          onClose={() => {
+            setSheet(null);
+            if (mode === 'knights') setMode(null);
+          }}
+        />
+      ) : null}
+      {sheet?.k === 'owe' && owe && !BOARD_OWES.has(owe.k) ? (
+        <OweSheet v={v} o={owe} opts={owed} onClose={() => setSheet(null)} />
+      ) : null}
+      {sheet?.k === 'cardParam' ? (
+        <CardParamSheet v={v} card={sheet.card} plays={sheet.plays} onClose={() => setSheet(null)} />
       ) : null}
       {sheet?.k === 'menu' ? (
         <MenuSheet
@@ -733,19 +994,29 @@ function Tray(props: {
   canPlay: (c: DevPlayable) => boolean;
   play: (c: DevPlayable) => void;
   canMove: boolean;
+  acts: Action[];
+  onImprove: (opts: Action[]) => void;
+  onPlayProgress: (c: Progress, plays: Play[]) => void;
 }) {
   const { v, mine, busy } = props;
   const sea = v.rules.modules.includes('seafarers');
+  const ck = !!v.ck;
   const me = v.me!;
   const hand = v.hand!;
   const pieces = v.players[me]!.pieces;
   const main = mine && v.stage === 'main' && !busy;
+  const can = (t: Action['type']) => props.acts.some((a) => a.type === t);
   const builds = [
     { k: 'road' as const, label: 'Road', cost: COST.road, left: pieces.road },
     { k: 'settlement' as const, label: 'Settlement', cost: COST.settlement, left: pieces.settlement },
     { k: 'city' as const, label: 'City', cost: COST.city, left: pieces.city },
     ...(sea ? [{ k: 'ship' as const, label: 'Ship', cost: SHIP_COST, left: pieces.ship ?? 0 }] : []),
-    { k: 'dev' as const, label: 'Dev card', cost: COST.dev, left: v.deckCount },
+    ...(ck
+      ? [
+          { k: 'knight' as const, label: 'Knight', cost: KNIGHT_COST, left: can('knight') ? 1 : 0 },
+          { k: 'wall' as const, label: 'City wall', cost: WALL_COST, left: can('wall') ? 1 : 0 },
+        ]
+      : [{ k: 'dev' as const, label: 'Dev card', cost: COST.dev, left: v.deckCount }]),
   ];
   const devs = [
     ...DEV_PLAY.map((c) => ({ c, n: hand.dev[c], fresh: hand.fresh[c] })),
@@ -760,17 +1031,17 @@ function Tray(props: {
         </span>
       </div>
       <div className="hand" data-testid="hand">
-        {RES.map((r) => (
+        {(ck ? [...RES, ...COMS] : RES).map((r) => (
           <div
             key={r}
-            className={`rcard${hand.res[r] ? '' : ' zero'}`}
-            style={{ ['--c' as string]: TILE_COLOR[r] }}
-            title={RES_LABEL[r]}
+            className={`rcard${hand.res[r] ? '' : ' zero'}${(COMS as readonly string[]).includes(r) ? ' com' : ''}`}
+            style={{ ['--c' as string]: CARD_COLOR[r] }}
+            title={CARD_LABEL[r]}
             data-res={r}
-            data-n={hand.res[r]}
+            data-n={hand.res[r] ?? 0}
           >
-            <span dangerouslySetInnerHTML={{ __html: iconSVG(r) }} style={{ display: 'contents' }} />
-            <span className="n">{hand.res[r]}</span>
+            <span dangerouslySetInnerHTML={{ __html: cardIcon(r) }} style={{ display: 'contents' }} />
+            <span className="n">{hand.res[r] ?? 0}</span>
           </div>
         ))}
       </div>
@@ -782,6 +1053,13 @@ function Tray(props: {
               key={b.k}
               className={`btn bbtn${props.mode === b.k ? ' on' : ''}`}
               disabled={!ok}
+              title={
+                b.k === 'knight'
+                  ? 'Basic knight. Activate it with 1 wheat.'
+                  : b.k === 'wall'
+                    ? '+2 to your hand limit on a 7'
+                    : undefined
+              }
               data-testid={`build-${b.k}`}
               onClick={() => {
                 if (b.k === 'dev') void client.act({ type: 'buyDev' });
@@ -818,6 +1096,33 @@ function Tray(props: {
           </button>
         ) : null}
       </div>
+      {ck ? (
+        <>
+          <div className="build">
+            <button
+              className={`btn bbtn${props.mode === 'knights' ? ' on' : ''}`}
+              disabled={
+                !main || !['activate', 'promote', 'moveKnight', 'chase'].some((t) => can(t as Action['type']))
+              }
+              data-testid="knights"
+              onClick={() => props.setMode(props.mode === 'knights' ? null : 'knights')}
+            >
+              Knights
+              <span className="cost" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                activate · promote · move
+              </span>
+            </button>
+          </div>
+          <ImproveRow v={v} acts={props.acts} busy={busy} onImprove={(_t, opts) => props.onImprove(opts)} />
+          <ProgressRow
+            v={v}
+            acts={props.acts}
+            busy={busy}
+            onPlay={props.onPlayProgress}
+            onDrop={(c) => void client.act({ type: 'dropProgress', card: c })}
+          />
+        </>
+      ) : null}
       {devs.length ? (
         <div className="devrow">
           {devs.map((d) => (

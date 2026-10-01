@@ -8,16 +8,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  COMS,
+  COM_OF,
   RES,
   geometryFor,
   isResource,
+  type Card as CardKind,
+  type Cards,
   type GameEvent,
-  type PartialRes,
   type PlayerView,
   type Resource,
   type Seat,
 } from '@settlers/engine';
-import { TILE_COLOR, dieSVG, iconSVG } from './art';
+import { CARD_COLOR, TRACK_COLOR, cardIcon, dieSVG } from './art';
 import { hexScreenPoint } from './Board';
 import { client } from './net';
 
@@ -58,7 +61,7 @@ export function Dice({ dice }: { dice: [number, number] | null }) {
 }
 
 type Spot = { x: number; y: number };
-type Card = { kind: Resource | 'back' | 'dev' };
+type Card = { kind: CardKind | 'back' | 'dev'; tint?: string };
 
 function center(el: Element | null): Spot | null {
   if (!el) return null;
@@ -70,9 +73,10 @@ const playerSpot = (p: Seat) => center(document.querySelector(`[data-seat="${p}"
 const bankSpot = () => center(document.querySelector('[data-bank]'));
 
 /** Expand counts into individual cards, capped so big trades don't flood the screen. */
-function cardsOf(c: PartialRes | null | undefined, cap = 8): Card[] {
+function cardsOf(c: Cards | null | undefined, cap = 8): Card[] {
   const out: Card[] = [];
-  for (const r of RES) for (let i = 0; i < (c?.[r] ?? 0) && out.length < cap; i++) out.push({ kind: r });
+  for (const r of [...RES, ...COMS])
+    for (let i = 0; i < (c?.[r] ?? 0) && out.length < cap; i++) out.push({ kind: r });
   return out;
 }
 
@@ -104,9 +108,9 @@ function fly(root: HTMLElement, from: Spot, to: Spot, card: Card, delay: number)
   const el = document.createElement('div');
   el.className = `flycard${card.kind === 'back' ? ' back' : card.kind === 'dev' ? ' dev back' : ''}`;
   if (card.kind !== 'back' && card.kind !== 'dev') {
-    el.style.setProperty('--c', TILE_COLOR[card.kind]);
-    el.innerHTML = iconSVG(card.kind);
-  }
+    el.style.setProperty('--c', CARD_COLOR[card.kind]);
+    el.innerHTML = cardIcon(card.kind);
+  } else if (card.tint) el.style.setProperty('background', card.tint);
   el.dataset.flight = card.kind;
   root.appendChild(el);
   const at = (p: Spot, s: number) => `translate(${p.x - 13}px, ${p.y - 18}px) scale(${s})`;
@@ -188,6 +192,45 @@ function flightsFor(e: GameEvent, v: PlayerView): Flight[] {
       break;
     case 'buyDev':
       move([{ kind: 'dev' }], bankSpot(), playerSpot(e.p));
+      break;
+    /* Cities & Knights */
+    case 'commodities': {
+      const sum = v.dice ? v.dice[0] + v.dice[1] : 0;
+      const g = geometryFor(v.board.hexes);
+      v.board.hexes.forEach((hx, i) => {
+        const com = isResource(hx.t) ? COM_OF[hx.t as Resource] : undefined;
+        if (hx.n !== sum || i === v.board.robber || !com) return;
+        for (const vert of g.hexVerts[i]!) {
+          const b = v.verts[vert];
+          if (b && b[1] === 2 && e.gains[b[0]]?.[com])
+            move([{ kind: com }], hexScreenPoint(i), playerSpot(b[0]));
+        }
+      });
+      break;
+    }
+    case 'draw':
+      move([{ kind: 'dev', tint: TRACK_COLOR[e.track] }], bankSpot(), playerSpot(e.p));
+      break;
+    case 'aqueduct':
+      move([{ kind: e.r }], bankSpot(), playerSpot(e.p));
+      break;
+    case 'give':
+      move(
+        e.cards ? cardsOf(e.cards) : Array(e.n).fill({ kind: 'back' }),
+        playerSpot(e.from),
+        playerSpot(e.to),
+      );
+      break;
+    case 'gain':
+      if (e.from)
+        for (const [p, n] of Object.entries(e.from)) {
+          const k = Object.keys(e.cards)[0] as CardKind;
+          move(cardsOf({ [k]: n }), playerSpot(Number(p)), playerSpot(e.p));
+        }
+      else move(cardsOf(e.cards), bankSpot(), playerSpot(e.p));
+      break;
+    case 'spy':
+      move([{ kind: 'dev', tint: TRACK_COLOR[e.track] }], playerSpot(e.from), playerSpot(e.p));
       break;
   }
   return out;

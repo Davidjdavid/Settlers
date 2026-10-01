@@ -2,7 +2,18 @@
 
 import { useMemo, useRef } from 'react';
 import { geometryFor, type Board as BoardData, type Geometry, type PlayerView } from '@settlers/engine';
-import { GLYPH, K, PCOL, RES_LABEL, TILE_COLOR, cityPath, f1, hexPts, settlementPath } from './art';
+import {
+  GLYPH,
+  K,
+  PCOL,
+  RES_LABEL,
+  TILE_COLOR,
+  TRACK_COLOR,
+  cityPath,
+  f1,
+  hexPts,
+  settlementPath,
+} from './art';
 
 export interface Targets {
   verts: number[];
@@ -13,6 +24,8 @@ export interface Targets {
   dimVerts?: boolean;
   /** A ship being moved, drawn highlighted. */
   ghostEdge?: number | null;
+  /** A knight being moved, drawn highlighted. */
+  ghostVert?: number | null;
 }
 
 export const NO_TARGETS: Targets = { verts: [], edges: [], hexes: [], ghost: null };
@@ -188,6 +201,38 @@ function pirateSVG(g: Geometry, i: number): string {
   </g>`;
 }
 
+/** A knight: a shield in the owner's colour with one pip per strength; gold ring when active. */
+function knightSVG(
+  g: Geometry,
+  v: number,
+  color: string,
+  lvl: number,
+  on: boolean,
+  owner: number,
+  isFresh: boolean,
+  lifted: boolean,
+): string {
+  const V = g.verts[v]!;
+  const x = V.x * K;
+  const y = V.y * K;
+  const r = 0.19 * K;
+  let pips = '';
+  for (let i = 0; i < lvl; i++) {
+    const px = x + (i - (lvl - 1) / 2) * 0.1 * K;
+    pips += `<circle cx="${f1(px)}" cy="${f1(y + 0.02 * K)}" r="${f1(0.035 * K)}" fill="#0b1418"/>`;
+  }
+  return `<g class="piece knight${isFresh ? ' fresh' : ''}" data-knight="${v}" data-owner="${owner}" data-lvl="${lvl}" data-on="${on ? 1 : 0}"${lifted ? ' opacity=".45"' : on ? '' : ' opacity=".8"'}>${on ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 0.07 * K)}" fill="none" stroke="#ffd54a" stroke-width="${f1(0.05 * K)}"/>` : ''}<path d="M${f1(x - r)} ${f1(y - r * 0.75)}Q${f1(x)} ${f1(y - r * 1.15)} ${f1(x + r)} ${f1(y - r * 0.75)}V${f1(y + r * 0.1)}Q${f1(x + r)} ${f1(y + r * 0.9)} ${f1(x)} ${f1(y + r * 1.15)}Q${f1(x - r)} ${f1(y + r * 0.9)} ${f1(x - r)} ${f1(y + r * 0.1)}Z" fill="${color}" stroke="${on ? '#3b2a00' : '#0b1418'}" stroke-width="2.2"/>${pips}</g>`;
+}
+
+/** The merchant: a small figure in the owner's colour on its tile. */
+function merchantSVG(g: Geometry, h: number, color: string): string {
+  const H = g.hexes[h]!;
+  const x = (H.x + 0.5) * K;
+  const y = (H.y - 0.05) * K;
+  const u = 0.1 * K;
+  return `<g class="piece" data-merchant="${h}"><ellipse cx="${f1(x)}" cy="${f1(y + 2.6 * u)}" rx="${f1(1.6 * u)}" ry="${f1(0.5 * u)}" fill="rgba(0,0,0,.3)"/><path d="M${f1(x - 1.4 * u)} ${f1(y + 2.5 * u)}L${f1(x)} ${f1(y - 1.2 * u)}L${f1(x + 1.4 * u)} ${f1(y + 2.5 * u)}Z" fill="${color}" stroke="#0b1418" stroke-width="2"/><circle cx="${f1(x)}" cy="${f1(y - 1.6 * u)}" r="${f1(0.8 * u)}" fill="#f4ecd6" stroke="#0b1418" stroke-width="1.6"/><path d="M${f1(x - 1.3 * u)} ${f1(y - 2.2 * u)}h${f1(2.6 * u)}" stroke="#0b1418" stroke-width="2.4" stroke-linecap="round"/></g>`;
+}
+
 function roadLine(g: Geometry, e: number, inset: number) {
   const E = g.edges[e]!;
   const a = g.verts[E.a]!;
@@ -244,6 +289,17 @@ export function Board(props: {
   });
   if (view.board.robber >= 0) parts.push(robberSVG(g, view.board.robber));
   if ((view.board.pirate ?? -1) >= 0) parts.push(pirateSVG(g, view.board.pirate!));
+  const ck = view.ck;
+  if (ck?.merchant) parts.push(merchantSVG(g, ck.merchant.h, PCOL[view.players[ck.merchant.p]!.color]));
+  // City walls sit under their cities.
+  for (const v of ck?.walls ?? []) {
+    const V = g.verts[v]!;
+    const x = V.x * K;
+    const y = V.y * K;
+    parts.push(
+      `<rect class="piece" data-wall="${v}" x="${f1(x - 0.34 * K)}" y="${f1(y + 0.08 * K)}" width="${f1(0.68 * K)}" height="${f1(0.16 * K)}" rx="${f1(0.03 * K)}" fill="#8b8172" stroke="#0b1418" stroke-width="2"/>`,
+    );
+  }
   view.verts.forEach((b, v) => {
     if (!b) return;
     const V = g.verts[v]!;
@@ -252,6 +308,33 @@ export function Board(props: {
       `<path class="piece${fresh(`v${v}:${b.join(',')}`) ? ' fresh' : ''}" data-building="${v}" data-owner="${b[0]}" data-kind="${b[1] === 2 ? 'city' : 'settlement'}" d="${d}" fill="${PCOL[view.players[b[0]]!.color]}" stroke="#0b1418" stroke-width="2.6" stroke-linejoin="round"/>`,
     );
   });
+  if (ck) {
+    // Metropolises: a tower in the track's colour on top of the city.
+    for (const [t, v] of Object.entries(ck.metro)) {
+      if (v == null) continue;
+      const V = g.verts[v]!;
+      const x = V.x * K;
+      const y = V.y * K;
+      parts.push(
+        `<g class="piece" data-metro="${t}" data-at="${v}"><rect x="${f1(x - 0.24 * K)}" y="${f1(y - 0.52 * K)}" width="${f1(0.16 * K)}" height="${f1(0.32 * K)}" fill="${TRACK_COLOR[t as 'trade']}" stroke="#0b1418" stroke-width="2"/><path d="M${f1(x - 0.27 * K)} ${f1(y - 0.52 * K)}L${f1(x - 0.16 * K)} ${f1(y - 0.66 * K)}L${f1(x - 0.05 * K)} ${f1(y - 0.52 * K)}Z" fill="${TRACK_COLOR[t as 'trade']}" stroke="#0b1418" stroke-width="2" stroke-linejoin="round"/></g>`,
+      );
+    }
+    ck.knights.forEach((k, v) => {
+      if (!k) return;
+      parts.push(
+        knightSVG(
+          g,
+          v,
+          PCOL[view.players[k.p]!.color],
+          k.lvl,
+          k.on,
+          k.p,
+          fresh(`k${v}:${k.p}:${k.lvl}`),
+          v === targets.ghostVert,
+        ),
+      );
+    });
+  }
   seen.current = now;
 
   if (targets.ghost != null && props.myColor) {
