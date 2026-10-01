@@ -18,16 +18,13 @@ if ! swapon --show | grep -q /swapfile; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
-if ! command -v caddy >/dev/null || ! command -v sqlite3 >/dev/null; then
+# Caddy comes from Ubuntu's own archive. (An earlier version added Caddy's third-party apt repo,
+# whose signing key expired; remove it so it can't break apt.)
+rm -f /etc/apt/sources.list.d/caddy-stable.list /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+if ! command -v caddy >/dev/null || ! command -v sqlite3 >/dev/null || ! command -v curl >/dev/null; then
   log "installing packages"
   apt-get update -q
-  apt-get install -y -q curl ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https sqlite3 xz-utils
-  if ! command -v caddy >/dev/null; then
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
-    apt-get update -q
-    apt-get install -y -q caddy
-  fi
+  apt-get install -y -q curl ca-certificates sqlite3 xz-utils caddy
 fi
 
 # Node, pinned and checksum-verified. Must match the Node major version the release was built with.
