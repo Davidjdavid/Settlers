@@ -148,6 +148,16 @@ export function checkInvariants(s: GameState, prev?: GameState): string[] {
     bad.push(`robber on an illegal hex ${s.board.robber}`);
   if (!(s.turn >= 0 && s.turn < n)) bad.push(`turn ${s.turn} out of range`);
 
+  // Handing the dice back.
+  if (s.back) {
+    const b = s.back;
+    if (!s.config.houseRules?.handBack) bad.push('hand-back pending without the rule');
+    if (!(b.from >= 0 && b.from < n)) bad.push(`hand-back from ${b.from}`);
+    if (b.asked && b.refused) bad.push('hand-back both asked and refused');
+    if (!b.state || b.state.back) bad.push('hand-back without exactly one earlier turn');
+    if (s.phase !== 'play') bad.push('hand-back pending after the game ended');
+  }
+
   for (const m of mods(s)) bad.push(...(m.invariants?.(s) ?? []));
   return bad;
 }

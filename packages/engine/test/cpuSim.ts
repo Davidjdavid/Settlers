@@ -96,6 +96,24 @@ export function cpuGame(
         }
       }
     }
+    // Now and then a test bot that just ended its turn asks a CPU for the dice back.
+    const back = s.back;
+    if (
+      back &&
+      !back.asked &&
+      !back.refused &&
+      back.from !== s.turn &&
+      !s.players[back.from]!.cpu &&
+      s.players[s.turn]!.cpu &&
+      nextFloat(rng) < 0.5
+    ) {
+      const r = applyAction(s, back.from, { type: 'askBack' });
+      if (r.ok) {
+        s = r.state;
+        actions++;
+        continue;
+      }
+    }
     let mover: Seat | null = null;
     let a: Action | null = null;
     for (let p = 0; p < n && !a; p++) {
@@ -135,6 +153,8 @@ export function cpuGame(
         if (a.card === 'merchant' && m && !s.players[m.p]!.cpu) fail('CPU took the merchant from a human');
       }
       if (a.type === 'playKnight') knightBy = p;
+      if (s.back?.asked && s.turn === p && a.type !== 'handBack')
+        fail(`CPU kept the dice when asked: ${a.type}`);
       if (a.type === 'robber' || a.type === 'pirate') {
         checked.robber++;
         const err = checkSpot(s, p, a);

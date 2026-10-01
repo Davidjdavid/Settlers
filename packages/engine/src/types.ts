@@ -57,7 +57,19 @@ export type EdgePiece = 'road' | 'ship';
 export const MODULES = ['seafarers', 'citiesKnights'] as const;
 export type ModuleId = (typeof MODULES)[number];
 
-export const COLORS = ['red', 'blue', 'white', 'purple', 'orange', 'gray'] as const;
+export const COLORS = [
+  'red',
+  'blue',
+  'white',
+  'orange',
+  'purple',
+  'black',
+  'pink',
+  'yellow',
+  'gray',
+] as const;
+/** Colours people can pick; gray is only for CPU players (SPEC 4.2). */
+export const PLAYER_COLORS = ['red', 'blue', 'white', 'orange', 'purple', 'black', 'pink', 'yellow'] as const;
 export type Color = (typeof COLORS)[number];
 
 /** One hex on the board. `n` is the number token; 0 means none (desert, sea). */
@@ -136,6 +148,27 @@ export interface HouseRules {
   noDiscardBeforeAttack?: boolean;
   /** Cities & Knights: the event die isn't rolled for this many rounds. */
   barbarianDelay?: number;
+  /** After ending a turn, the dice can be handed back until the next player acts (SPEC 4.4). */
+  handBack?: boolean;
+  /** ...also after a starting placement. */
+  handBackSetup?: boolean;
+}
+
+/** Game rules a player may change during their turn (SPEC 4.5). */
+export const RULE_KEYS = [
+  'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
+  'barbarianDelay', 'handBack', 'handBackSetup',
+] as const; // prettier-ignore
+export type RuleKey = (typeof RULE_KEYS)[number];
+
+/** A turn that can still be handed back. */
+export interface HandBack {
+  /** The player who ended the turn (or made the starting placement). */
+  from: Seat;
+  asked: boolean;
+  refused: boolean;
+  /** The game as it was before; restored on hand-back. Server-only. */
+  state: GameState | null;
 }
 
 /**
@@ -289,6 +322,8 @@ export interface GameState {
   sea?: SeaState;
   /** Cities & Knights state; absent without it. */
   ck?: CKState;
+  /** A turn that can still be handed back; absent otherwise. */
+  back?: HandBack;
 }
 
 /* ---------- Actions (what a seat asks to do) ---------- */
@@ -321,6 +356,12 @@ export type Action =
   | { type: 'moveShip'; from: number; to: number }
   | { type: 'pirate'; hex: number; victim?: Seat | null }
   | { type: 'chooseGold'; cards: PartialRes }
+  /* Handing the dice back (SPEC 4.4) */
+  | { type: 'askBack' }
+  | { type: 'handBack' }
+  | { type: 'refuseBack' }
+  /** Change a game rule during your turn. */
+  | { type: 'setRule'; rule: RuleKey; value: boolean | number }
   /* Cities & Knights */
   | { type: 'improve'; track: Track; v?: number }
   | { type: 'wall'; v: number }
@@ -397,6 +438,10 @@ export type GameEvent =
   /** A fog hex was discovered. `got` is the discoverer's reward (gold is chosen separately). */
   | { k: 'discover'; p: Seat; h: number; t: Terrain; n: number; got: PartialRes | null }
   | { k: 'islandBonus'; p: Seat; vp: number }
+  | { k: 'askBack'; p: Seat }
+  | { k: 'handBack'; p: Seat; to: Seat }
+  | { k: 'refuseBack'; p: Seat }
+  | { k: 'rule'; p: Seat; rule: RuleKey; value: boolean | number }
   /* Cities & Knights */
   | { k: 'eventDie'; face: 'ship' | Track }
   | { k: 'barbarians'; at: number }

@@ -72,6 +72,8 @@ export interface PlayerView {
     start: 'all' | [number, number][];
     newIslandVP: number;
   };
+  /** A turn that can be handed back (who ended it, whether they asked). */
+  back?: { from: Seat; asked: boolean; refused: boolean };
   /** Seafarers (public parts only). */
   sea?: SeaView;
   /** Cities & Knights (public parts, plus the viewer's own cards). */
@@ -142,6 +144,7 @@ export function viewFor(s: GameState, seat: Seat | null): PlayerView {
       newIslandVP: s.config.map?.specialVP?.newIsland ?? 0,
     },
   } satisfies PlayerView);
+  if (s.back) v.back = { from: s.back.from, asked: s.back.asked, refused: s.back.refused };
   for (const m of mods(s)) m.view?.(s, me, v);
   return v;
 }
@@ -231,6 +234,8 @@ export function stateFromView(v: PlayerView): GameState {
     offerN: 0,
     winner: v.winner,
   } satisfies GameState);
+  // The turn to restore is server-only; legal moves only need to know a hand-back is possible.
+  if (v.back) s.back = { ...v.back, state: null };
   for (const m of mods(s)) m.fromView?.(v, s);
   return s;
 }

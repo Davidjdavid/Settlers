@@ -241,6 +241,8 @@ export function cpuMove(v: PlayerView, rng: RngState, memo: CpuMemo): Action | n
     if (o.from === s.turn || s.turn === me) return { type: 'respond', id: o.id, yes: false };
   }
   if (s.turn !== me) return null;
+  // Asked for the dice back: a CPU always hands them back (SPEC 4.4).
+  if (s.back?.asked) return { type: 'handBack' };
 
   const acts = legalActions(s, me).filter(
     (a) => a.type !== 'respond' && a.type !== 'confirm' && a.type !== 'cancel',

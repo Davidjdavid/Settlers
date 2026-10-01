@@ -51,6 +51,13 @@ export function legalActions(s: GameState, p: Seat): Action[] {
     }
   }
   for (const m of mods(s)) m.legal?.(s, p, out);
+  // Handing the dice back.
+  const b = s.back;
+  if (b) {
+    if (p === b.from && !myTurn && !b.asked && !b.refused) out.push({ type: 'askBack' });
+    if (myTurn) out.push({ type: 'handBack' });
+    if (myTurn && b.asked) out.push({ type: 'refuseBack' });
+  }
   if (!myTurn) return out;
 
   switch (s.stage) {

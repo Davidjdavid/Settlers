@@ -295,6 +295,11 @@ export const seafarers: RuleModule = {
     return null;
   },
 
+  ruleChangeBlock: (s, rule, value) =>
+    rule === 'freeShipMoves' && !value && sea(s).movesThisTurn > 1
+      ? 'You’ve already moved more than one ship this turn'
+      : null,
+
   onTurnEnd(s) {
     sea(s).builtThisTurn = [];
     sea(s).movesThisTurn = 0;
@@ -521,7 +526,8 @@ export const seafarers: RuleModule = {
           bad.push(`ship changed on pirate edge ${e}`);
       });
     }
-    const moved = next.sea!.movesThisTurn - (prev.turn === next.turn ? prev.sea!.movesThisTurn : 0);
+    // (When the turn changes, the count starts again, or comes back with a handed-back turn.)
+    const moved = prev.turn === next.turn ? next.sea!.movesThisTurn - prev.sea!.movesThisTurn : 0;
     if (moved > 1) bad.push(`${moved} ship moves in one action`);
     return bad;
   },

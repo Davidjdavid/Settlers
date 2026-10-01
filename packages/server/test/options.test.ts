@@ -104,16 +104,18 @@ describe('room options', () => {
   });
 
   it('a classic game with default options keeps exactly the classic config', () => {
-    expect(gameConfigFor(DEFAULT_OPTIONS)).toEqual({});
+    // New games can hand the dice back (SPEC 4.4); turning it off gives the classic config.
+    expect(gameConfigFor(DEFAULT_OPTIONS)).toEqual({ houseRules: { handBack: true } });
+    expect(gameConfigFor({ ...DEFAULT_OPTIONS, houseRules: { handBack: false } })).toEqual({});
     expect(
       gameConfigFor({ ...DEFAULT_OPTIONS, winVP: 12, houseRules: { bank3to1: true, freeShipMoves: true } }),
     ).toEqual({
       winVP: 12,
-      houseRules: { bank3to1: true },
+      houseRules: { bank3to1: true, handBack: true },
     });
     const sea = gameConfigFor({ ...HFNS, houseRules: { freeShipMoves: true } });
     expect(sea.map?.id).toBe('heading-for-new-shores');
-    expect(sea.houseRules).toEqual({ freeShipMoves: true });
+    expect(sea.houseRules).toEqual({ freeShipMoves: true, handBack: true });
   });
 
   it('Cities & Knights adds its module, needs 3 or 4 players, and only then takes its house rules', () => {
@@ -126,11 +128,13 @@ describe('room options', () => {
     expect(gameConfigFor(ck)).toEqual({
       modules: ['citiesKnights'],
       winVP: 13,
-      houseRules: { rerollBeforeAttack: true, barbarianDelay: 2 },
+      houseRules: { rerollBeforeAttack: true, barbarianDelay: 2, handBack: true },
     });
     const both = gameConfigFor({ ...HFNS, ck: true, winVP: 17 });
     expect(both.modules).toEqual(['seafarers', 'citiesKnights']);
-    expect(gameConfigFor({ ...DEFAULT_OPTIONS, houseRules: { rerollBeforeAttack: true } })).toEqual({});
+    expect(
+      gameConfigFor({ ...DEFAULT_OPTIONS, houseRules: { rerollBeforeAttack: true, handBack: false } }),
+    ).toEqual({});
     const { conns, code } = table(2);
     send(conns[0]!, { t: 'setOptions', options: ck });
     send(conns[0]!, { t: 'start' });

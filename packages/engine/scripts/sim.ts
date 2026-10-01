@@ -33,12 +33,12 @@ interface Scenario {
 }
 const HFNS = SCENARIOS['heading-for-new-shores']!;
 const SIMS: Record<string, Scenario> = {
-  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb'] },
+  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb', 'h', 'nH'] },
   'heading-for-new-shores': {
     map: HFNS,
     players: HFNS.players,
     maxTurns: 3000,
-    rules: ['n', 'b', 'nb', 'f', 'nbf'],
+    rules: ['n', 'b', 'nb', 'f', 'nbf', 'h', 'fH'],
   },
   'fog-test': { map: fogTest as unknown as MapData, players: [3, 4], rules: ['n', 'b', 'nb', 'f', 'nbf'] },
   ck: {
@@ -47,7 +47,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 13,
     quickVP: 10,
     maxTurns: 3000,
-    rules: ['r', 'd', 'w', 'b', 'nrw', 'bdw'],
+    rules: ['r', 'd', 'w', 'b', 'nrw', 'bdw', 'h', 'rH'],
   },
   'ck-sea': {
     map: HFNS,
@@ -56,7 +56,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 17,
     quickVP: 13,
     maxTurns: 5000,
-    rules: ['r', 'd', 'w', 'f', 'nbf', 'rdw'],
+    rules: ['r', 'd', 'w', 'f', 'nbf', 'rdw', 'h', 'wH'],
   },
 };
 for (const k of ['classic', 'heading-for-new-shores', 'ck', 'ck-sea'] as const) {
@@ -82,7 +82,7 @@ const DEFAULT_GAMES: Record<string, number> = {
 /**
  * Seed format: base.scenario.index.<n>p.<house rules or ->. House rules: n no 7s in round 1,
  * b 3:1 bank, f free ship moves, r re-roll 7s / d no discards until the barbarians attack,
- * w barbarians wait 2 rounds.
+ * w barbarians wait 2 rounds, h dice can be handed back (H: during setup too).
  */
 function makeSeed(base: string, scenario: string, i: number): string {
   const sc = SIMS[scenario]!;
@@ -101,6 +101,8 @@ function parseSeed(seed: string): { scenario: string; n: number; houseRules: Hou
   if (hr?.includes('r')) houseRules.rerollBeforeAttack = true;
   if (hr?.includes('d')) houseRules.noDiscardBeforeAttack = true;
   if (hr?.includes('w')) houseRules.barbarianDelay = 2;
+  if (hr?.includes('h')) houseRules.handBack = true;
+  if (hr?.includes('H')) Object.assign(houseRules, { handBack: true, handBackSetup: true });
   return { scenario, n: Number(np.replace('p', '')), houseRules };
 }
 

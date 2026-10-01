@@ -14,7 +14,7 @@ const PROGRESS = z.enum([
   'alchemist', 'crane', 'engineer', 'inventor', 'irrigation', 'medicine', 'mining', 'printer', 'roadBuilding', 'smith',
   'bishop', 'constitution', 'deserter', 'diplomat', 'intrigue', 'saboteur', 'spy', 'warlord', 'wedding',
 ]); // prettier-ignore
-const COLOR = z.enum(['red', 'blue', 'white', 'purple', 'orange', 'gray']);
+const COLOR = z.enum(['red', 'blue', 'white', 'orange', 'purple', 'black', 'pink', 'yellow', 'gray']);
 const count = z.number().int().min(0).max(95);
 /** Card counts. Commodities only mean something in Cities & Knights; the engine checks. */
 const cards = z.strictObject({
@@ -56,6 +56,17 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('moveShip'), from: idx, to: idx }),
   z.strictObject({ type: z.literal('pirate'), hex: idx, victim: idx.nullable().optional() }),
   z.strictObject({ type: z.literal('chooseGold'), cards }),
+  z.strictObject({ type: z.literal('askBack') }),
+  z.strictObject({ type: z.literal('handBack') }),
+  z.strictObject({ type: z.literal('refuseBack') }),
+  z.strictObject({
+    type: z.literal('setRule'),
+    rule: z.enum([
+      'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
+      'barbarianDelay', 'handBack', 'handBackSetup',
+    ]), // prettier-ignore
+    value: z.union([z.boolean(), z.number().int().min(0).max(30)]),
+  }),
   z.strictObject({ type: z.literal('improve'), track: TRACK, v: idx.optional() }),
   z.strictObject({ type: z.literal('wall'), v: idx }),
   z.strictObject({ type: z.literal('knight'), v: idx }),
@@ -101,8 +112,21 @@ export const OptionsSchema = z.strictObject({
     rerollBeforeAttack: z.boolean().optional(),
     noDiscardBeforeAttack: z.boolean().optional(),
     barbarianDelay: z.number().int().min(0).max(10).optional(),
+    /** Handing the dice back; on unless set to false. */
+    handBack: z.boolean().optional(),
+    handBackSetup: z.boolean().optional(),
   }),
 });
+
+/** Personal confirmation settings (SPEC 4.3), saved under your nickname. Missing means on. */
+export const SettingsSchema = z.strictObject({
+  confirmPlace: z.boolean().optional(),
+  confirmPlaceTouch: z.boolean().optional(),
+  confirmEnd: z.boolean().optional(),
+  confirmCard: z.boolean().optional(),
+  confirmTrade: z.boolean().optional(),
+});
+export type PlayerSettings = z.infer<typeof SettingsSchema>;
 export type RoomOptions = z.infer<typeof OptionsSchema>;
 export const DEFAULT_OPTIONS: RoomOptions = { scenario: 'classic', winVP: 10, houseRules: {} };
 
@@ -128,6 +152,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('removeCpu'), pid: z.string().max(40) }),
   /** Lobby only: scenario, points to win and house rules for the next game. */
   z.strictObject({ t: z.literal('setOptions'), options: OptionsSchema }),
+  /** Save your personal settings (you must be seated; they're kept under your nickname). */
+  z.strictObject({ t: z.literal('saveSettings'), settings: SettingsSchema }),
   /** `id` makes resends after a dropped connection safe: an id is applied at most once. */
   z.strictObject({ t: z.literal('act'), id: z.string().min(1).max(64), action: ActionSchema }),
   z.strictObject({ t: z.literal('chat'), text: z.string().min(1).max(240) }),
@@ -157,6 +183,8 @@ export interface RoomInfo {
   phase: 'lobby' | 'play' | 'over';
   /** Options for the next game (shown in the lobby). */
   options: RoomOptions;
+  /** Your personal settings, if you're seated (missing fields mean on). */
+  mySettings: PlayerSettings | null;
   pendingReset: { pid: string; nick: string; expiresAt: number } | null;
 }
 

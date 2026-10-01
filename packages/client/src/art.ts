@@ -21,20 +21,33 @@ export const TILE_COLOR: Record<Terrain, string> = {
   sea: '#1f5f73',
   fog: '#5d6b73',
 };
+/**
+ * Piece colours, chosen so every pair stays clearly different (CIEDE2000 ≥ 12) with normal vision
+ * and simulated protanopia, deuteranopia and tritanopia, and every colour stands out on every
+ * tile (≥ 8). Checked by test/colors.test.ts; change them only with that test passing.
+ */
 export const PCOL: Record<Color, string> = {
-  red: '#e5484d',
-  blue: '#3b82f6',
-  white: '#f1ede4',
-  purple: '#a970ff',
-  orange: '#f28a2e',
-  gray: '#8b969c',
+  red: '#ac130a',
+  blue: '#0230c1',
+  white: '#f3f4f5',
+  orange: '#ee6f15',
+  purple: '#a66bd7',
+  black: '#191919',
+  pink: '#f2a2e4',
+  yellow: '#fff023',
+  gray: '#9d9f93',
 };
+/** Outline for pieces of each colour: dark, except a light one for black pieces. */
+export const PEDGE = (c: Color) => (c === 'black' ? '#d9dde0' : '#0b1418');
 export const PNAME: Record<Color, string> = {
   red: 'Red',
   blue: 'Blue',
   white: 'White',
-  purple: 'Purple',
   orange: 'Orange',
+  purple: 'Purple',
+  black: 'Black',
+  pink: 'Pink',
+  yellow: 'Yellow',
   gray: 'Gray',
 };
 export const DEV_LABEL: Record<DevType, string> = {

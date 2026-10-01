@@ -12,12 +12,12 @@ import {
 } from './ops'; // prettier-ignore
 import {
   BANK_EACH, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, geo, has,
-  rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, settlementOK, setupVertOK, snakeOrder, total,
+  publicVP, rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, totalVP, settlementOK, setupVertOK, snakeOrder, total,
   zeroRes,
 } from './queries'; // prettier-ignore
 import { nextInt, seedRng, shuffle, type RngState } from './rng';
 import {
-  COLORS, DEV_PLAY, DEV_TYPES, isResource, type Action, type ApplyResult, type Card, type Color, type DevCounts,
+  COLORS, DEV_PLAY, DEV_TYPES, RULE_KEYS, isResource, type Action, type ApplyResult, type Card, type Color, type DevCounts,
   type GameConfig, type GameEvent, type GameState, type Hand, type PartialRes, type Player, type Seat,
 } from './types'; // prettier-ignore
 
@@ -114,8 +114,63 @@ export function applyAction(s0: GameState, seat: Seat, action: Action): ApplyRes
     error = `Something went wrong (${e instanceof Error ? e.message : String(e)})`;
   }
   if (error) return { ok: false, error };
+  keepForHandBack(s0, s, seat, action);
   s.seq = s0.seq + 1;
   return { ok: true, state: s, events };
+}
+
+/** Actions that leave a pending hand-back alone. */
+const BACK_ACTIONS = new Set<Action['type']>(['askBack', 'handBack', 'refuseBack', 'setRule']);
+
+/**
+ * Handing the dice back (SPEC 4.4): ending a turn (or, if allowed, a starting placement) keeps
+ * the game as it was before, until the next move by anyone. Games without the rule never get it.
+ */
+function keepForHandBack(s0: GameState, s: GameState, p: Seat, a: Action) {
+  if (BACK_ACTIONS.has(a.type)) return;
+  const hr = s.config.houseRules;
+  if (s.phase === 'play' && hr?.handBack && (a.type === 'end' || (a.type === 'setup' && hr.handBackSetup))) {
+    const { back: _old, ...before } = s0;
+    void _old;
+    s.back = { from: p, asked: false, refused: false, state: cloneJson(before) };
+  } else delete s.back;
+}
+
+/** Change one game rule (SPEC 4.5). Returns an error or null. */
+function setRule(
+  s: GameState,
+  p: Seat,
+  a: Extract<Action, { type: 'setRule' }>,
+  events: GameEvent[],
+): string | null {
+  const { rule, value } = a;
+  if (!(RULE_KEYS as readonly string[]).includes(rule)) return 'Unknown rule';
+  const sea = mods(s).some((m) => m.id === 'seafarers');
+  const ck = mods(s).some((m) => m.id === 'citiesKnights');
+  if (rule === 'freeShipMoves' && !sea) return 'That rule is for Seafarers';
+  if ((rule === 'rerollBeforeAttack' || rule === 'noDiscardBeforeAttack' || rule === 'barbarianDelay') && !ck)
+    return 'That rule is for Cities & Knights';
+  for (const m of mods(s)) {
+    const why = m.ruleChangeBlock?.(s, rule, value);
+    if (why) return why;
+  }
+  if (rule === 'winVP') {
+    if (!isInt(value) || value < 3 || value > 30) return 'Points to win must be 3 to 30';
+    const top = Math.max(totalVP(s, p), ...s.players.map((_, i) => publicVP(s, i)));
+    if (value <= top) return `Points to win must be more than ${top}, the top score`;
+    s.config.winVP = value;
+  } else {
+    if (rule === 'barbarianDelay' ? !isInt(value) || value < 0 || value > 10 : typeof value !== 'boolean')
+      return 'That isn’t a valid setting';
+    const hr = { ...(s.config.houseRules ?? {}) } as Record<string, unknown>;
+    if (value === false || value === 0) delete hr[rule];
+    else hr[rule] = value;
+    if (Object.keys(hr).length) s.config.houseRules = hr;
+    else delete s.config.houseRules;
+    if (rule === 'handBack' && !value) delete s.back;
+  }
+  events.push({ k: 'rule', p, rule, value });
+  return null;
 }
 
 function doTrade(
@@ -157,6 +212,39 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
   }
 
   switch (a.type) {
+    case 'askBack': {
+      const b = s.back;
+      if (!b || p !== b.from || p === s.turn) return 'You can’t ask for the dice now';
+      if (b.refused) return 'They said no this turn';
+      if (b.asked) return 'You already asked';
+      b.asked = true;
+      events.push({ k: 'askBack', p });
+      return null;
+    }
+    case 'refuseBack': {
+      const b = s.back;
+      if (!b || !myTurn || !b.asked) return 'Nobody asked for the dice';
+      b.asked = false;
+      b.refused = true;
+      events.push({ k: 'refuseBack', p });
+      return null;
+    }
+    case 'handBack': {
+      const b = s.back;
+      if (!b?.state) return 'There’s nothing to hand back';
+      if (!myTurn) return 'Only the player with the dice can hand them back';
+      // Everything as it was, except the rules, which stay as they are now.
+      const config = s.config;
+      const before = b.state;
+      for (const k of Object.keys(s)) delete (s as unknown as Record<string, unknown>)[k];
+      Object.assign(s, before, { config });
+      events.push({ k: 'handBack', p, to: b.from });
+      return null;
+    }
+    case 'setRule':
+      if (!myTurn) return 'Change the rules on your turn';
+      return setRule(s, p, a, events);
+
     case 'setup': {
       if (s.stage !== 'setup') return 'Setup is finished';
       if (!myTurn) return 'Wait for your turn';

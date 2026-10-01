@@ -5,7 +5,7 @@
  */
 
 import {
-  COST, DEV_TYPES, RES, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
+  COST, DEV_TYPES, RES, RULE_KEYS, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
   PROGRESS, viewFor, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
 
@@ -61,6 +61,8 @@ const WEIGHT: Record<Action['type'], number> = {
   ship: 6, freeShip: 5, moveShip: 1, pirate: 1, chooseGold: 1,
   improve: 25, wall: 4, knight: 6, promote: 4, activate: 5, moveKnight: 1.5, chase: 3,
   dropProgress: 1, progress: 4, choose: 1,
+  // Hand-backs and rule changes are made on purpose in chooseMove, not picked at random.
+  askBack: 0, handBack: 0, refuseBack: 0, setRule: 0,
 }; // prettier-ignore
 
 function randomCards(s: GameState, p: Seat, need: number, rng: RngState): Cards {
@@ -179,8 +181,31 @@ const SHARED = new Set<Action['type']>([
   'choose',
 ]);
 
+/** A random game-rule change that applies to this game. */
+function randomRule(s: GameState, rng: RngState): Action {
+  const mods = s.config.modules ?? [];
+  const keys = RULE_KEYS.filter(
+    (k) =>
+      (k !== 'freeShipMoves' || mods.includes('seafarers')) &&
+      (!['rerollBeforeAttack', 'noDiscardBeforeAttack', 'barbarianDelay'].includes(k) ||
+        mods.includes('citiesKnights')),
+  );
+  const rule = pick(rng, keys);
+  if (rule === 'winVP') return { type: 'setRule', rule, value: s.config.winVP + 1 };
+  if (rule === 'barbarianDelay') return { type: 'setRule', rule, value: nextInt(rng, 3) };
+  return { type: 'setRule', rule, value: !s.config.houseRules?.[rule] };
+}
+
 /** Choose who acts next and what they do. */
 function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
+  // Handing the dice back: ask, hand back or refuse now and then.
+  const b = s.back;
+  if (b && chance(rng, 0.12)) {
+    if (b.asked) return [s.turn, { type: chance(rng, 0.6) ? 'handBack' : 'refuseBack' }];
+    if (!b.refused && b.from !== s.turn) return [b.from, { type: 'askBack' }];
+    if (chance(rng, 0.3)) return [s.turn, { type: 'handBack' }];
+  }
+  if (s.stage === 'main' && chance(rng, 0.003)) return [s.turn, randomRule(s, rng)];
   if (s.stage === 'discard') {
     const p = pick(rng, waitingOn(s));
     return [p, randomDiscard(s, p, rng)];
@@ -410,6 +435,19 @@ function eventLeakCheck(
     : `events for seat ${seat} reveal hidden information after ${JSON.stringify(a)}: ${mine}`;
 }
 
+/** JSON with sorted keys, to compare states regardless of key order. */
+export function canonical(x: unknown): string {
+  return JSON.stringify(x, (_k, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.keys(v)
+            .sort()
+            .map((k) => [k, (v as Record<string, unknown>)[k]]),
+        )
+      : v,
+  );
+}
+
 export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}): SimResult {
   const maxTurns = opts.maxTurns ?? 1500;
   const deep = opts.deepCheckRate ?? 0.03;
@@ -468,8 +506,9 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
     const r = applyAction(s, p, a);
     if (before && before !== JSON.stringify(s)) fail('applyAction mutated its input');
     if (!r.ok) {
-      // Offers are free-form and may legitimately be refused; everything else came from legalActions.
-      if (a.type !== 'offer') fail(`chosen action rejected for ${p}: ${JSON.stringify(a)} -> ${r.error}`);
+      // Offers and rule changes are free-form and may be refused; everything else came from legalActions.
+      if (a.type !== 'offer' && a.type !== 'setRule')
+        fail(`chosen action rejected for ${p}: ${JSON.stringify(a)} -> ${r.error}`);
       continue;
     }
     // Steals and dev draws are checked every time; rolls (very frequent) on sampled steps.
@@ -480,6 +519,11 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
     const prev = s;
     s = r.state;
     log.push([p, a]);
+    // A hand-back restores the earlier turn exactly (only the move count and the rules move on).
+    if (a.type === 'handBack') {
+      const same = (x: GameState) => canonical({ ...x, seq: 0, config: null });
+      if (same(s) !== same(prev.back!.state!)) fail('hand-back did not restore the turn exactly');
+    }
     const bad = [...checkInvariants(s, prev), ...checkTransition(prev, s)];
     if (bad.length) bad.forEach((b) => fail(`after ${JSON.stringify(a)}: ${b}`));
   }

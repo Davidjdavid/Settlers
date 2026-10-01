@@ -56,6 +56,9 @@ export interface ChatRow {
   at: number;
 }
 
+/** Nicknames match whatever the case and spacing. */
+export const nickKey = (nick: string) => nick.trim().toLowerCase().replace(/\s+/g, ' ');
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS rooms (
@@ -102,6 +105,11 @@ CREATE TABLE IF NOT EXISTS chat (
   at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chat_room ON chat (room_code, id);
+CREATE TABLE IF NOT EXISTS player_settings (
+  nick_key TEXT PRIMARY KEY,
+  settings_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `;
 
 export class Store {
@@ -146,6 +154,24 @@ export class Store {
     this.db
       .prepare('INSERT INTO rooms (code, created_at, seats_json, game_id) VALUES (?, ?, ?, ?)')
       .run(r.code, r.createdAt, JSON.stringify(r.seats), r.gameId);
+  }
+
+  /* ---------- Personal settings, by nickname (SPEC 4.5) ---------- */
+
+  getSettings(nick: string): unknown {
+    const row = this.db
+      .prepare('SELECT settings_json FROM player_settings WHERE nick_key = ?')
+      .get(nickKey(nick)) as { settings_json: string } | undefined;
+    return row ? JSON.parse(row.settings_json) : null;
+  }
+
+  saveSettings(nick: string, settings: unknown, at: number) {
+    this.db
+      .prepare(
+        'INSERT INTO player_settings (nick_key, settings_json, updated_at) VALUES (?, ?, ?) ' +
+          'ON CONFLICT(nick_key) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at',
+      )
+      .run(nickKey(nick), JSON.stringify(settings), at);
   }
 
   saveOptions(code: string, options: unknown) {

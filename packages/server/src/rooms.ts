@@ -16,13 +16,15 @@ import {
 import {
   DEFAULT_OPTIONS,
   OptionsSchema,
+  SettingsSchema,
   type ClientMsg,
+  type PlayerSettings,
   type LogItem,
   type RoomInfo,
   type RoomOptions,
   type ServerMsg,
 } from './protocol';
-import type { ActionRow, ChatRow, GameRow, SeatRow, Store } from './store';
+import { nickKey, type ActionRow, type ChatRow, type GameRow, type SeatRow, type Store } from './store';
 
 export interface Conn {
   send(msg: ServerMsg): void;
@@ -148,8 +150,10 @@ export class Rooms {
     for (const room of this.rooms.values()) this.scheduleCpu(room);
   }
 
-  /** Cancel pending CPU moves (shutdown, tests). */
+  private stopped = false;
+  /** Cancel pending CPU moves and stop sending updates (shutdown, tests). */
   stop() {
+    this.stopped = true;
     for (const room of this.rooms.values()) {
       if (room.cpuTimer != null)
         (this.opts.clearTimer ?? clearTimeout)(room.cpuTimer as ReturnType<typeof setTimeout>);
@@ -201,7 +205,7 @@ export class Rooms {
 
   disconnect(conn: Conn) {
     const room = conn.room;
-    if (!room) return;
+    if (!room || this.stopped) return;
     room.conns.delete(conn);
     conn.room = null;
     const pid = conn.pid;
@@ -243,6 +247,8 @@ export class Rooms {
         return this.editCpu(conn, room, msg.pid, msg.nick, msg.color);
       case 'removeCpu':
         return this.removeCpu(conn, room, msg.pid);
+      case 'saveSettings':
+        return this.saveSettings(conn, room, msg.settings);
       case 'act':
         return this.act(conn, room, msg.id, msg.action);
       case 'chat':
@@ -306,9 +312,26 @@ export class Rooms {
 
   private join(conn: Conn, room: Room, rawNick: string, color: Color) {
     if (conn.pid) return conn.send({ t: 'error', text: 'You already have a seat' });
-    if (room.game) return conn.send({ t: 'error', text: 'The game has already started' });
     const nick = cleanNick(rawNick);
     if (!nick) return conn.send({ t: 'error', text: 'Pick a nickname' });
+    // Rejoining by name (SPEC 4.6): the same nickname gets its seat back if nobody is using it.
+    const mine = room.seats.find((s) => !s.cpu && nickKey(s.nick) === nickKey(nick));
+    if (mine) {
+      if (this.isConnected(room, mine.pid))
+        return conn.send({ t: 'error', text: `${mine.nick}’s seat is in use` });
+      const token = randomBytes(24).toString('base64url');
+      mine.tokenHash = hashToken(token);
+      this.store.tx(() => {
+        this.store.saveRoom(room.code, room.seats, room.game?.row.id ?? null);
+        this.sys(room, `${mine.nick} is back`);
+      });
+      conn.pid = mine.pid;
+      conn.send({ t: 'seat', room: room.code, pid: mine.pid, token });
+      this.broadcast(room, this.takeSys(room));
+      return;
+    }
+    if (room.game) return conn.send({ t: 'error', text: 'The game has already started' });
+    if (color === 'gray') return conn.send({ t: 'error', text: 'Gray is for CPU players' });
     if (room.seats.length >= 4) return conn.send({ t: 'error', text: 'The table is full' });
     if (room.seats.some((s) => s.color === color))
       return conn.send({ t: 'error', text: 'That color is taken' });
@@ -328,6 +351,7 @@ export class Rooms {
     const seat = room.seats.find((s) => s.pid === conn.pid);
     if (!seat) return conn.send({ t: 'error', text: 'Take a seat first' });
     if (room.game) return conn.send({ t: 'error', text: 'The game has already started' });
+    if (color === 'gray' && !seat.cpu) return conn.send({ t: 'error', text: 'Gray is for CPU players' });
     if (room.seats.some((s) => s.color === color && s !== seat))
       return conn.send({ t: 'error', text: 'That color is taken' });
     seat.color = color;
@@ -413,6 +437,30 @@ export class Rooms {
     this.broadcast(room, this.takeSys(room));
   }
 
+  private saveSettings(conn: Conn, room: Room, settings: PlayerSettings) {
+    const seat = room.seats.find((s) => s.pid === conn.pid);
+    if (!seat) return conn.send({ t: 'error', text: 'Take a seat first' });
+    this.store.saveSettings(seat.nick, settings, this.now());
+    this.settings.set(nickKey(seat.nick), settings);
+    // Only you see your settings, on every device you're using.
+    for (const c of room.conns)
+      if (c.pid === seat.pid)
+        c.send({ t: 'update', room: this.roomInfo(room, c), game: this.viewOf(room, c), log: [] });
+  }
+
+  /** Settings by nickname, read from the database once. */
+  private settings = new Map<string, PlayerSettings>();
+  private settingsOf(nick: string): PlayerSettings {
+    const key = nickKey(nick);
+    let s = this.settings.get(key);
+    if (!s) {
+      const parsed = SettingsSchema.safeParse(this.store.getSettings(nick));
+      s = parsed.success ? parsed.data : {};
+      this.settings.set(key, s);
+    }
+    return s;
+  }
+
   /** If a CPU has something to do, make its move after a short pause. */
   private scheduleCpu(room: Room) {
     const g = room.game;
@@ -420,7 +468,10 @@ export class Rooms {
     if (!g.state.players.some((p) => p.cpu)) return;
     const next = this.cpuNext(room, true);
     if (!next) return;
-    const delay = this.opts.cpuDelay ? this.opts.cpuDelay() : 1000 + Math.random() * 1000;
+    // When the dice could still be handed back to a person, give them a moment to ask first.
+    const s = g.state;
+    const askable = !!s.back && !s.back.asked && !s.players[s.back.from]!.cpu && !!s.players[s.turn]!.cpu;
+    const delay = this.opts.cpuDelay ? this.opts.cpuDelay() : askable ? 4000 : 1000 + Math.random() * 1000;
     room.cpuTimer = (this.opts.setTimer ?? setTimeout)(() => {
       room.cpuTimer = undefined;
       this.cpuStep(room);
@@ -556,6 +607,8 @@ export class Rooms {
     });
     g.state = r.state;
     g.clientIds.add(id);
+    // A rule changed mid-game also becomes the room's option for the next game.
+    for (const e of r.events) if (e.k === 'rule') this.optionFromRule(room, e.rule, e.value);
     const items = r.events.map((e) => ({ seq: r.state.seq, at, e }));
     g.events.push(...items);
     if (g.events.length > LOG_EVENTS * 2) g.events = g.events.slice(-LOG_EVENTS);
@@ -567,6 +620,16 @@ export class Rooms {
       items.map((x): LogItem => ({ k: 'ev', ...x })),
     );
     return { ok: true };
+  }
+
+  private optionFromRule(room: Room, rule: string, value: boolean | number) {
+    const o = structuredClone(room.options);
+    if (rule === 'winVP') o.winVP = value as number;
+    else (o.houseRules as Record<string, unknown>)[rule] = rule === 'handBack' ? value : value || undefined;
+    const parsed = OptionsSchema.safeParse(JSON.parse(JSON.stringify(o)));
+    if (!parsed.success) return;
+    room.options = parsed.data;
+    this.store.saveOptions(room.code, room.options);
   }
 
   private chat(conn: Conn, room: Room, raw: string) {
@@ -703,6 +766,10 @@ export class Rooms {
       me: conn.pid,
       phase: room.game ? room.game.state.phase : 'lobby',
       options: room.options,
+      mySettings: (() => {
+        const seat = room.seats.find((s) => s.pid === conn.pid);
+        return seat ? this.settingsOf(seat.nick) : null;
+      })(),
       pendingReset: pr
         ? { pid: pr.pid, nick: room.seats.find((s) => s.pid === pr.pid)?.nick ?? '', expiresAt: pr.expiresAt }
         : null,
@@ -744,6 +811,8 @@ export function gameConfigFor(o: RoomOptions): Partial<GameConfig> {
   if (o.houseRules.no7FirstRound) hr.no7FirstRound = true;
   if (o.houseRules.bank3to1) hr.bank3to1 = true;
   if (o.houseRules.freeShipMoves && seafarers) hr.freeShipMoves = true;
+  if (o.houseRules.handBack !== false) hr.handBack = true;
+  if (o.houseRules.handBackSetup) hr.handBackSetup = true;
   if (o.ck) {
     if (o.houseRules.rerollBeforeAttack) hr.rerollBeforeAttack = true;
     if (o.houseRules.noDiscardBeforeAttack) hr.noDiscardBeforeAttack = true;
