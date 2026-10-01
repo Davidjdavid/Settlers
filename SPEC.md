@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestone 1 (base game) — draft, not yet agreed.** Items marked _(decide)_ are open questions.
+Status: **Milestone 1 (base game) — agreed, in progress.**
 
 ## Milestone 1: base game
 
@@ -13,14 +13,14 @@ Status: **Milestone 1 (base game) — draft, not yet agreed.** Items marked _(de
 - 2–4 players. Any seated player can start the game once at least 2 are seated.
 - **Rejoin:** your browser keeps a secret seat token. A refresh, a dropped connection or a server restart puts you back in your seat, in the middle of your turn if it was your turn. No turn timers. The game waits for a disconnected player.
 - Each seat shows whether that player is connected.
-- **Lost seat token** (cleared browser, new device): any connected player can hand a disconnected seat to a newcomer, after everyone at the table confirms. _(decide)_
-- **Starting a new game in the same room** needs every player to agree. A single click can't wipe a game in progress. _(decide; the prototype let any one player reset)_
+- **Lost seat token** (cleared browser, new device): any connected player can hand a disconnected seat to a newcomer. They have to confirm twice, and everyone at the table sees a warning saying who took which seat.
+- **Starting a new game in the same room:** any one player can do it, but they have to confirm twice, and everyone gets a warning first. The old game stays saved in the history.
 
 ### Saving
 - Every accepted move is saved before anyone sees its result.
 - A server restart loses nothing. Games carry on where they left off.
 - Each game keeps its full move history, so any game can be replayed exactly. That's for debugging, and later for a "replay this game" view.
-- Nightly backup of the database. _(decide: S3 or local copy)_
+- Nightly backup of the database (a local copy on the server to start; S3 later if wanted).
 
 ### Rules (matching the prototype)
 - **Board:** 19 hexes, randomised each game.
@@ -49,6 +49,7 @@ Status: **Milestone 1 (base game) — draft, not yet agreed.** Items marked _(de
   - With players, only after the roll and only involving the player whose turn it is. The current player posts an offer, others accept or decline, and the current player confirms with one of those who accepted.
   - Other players may post offers to the current player.
   - You can't give and ask for the same resource.
+  - Change from the prototype: offers can only be accepted or confirmed in the main phase, not while a knight's robber move or free roads are pending.
 - **Longest road:** 5 or more segments, broken by opponent buildings. The current holder keeps it on a tie. If the holder loses it and the new longest is tied, nobody holds it. Worth 2 VP.
 - **Largest army:** 3 or more knights played, and you must beat the current holder outright. Worth 2 VP.
 - **Winning:** 10 VP, checked only for the player whose turn it is. That includes the start of a turn, so a player who reaches 10 on someone else's turn wins when their own turn begins.
@@ -61,20 +62,19 @@ Status: **Milestone 1 (base game) — draft, not yet agreed.** Items marked _(de
 - **Stolen cards:** only the thief and the victim see which resource was taken. Everyone else sees "took 1 card".
 - **Bought dev cards:** only the buyer sees the type.
 - The random seed and deck order never leave the server.
-- Discards are public (who discarded what). _(decide)_
+- Discards are public: everyone sees exactly which cards were discarded, and it goes in the log.
 
 ### Showing what's happening (no reading required)
-The prototype made you read the log to follow the game. Milestone 1 replaces that with animation driven by the engine's events:
-- An animated **dice roll** that everyone sees, with the rolled number's hexes highlighted.
-- **Resource cards fly** from producing hexes to each player's hand.
-- Visible **card movement** for steals (a face-down card for onlookers), discards, trades, bank trades, monopoly and year of plenty.
-- Placing a piece animates it onto the board. Longest road and largest army move visibly between players.
+The prototype made you read the log to follow the game. Milestone 1 adds **simple** animations driven by the engine's events. The point is to show who got what, so nobody has to ask before trading:
+- **Dice:** the numbers flicker quickly, then stop on the roll. The hexes with that number are highlighted.
+- **Cards:** small resource-card images pop up over the producing hexes, then slide to the receiving player's panel. Discards, trades, bank trades, monopoly and year of plenty use the same effect. Steals show a face-down card to onlookers.
+- Nothing elaborate. Animations must never block input or delay the game state, and they're skipped when a client reconnects or catches up.
 - A clear **"whose turn / what's happening now"** banner.
 - The text log stays as a secondary history panel.
 - Table chat.
 
 ### Deployment
-- Runs on one EC2 Ubuntu server: Node behind Caddy, with automatic HTTPS. _(decide: domain or free subdomain)_
+- Runs at **https://betteronlinesettlers.com** (`www.` redirects to it) on one EC2 Ubuntu server: Node behind Caddy, with automatic HTTPS.
 - One-command deploy that runs the tests, ships, restarts, checks health, and rolls back on failure.
 
 ### Done means

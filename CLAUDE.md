@@ -22,17 +22,17 @@ Run all commands from the repo root.
 | What | Command |
 |---|---|
 | Install | `npm ci` |
-| Dev (server + client, hot reload) | `npm run dev` |
+| Dev (server + client, hot reload) | `npm run dev` _(not built yet)_ |
 | Typecheck | `npm run typecheck` |
 | Lint + format check | `npm run lint` |
 | Unit tests (all packages) | `npm test` |
 | Simulator (default 1,000 games) | `npm run sim` |
 | Simulator, more games / fixed seed | `npm run sim -- --games 20000 --seed 12345` |
 | Replay a failing game | `npm run sim -- --replay <seed>` |
-| End-to-end (3 browsers, real server) | `npm run test:e2e` |
+| End-to-end (3 browsers, real server) | `npm run test:e2e` _(not built yet)_ |
 | **Everything CI runs** | `npm run check` |
-| Build | `npm run build` |
-| Deploy | see `deploy/README.md` |
+| Build | `npm run build` _(not built yet)_ |
+| Deploy | see `deploy/README.md` _(not built yet)_ |
 
 ## Definition of done
 
@@ -41,6 +41,13 @@ Run all commands from the repo root.
 - For a bug: first reproduce it as a failing test, using a seed or move log where possible. Then fix it and show the test passing.
 - For a rule change: add a unit test for the rule, and add or update a simulator invariant if the rule affects a conserved quantity.
 - For UI changes: also check them in a browser (Playwright screenshot or the e2e test), not just by typechecking.
+
+## Engine tests
+
+- `packages/engine/test/simulate.ts` plays seeded random games. After every action it checks `checkInvariants` and `checkTransition`. On a sample of steps it also checks that every action from `legalActions` is accepted, that inputs aren't mutated, and that views and events leak nothing. At the end of each game it replays the whole game from the seed and compares the result.
+- A failing game prints its seed. `npm run sim -- --replay <seed>` reruns it with every check on every step.
+- Test helpers (`test/helpers.ts`) can rig the dice (`rigDice`), set hands, and place pieces directly, for exact rule tests.
+- When you add a check, plant the bug it should catch and confirm it fails before trusting it.
 
 ## Engine conventions
 

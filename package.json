@@ -1,0 +1,26 @@
+{
+  "name": "settlers",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p packages/engine",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "sim": "tsx packages/engine/scripts/sim.ts",
+    "check": "npm run typecheck && npm run lint && npm test && npm run sim"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
