@@ -1558,3 +1558,31 @@ body.noroom .dock {
   display: flex;
   gap: 6px;
 }
+
+/* CPU seats in the lobby: name and remove on top, CPU tag and colour below. */
+.cpuseat {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.cpuseat .cpunick {
+  flex: 1 1 0;
+  width: auto;
+  padding: 5px 8px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.cpuseat .cpurow {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 18px;
+}
+.cpucolor {
+  background: var(--abyss);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 3px 4px;
+  font-size: 13px;
+}

@@ -79,7 +79,7 @@ function randomDiscard(s: GameState, p: Seat, rng: RngState): Action {
   return { type: 'discard', cards: randomCards(s, p, mustDiscard(s, p), rng) };
 }
 
-function randomOffer(s: GameState, p: Seat, rng: RngState): Action | null {
+export function randomOffer(s: GameState, p: Seat, rng: RngState): Action | null {
   const res = s.players[p]!.res;
   const haves = cardKinds(s).filter((r) => res[r]! > 0);
   if (!haves.length) return null;
@@ -299,7 +299,7 @@ function randomCandidates(s: GameState, rng: RngState): [Seat, Action][] {
 }
 
 /** A copy of `s` with everything `seat` cannot see changed: other hands, dev cards, deck order. */
-function perturbHidden(s: GameState, seat: Seat, rng: RngState, decks = true): GameState {
+export function perturbHidden(s: GameState, seat: Seat, rng: RngState, decks = true): GameState {
   const t = cloneJson(s);
   if (t.sea) {
     // Fog stays secret: a different stack of the same size must look the same.

@@ -512,10 +512,12 @@ export function Game({
           ],
         };
   } else {
+    // CPU players never trade with people (docs/bot.md), so don't offer.
+    const tradable = me != null && !v.players[v.turn]!.cpu;
     pm = {
       title: `${cur}’s turn`,
-      sub: me != null ? `${cur} rolled ${sum}. You can offer them a trade.` : `${cur} rolled ${sum}.`,
-      buttons: me != null ? [{ label: 'Offer a trade', on: () => setSheet({ k: 'trade' }) }] : [],
+      sub: tradable ? `${cur} rolled ${sum}. You can offer them a trade.` : `${cur} rolled ${sum}.`,
+      buttons: tradable ? [{ label: 'Offer a trade', on: () => setSheet({ k: 'trade' }) }] : [],
     };
   }
 
@@ -700,6 +702,7 @@ export function Game({
                 <span className="nm">
                   <span>{p.nick}</span>
                   {i === me ? <span className="you">you</span> : null}
+                  {p.cpu ? <span className="you">CPU</span> : null}
                   {v.discard?.[i] != null ? <span className="tag wait">discarding</span> : null}
                   <span
                     className={`online${connected(i) ? '' : ' away'}`}

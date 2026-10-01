@@ -25,6 +25,8 @@ export class TestServer {
   constructor(
     readonly port: number,
     readonly passphrase: string,
+    /** Extra environment for the server (e.g. CPU_DELAY_MS). */
+    readonly env: Record<string, string> = {},
   ) {}
 
   get url() {
@@ -40,6 +42,7 @@ export class TestServer {
         STATIC_DIR: join(ROOT, 'packages/client/dist'),
         SITE_PASSPHRASE: this.passphrase,
         NODE_ENV: 'test',
+        ...this.env,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

@@ -242,6 +242,7 @@ export function startServer(cfg: ServerConfig): Promise<RunningServer> {
           new Promise<void>((done) => {
             clearInterval(heartbeat);
             for (const ws of sockets.keys()) ws.terminate();
+            rooms.stop();
             wss.close();
             http.close(() => {
               store.close();

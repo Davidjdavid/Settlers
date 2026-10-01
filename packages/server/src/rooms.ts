@@ -9,7 +9,8 @@ import {
   ENGINE_VERSION,
   SCENARIOS,
   type GameConfig,
-  type HouseRules, applyAction, checkInvariants, eventsFor, newGame, viewFor,
+  type HouseRules, applyAction, checkInvariants, cpuMove, eventsFor, newCpuMemo, newGame, seedRng, viewFor,
+  COLORS, type CpuMemo,
   type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView,
 } from '@settlers/engine'; // prettier-ignore
 import {
@@ -46,6 +47,10 @@ export interface Room {
   pendingReset: { pid: string; expiresAt: number } | null;
   conns: Set<Conn>;
   options: RoomOptions;
+  /** The pending CPU move, if any. */
+  cpuTimer?: unknown;
+  /** What each CPU remembers within a turn, by pid. */
+  cpuMemo?: Map<string, CpuMemo>;
 }
 
 export interface RoomsOptions {
@@ -55,6 +60,11 @@ export interface RoomsOptions {
   /** Override game config (tests only). */
   gameConfig?: { winVP?: number };
   log?: (msg: string) => void;
+  /** How long a CPU waits before each move, in ms (default 1–2 s). */
+  cpuDelay?: () => number;
+  /** Timers for CPU moves (tests use a fake clock). */
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (t: unknown) => void;
 }
 
 const CODE_ALPHABET = 'ACDEFGHJKMNPQRTUVWXY34679';
@@ -135,6 +145,16 @@ export class Rooms {
     this.snapshotEvery = opts.snapshotEvery ?? 25;
     this.log = opts.log ?? ((m) => console.log(m));
     this.loadAll();
+    for (const room of this.rooms.values()) this.scheduleCpu(room);
+  }
+
+  /** Cancel pending CPU moves (shutdown, tests). */
+  stop() {
+    for (const room of this.rooms.values()) {
+      if (room.cpuTimer != null)
+        (this.opts.clearTimer ?? clearTimeout)(room.cpuTimer as ReturnType<typeof setTimeout>);
+      room.cpuTimer = undefined;
+    }
   }
 
   get size() {
@@ -190,6 +210,7 @@ export class Rooms {
   }
 
   private isConnected(room: Room, pid: string): boolean {
+    if (room.seats.some((s) => s.pid === pid && s.cpu)) return true; // CPUs are always here
     for (const c of room.conns) if (c.pid === pid) return true;
     return false;
   }
@@ -216,6 +237,12 @@ export class Rooms {
         return this.start(conn, room);
       case 'setOptions':
         return this.setOptions(conn, room, msg.options);
+      case 'addCpu':
+        return this.addCpu(conn, room);
+      case 'editCpu':
+        return this.editCpu(conn, room, msg.pid, msg.nick, msg.color);
+      case 'removeCpu':
+        return this.removeCpu(conn, room, msg.pid);
       case 'act':
         return this.act(conn, room, msg.id, msg.action);
       case 'chat':
@@ -321,6 +348,115 @@ export class Rooms {
     this.broadcast(room, this.takeSys(room));
   }
 
+  /* ---------- CPU seats (docs/bot.md) ---------- */
+
+  private addCpu(conn: Conn, room: Room) {
+    if (!room.seats.some((s) => s.pid === conn.pid))
+      return conn.send({ t: 'error', text: 'Take a seat first' });
+    if (room.game) return conn.send({ t: 'error', text: 'The game has already started' });
+    if (room.seats.length >= 4) return conn.send({ t: 'error', text: 'The table is full' });
+    const taken = new Set(room.seats.map((s) => s.color));
+    const color = taken.has('gray') ? COLORS.find((c) => !taken.has(c))! : 'gray';
+    let n = 1;
+    while (room.seats.some((s) => s.nick === `CPU ${n}`)) n++;
+    const seat: SeatRow = {
+      pid: `cpu-${randomBytes(6).toString('base64url')}`,
+      tokenHash: 'cpu',
+      nick: `CPU ${n}`,
+      color,
+      cpu: true,
+    };
+    room.seats.push(seat);
+    this.store.tx(() => {
+      this.store.saveRoom(room.code, room.seats, null);
+      this.sys(room, `${seat.nick} (CPU) sat down`);
+    });
+    this.broadcast(room, this.takeSys(room));
+  }
+
+  private cpuSeat(conn: Conn, room: Room, pid: string): SeatRow | null {
+    const seat = room.seats.find((s) => s.pid === pid && s.cpu);
+    if (!seat) {
+      conn.send({ t: 'error', text: 'That isn’t a CPU player' });
+      return null;
+    }
+    if (room.game) {
+      conn.send({ t: 'error', text: 'The game has already started' });
+      return null;
+    }
+    return seat;
+  }
+
+  private editCpu(conn: Conn, room: Room, pid: string, rawNick?: string, color?: Color) {
+    const seat = this.cpuSeat(conn, room, pid);
+    if (!seat) return;
+    if (color && room.seats.some((s) => s.color === color && s !== seat))
+      return conn.send({ t: 'error', text: 'That color is taken' });
+    if (rawNick != null) {
+      const nick = cleanNick(rawNick);
+      if (!nick) return conn.send({ t: 'error', text: 'Pick a name' });
+      seat.nick = nick;
+    }
+    if (color) seat.color = color;
+    this.store.saveRoom(room.code, room.seats, null);
+    this.broadcast(room, []);
+  }
+
+  private removeCpu(conn: Conn, room: Room, pid: string) {
+    const seat = this.cpuSeat(conn, room, pid);
+    if (!seat) return;
+    room.seats = room.seats.filter((s) => s !== seat);
+    this.store.tx(() => {
+      this.store.saveRoom(room.code, room.seats, null);
+      this.sys(room, `${seat.nick} (CPU) left`);
+    });
+    this.broadcast(room, this.takeSys(room));
+  }
+
+  /** If a CPU has something to do, make its move after a short pause. */
+  private scheduleCpu(room: Room) {
+    const g = room.game;
+    if (!g || g.state.phase !== 'play' || room.cpuTimer != null) return;
+    if (!g.state.players.some((p) => p.cpu)) return;
+    const next = this.cpuNext(room, true);
+    if (!next) return;
+    const delay = this.opts.cpuDelay ? this.opts.cpuDelay() : 1000 + Math.random() * 1000;
+    room.cpuTimer = (this.opts.setTimer ?? setTimeout)(() => {
+      room.cpuTimer = undefined;
+      this.cpuStep(room);
+    }, delay);
+  }
+
+  /** The next CPU move: [seat, action]. With `peek`, its memory is left untouched. */
+  private cpuNext(room: Room, peek: boolean): [number, Action] | null {
+    const g = room.game!;
+    const memos = (room.cpuMemo ??= new Map());
+    for (let seat = 0; seat < g.state.players.length; seat++) {
+      const pl = g.state.players[seat]!;
+      if (!pl.cpu) continue;
+      if (!memos.has(pl.pid)) memos.set(pl.pid, newCpuMemo());
+      const memo = peek ? { ...memos.get(pl.pid)! } : memos.get(pl.pid)!;
+      const a = cpuMove(viewFor(g.state, seat), seedRng(`${g.row.id}:${g.state.seq}:${seat}`), memo);
+      if (a) return [seat, a];
+    }
+    return null;
+  }
+
+  private cpuStep(room: Room) {
+    if (!room.game || room.game.state.phase !== 'play') return;
+    const next = this.cpuNext(room, false);
+    if (!next) return;
+    const [seat, action] = next;
+    const pl = room.game.state.players[seat]!;
+    const r = this.commit(room, seat, pl.pid, `cpu:${room.game.state.seq}:${seat}`, action);
+    // A rejected CPU move is a bug in the CPU; stop rather than retry forever.
+    if (!r.ok)
+      return this.log(
+        `room ${room.code}: CPU ${pl.nick} move rejected: ${JSON.stringify(action)} -> ${r.error}`,
+      );
+    this.scheduleCpu(room);
+  }
+
   private setOptions(conn: Conn, room: Room, options: RoomOptions) {
     const seat = room.seats.find((s) => s.pid === conn.pid);
     if (!seat) return conn.send({ t: 'error', text: 'Take a seat first' });
@@ -335,13 +471,20 @@ export class Rooms {
     if (!room.seats.some((s) => s.pid === conn.pid))
       return conn.send({ t: 'error', text: 'Take a seat first' });
     if (room.seats.length < 2) return conn.send({ t: 'error', text: 'You need at least 2 players' });
+    if (room.seats.every((s) => s.cpu))
+      return conn.send({ t: 'error', text: 'At least one person must play' });
     const map = SCENARIOS[room.options.scenario]!;
     const allowed = playersFor(room.options);
     if (!allowed.includes(room.seats.length)) {
       const name = room.options.ck ? `${map.name} with Cities & Knights` : map.name;
       return conn.send({ t: 'error', text: `${name} needs ${allowed.join(' or ')} players` });
     }
-    const players: NewPlayer[] = room.seats.map((s) => ({ pid: s.pid, color: s.color, nick: s.nick }));
+    const players: NewPlayer[] = room.seats.map((s) => ({
+      pid: s.pid,
+      color: s.color,
+      nick: s.nick,
+      ...(s.cpu ? { cpu: true } : {}),
+    }));
     const row: GameRow = {
       id: randomUUID(),
       roomCode: room.code,
@@ -366,8 +509,10 @@ export class Rooms {
     });
     room.game = { row, state, clientIds: new Set(), events: [] };
     room.pendingReset = null;
+    room.cpuMemo = new Map();
     this.log(`room ${room.code} game ${row.id} started with ${players.length} players`);
     this.broadcast(room, this.takeSys(room));
+    this.scheduleCpu(room);
   }
 
   private act(conn: Conn, room: Room, id: string, action: Action) {
@@ -376,15 +521,30 @@ export class Rooms {
     if (g.clientIds.has(id)) return conn.send({ t: 'ack', id, ok: true }); // a resend of a move we already applied
     const seat = g.state.players.findIndex((p) => p.pid === conn.pid);
     if (seat < 0) return conn.send({ t: 'ack', id, ok: false, error: 'You are watching this game' });
-    const r = applyAction(g.state, seat, action);
+    const r = this.commit(room, seat, conn.pid!, id, action);
     if (!r.ok) return conn.send({ t: 'ack', id, ok: false, error: r.error });
+    conn.send({ t: 'ack', id, ok: true });
+    this.scheduleCpu(room);
+  }
+
+  /** Apply, save, then broadcast one move. */
+  private commit(
+    room: Room,
+    seat: number,
+    pid: string,
+    id: string,
+    action: Action,
+  ): { ok: boolean; error?: string } {
+    const g = room.game!;
+    const r = applyAction(g.state, seat, action);
+    if (!r.ok) return { ok: false, error: r.error };
     const at = this.now();
     const over = r.state.phase === 'over';
     // Persist first. If this throws, nothing changes in memory and nobody hears about the move.
     this.store.tx(() => {
       this.store.insertAction(g.row.id, {
         seq: r.state.seq,
-        pid: conn.pid!,
+        pid,
         seat,
         clientId: id,
         action,
@@ -406,7 +566,7 @@ export class Rooms {
       room,
       items.map((x): LogItem => ({ k: 'ev', ...x })),
     );
-    conn.send({ t: 'ack', id, ok: true });
+    return { ok: true };
   }
 
   private chat(conn: Conn, room: Room, raw: string) {
@@ -481,6 +641,7 @@ export class Rooms {
     if (conn.pid) return conn.send({ t: 'error', text: 'You already have a seat' });
     const seat = room.seats[index];
     if (!seat) return conn.send({ t: 'error', text: 'No such seat' });
+    if (seat.cpu) return conn.send({ t: 'error', text: 'That’s a CPU player' });
     if (this.isConnected(room, seat.pid))
       return conn.send({ t: 'error', text: 'That player is still connected' });
     const token = randomBytes(24).toString('base64url');
@@ -537,6 +698,7 @@ export class Rooms {
         nick: s.nick,
         color: s.color,
         connected: this.isConnected(room, s.pid),
+        ...(s.cpu ? { cpu: true } : {}),
       })),
       me: conn.pid,
       phase: room.game ? room.game.state.phase : 'lobby',

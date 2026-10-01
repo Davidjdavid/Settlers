@@ -25,6 +25,8 @@ export interface PublicPlayer {
   publicVP: number;
   /** Only filled in once the game is over. */
   vpCards: number | null;
+  /** A CPU player. */
+  cpu?: true;
 }
 
 export interface PrivateHand {
@@ -113,6 +115,7 @@ export function viewFor(s: GameState, seat: Seat | null): PlayerView {
       roadLen: s.roadLens[i] ?? 0,
       publicVP: publicVP(s, i),
       vpCards: over ? pl.vpCards : null,
+      ...(pl.cpu ? { cpu: true as const } : {}),
     })),
     hand: mine
       ? { res: mine.res, dev: mine.dev, fresh: mine.fresh, vpCards: mine.vpCards, totalVP: totalVP(s, me!) }
@@ -207,6 +210,7 @@ export function stateFromView(v: PlayerView): GameState {
         knights: p.knights,
         played: p.played,
         pieces: p.pieces,
+        ...(p.cpu ? { cpu: true as const } : {}),
       };
     }),
     bank: v.bank,

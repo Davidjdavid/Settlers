@@ -57,7 +57,7 @@ export type EdgePiece = 'road' | 'ship';
 export const MODULES = ['seafarers', 'citiesKnights'] as const;
 export type ModuleId = (typeof MODULES)[number];
 
-export const COLORS = ['red', 'blue', 'white', 'purple', 'orange'] as const;
+export const COLORS = ['red', 'blue', 'white', 'purple', 'orange', 'gray'] as const;
 export type Color = (typeof COLORS)[number];
 
 /** One hex on the board. `n` is the number token; 0 means none (desert, sea). */
@@ -103,6 +103,8 @@ export interface Player {
   played: { road: number; plenty: number; mono: number };
   /** Pieces left in supply. `ship` only exists with Seafarers. */
   pieces: { road: number; settlement: number; city: number; ship?: number };
+  /** A CPU player (docs/bot.md). Public. Absent for people. */
+  cpu?: true;
 }
 
 /**

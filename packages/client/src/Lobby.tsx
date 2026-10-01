@@ -1,6 +1,6 @@
 /* Login, home and lobby screens. */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { COLORS, SCENARIOS, type Color } from '@settlers/engine';
 import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
 import { BRAND_SVG, PCOL, PNAME } from './art';
@@ -130,14 +130,18 @@ export function Lobby({ room }: { room: RoomInfo }) {
           </button>
         </div>
         <div className="seats">
-          {room.seats.map((s) => (
-            <div className="seat" key={s.pid}>
-              <span className="dot" style={{ background: PCOL[s.color] }} />
-              <span className="nm">{s.nick}</span>
-              {s.pid === room.me ? <span className="you">you</span> : null}
-              <span className={`online${s.connected ? '' : ' away'}`} />
-            </div>
-          ))}
+          {room.seats.map((s) =>
+            s.cpu ? (
+              <CpuSeat key={s.pid} seat={s} taken={taken} />
+            ) : (
+              <div className="seat" key={s.pid}>
+                <span className="dot" style={{ background: PCOL[s.color] }} />
+                <span className="nm">{s.nick}</span>
+                {s.pid === room.me ? <span className="you">you</span> : null}
+                <span className={`online${s.connected ? '' : ' away'}`} />
+              </div>
+            ),
+          )}
           {Array.from({ length: Math.max(0, 4 - room.seats.length) }, (_, i) => (
             <div className="seat open" key={`open${i}`}>
               Open seat
@@ -163,6 +167,16 @@ export function Lobby({ room }: { room: RoomInfo }) {
               </div>
             </div>
             <Options room={room} editable />
+            {room.seats.length < 4 ? (
+              <button
+                className="btn small"
+                onClick={() => client.addCpu()}
+                data-testid="add-cpu"
+                style={{ marginBottom: 12 }}
+              >
+                Add CPU player
+              </button>
+            ) : null}
             <div className="row">
               <button
                 className="btn primary"
@@ -226,6 +240,63 @@ export function Lobby({ room }: { room: RoomInfo }) {
           <p className="hint">The table is full.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+/** A CPU's seat: anyone in the lobby can rename it, recolour it or remove it. */
+function CpuSeat({ seat, taken }: { seat: RoomInfo['seats'][number]; taken: Set<Color> }) {
+  const [nick, setNick] = useState(seat.nick);
+  const [editing, setEditing] = useState(false);
+  // Someone else renamed it: show the new name unless you're typing.
+  useEffect(() => {
+    if (!editing) setNick(seat.nick);
+  }, [seat.nick, editing]);
+  const save = () => {
+    const n = nick.trim();
+    if (n && n !== seat.nick) client.editCpu(seat.pid, { nick: n });
+    else setNick(seat.nick);
+  };
+  return (
+    <div className="seat cpuseat" data-testid="cpu-seat">
+      <span className="dot" style={{ background: PCOL[seat.color] }} />
+      <input
+        className="text cpunick"
+        value={nick}
+        maxLength={18}
+        aria-label="CPU name"
+        data-testid="cpu-nick"
+        onChange={(e) => setNick(e.target.value)}
+        onFocus={() => setEditing(true)}
+        onBlur={() => {
+          setEditing(false);
+          save();
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      />
+      <button
+        className="btn small ghost"
+        aria-label={`Remove ${seat.nick}`}
+        onClick={() => client.removeCpu(seat.pid)}
+      >
+        ✕
+      </button>
+      <span className="cpurow">
+        <span className="you">CPU</span>
+        <select
+          className="cpucolor"
+          aria-label="CPU color"
+          data-testid="cpu-color"
+          value={seat.color}
+          onChange={(e) => client.editCpu(seat.pid, { color: e.target.value as Color })}
+        >
+          {COLORS.filter((c) => c === seat.color || !taken.has(c)).map((c) => (
+            <option key={c} value={c}>
+              {PNAME[c]}
+            </option>
+          ))}
+        </select>
+      </span>
     </div>
   );
 }

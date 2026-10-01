@@ -30,6 +30,7 @@ export interface NewPlayer {
   pid: string;
   color: Color;
   nick: string;
+  cpu?: boolean;
 }
 
 const zeroDev = (): DevCounts => ({ knight: 0, road: 0, plenty: 0, mono: 0 });
@@ -78,6 +79,7 @@ export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameCo
       knights: 0,
       played: { road: 0, plenty: 0, mono: 0 },
       pieces: { ...PIECES },
+      ...(x.cpu ? { cpu: true as const } : {}),
     })),
     bank: { wood: BANK_EACH, brick: BANK_EACH, sheep: BANK_EACH, wheat: BANK_EACH, ore: BANK_EACH },
     deck: { ...DEV_COUNTS },

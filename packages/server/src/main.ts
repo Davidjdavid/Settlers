@@ -21,6 +21,8 @@ const server = await startServer({
   staticDir: env.STATIC_DIR,
   secureCookie: env.NODE_ENV === 'production',
   version: env.APP_VERSION ?? 'dev',
+  // CPU_DELAY_MS speeds CPU players up for tests; normally they take 1–2 seconds a move.
+  ...(env.CPU_DELAY_MS ? { rooms: { cpuDelay: () => Number(env.CPU_DELAY_MS) } } : {}),
 });
 
 let stopping = false;

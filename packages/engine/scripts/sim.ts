@@ -1,16 +1,20 @@
 /*
- * npm run sim -- [--games N] [--scenario classic|heading-for-new-shores|fog-test|all] [--seed S]
+ * npm run sim -- [--games N] [--scenario classic|heading-for-new-shores|fog-test|ck|ck-sea|cpu-*|all] [--seed S]
  *                [--replay SEED] [--workers N]
  *
  * Plays N random games per scenario (players and house rules vary by game) across worker
  * threads, and exits non-zero on any failure. Every game's seed encodes how it was set up, so
  * `--replay <seed>` reruns exactly that game with every check on every step.
+ *
+ * The cpu-* scenarios seat 1 or more CPU players (docs/bot.md) against the test bot, and check
+ * every CPU move against the CPU's rules.
  */
 
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import fogTest from '../test/fixtures/fog-test.json';
 import { SCENARIOS, type HouseRules, type MapData, type ModuleId } from '../src/index';
+import { cpuGame } from '../test/cpuSim';
 import { simulate, type SimResult } from '../test/simulate';
 
 interface Scenario {
@@ -22,6 +26,8 @@ interface Scenario {
   maxTurns?: number;
   /** Points to win in odd-numbered games, to keep the run quick (even ones use winVP). */
   quickVP?: number;
+  /** CPU players against the test bot. */
+  cpu?: boolean;
   /** House-rule mixes to cycle through (letters as in parseSeed). */
   rules: string[];
 }
@@ -53,12 +59,24 @@ const SIMS: Record<string, Scenario> = {
     rules: ['r', 'd', 'w', 'f', 'nbf', 'rdw'],
   },
 };
+for (const k of ['classic', 'heading-for-new-shores', 'ck', 'ck-sea'] as const) {
+  const base = SIMS[k]!;
+  SIMS[`cpu-${k}`] = {
+    ...base,
+    cpu: true,
+    players: base.players.filter((n) => n >= (k === 'classic' ? 2 : 3)),
+  };
+}
 const DEFAULT_GAMES: Record<string, number> = {
   classic: 1000,
   'heading-for-new-shores': 1000,
   'fog-test': 200,
   ck: 1000,
   'ck-sea': 1000,
+  'cpu-classic': 250,
+  'cpu-heading-for-new-shores': 250,
+  'cpu-ck': 250,
+  'cpu-ck-sea': 250,
 };
 
 /**
@@ -86,11 +104,23 @@ function parseSeed(seed: string): { scenario: string; n: number; houseRules: Hou
   return { scenario, n: Number(np.replace('p', '')), houseRules };
 }
 
-function run(seed: string, deepCheckRate?: number): SimResult {
+function run(seed: string, deepCheckRate?: number): SimResult & { cpuWon?: boolean } {
   const { scenario, n, houseRules } = parseSeed(seed);
   const sc = SIMS[scenario]!;
   const index = Number(seed.split('.')[2]);
   const winVP = sc.quickVP && index % 2 ? sc.quickVP : sc.winVP;
+  if (sc.cpu) {
+    // 1 to n-1 CPUs; the rest are test bots.
+    const r = cpuGame(seed, n, 1 + (index % (n - 1)), {
+      ...(sc.map ? { map: sc.map } : {}),
+      ...(sc.modules ? { modules: sc.modules } : {}),
+      ...(winVP ? { winVP } : {}),
+      maxTurns: sc.maxTurns ?? 3000,
+      houseRules,
+      ...(deepCheckRate != null ? { hiddenRate: deepCheckRate } : {}),
+    });
+    return { ...r, winner: null, log: [] };
+  }
   return simulate(seed, n, {
     ...(sc.map ? { map: sc.map } : {}),
     ...(sc.modules ? { modules: sc.modules } : {}),
@@ -101,7 +131,14 @@ function run(seed: string, deepCheckRate?: number): SimResult {
   });
 }
 
-type Summary = { seed: string; ok: boolean; turns: number; actions: number; errors: string[] };
+type Summary = {
+  seed: string;
+  ok: boolean;
+  turns: number;
+  actions: number;
+  errors: string[];
+  cpuWon?: boolean;
+};
 
 if (!isMainThread) {
   for (const seed of workerData.seeds as string[]) {
@@ -112,6 +149,7 @@ if (!isMainThread) {
       turns: r.turns,
       actions: r.actions,
       errors: r.errors.slice(0, 5),
+      ...(r.cpuWon != null ? { cpuWon: r.cpuWon } : {}),
     } satisfies Summary);
   }
 } else {
@@ -156,7 +194,8 @@ if (!isMainThread) {
     const avg = (f: (r: Summary) => number) =>
       (rs.reduce((a, r) => a + f(r), 0) / Math.max(1, rs.length)).toFixed(0);
     console.log(
-      `${sc}: ${rs.length} games, ${bad.length} failed, avg ${avg((r) => r.turns)} turns / ${avg((r) => r.actions)} actions`,
+      `${sc}: ${rs.length} games, ${bad.length} failed, avg ${avg((r) => r.turns)} turns / ${avg((r) => r.actions)} actions` +
+        (SIMS[sc]?.cpu ? `, CPUs won ${rs.filter((r) => r.cpuWon).length}` : ''),
     );
     for (const r of bad.slice(0, 10)) {
       console.error(

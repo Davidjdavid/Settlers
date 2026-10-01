@@ -11,6 +11,8 @@ export interface SeatRow {
   tokenHash: string;
   nick: string;
   color: Color;
+  /** A CPU player (docs/bot.md); its token hash matches nothing. */
+  cpu?: true;
 }
 
 export interface RoomRow {

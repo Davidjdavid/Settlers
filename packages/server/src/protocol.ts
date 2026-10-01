@@ -14,7 +14,7 @@ const PROGRESS = z.enum([
   'alchemist', 'crane', 'engineer', 'inventor', 'irrigation', 'medicine', 'mining', 'printer', 'roadBuilding', 'smith',
   'bishop', 'constitution', 'deserter', 'diplomat', 'intrigue', 'saboteur', 'spy', 'warlord', 'wedding',
 ]); // prettier-ignore
-const COLOR = z.enum(['red', 'blue', 'white', 'purple', 'orange']);
+const COLOR = z.enum(['red', 'blue', 'white', 'purple', 'orange', 'gray']);
 const count = z.number().int().min(0).max(95);
 /** Card counts. Commodities only mean something in Cities & Knights; the engine checks. */
 const cards = z.strictObject({
@@ -117,6 +117,15 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('setColor'), color: COLOR }),
   z.strictObject({ t: z.literal('leave') }),
   z.strictObject({ t: z.literal('start') }),
+  /** Lobby only: add a CPU player (any seated player), rename/recolour or remove one (anyone). */
+  z.strictObject({ t: z.literal('addCpu') }),
+  z.strictObject({
+    t: z.literal('editCpu'),
+    pid: z.string().max(40),
+    nick: nick.optional(),
+    color: COLOR.optional(),
+  }),
+  z.strictObject({ t: z.literal('removeCpu'), pid: z.string().max(40) }),
   /** Lobby only: scenario, points to win and house rules for the next game. */
   z.strictObject({ t: z.literal('setOptions'), options: OptionsSchema }),
   /** `id` makes resends after a dropped connection safe: an id is applied at most once. */
@@ -136,6 +145,8 @@ export interface SeatInfo {
   nick: string;
   color: Color;
   connected: boolean;
+  /** A CPU player. */
+  cpu?: boolean;
 }
 
 export interface RoomInfo {

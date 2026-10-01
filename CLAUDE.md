@@ -26,8 +26,8 @@ Run all commands from the repo root.
 | Typecheck | `npm run typecheck` |
 | Lint + format check | `npm run lint` |
 | Unit tests (all packages) | `npm test` |
-| Simulator (1,000 each of classic, Heading for New Shores, C&K and C&K + Seafarers, plus 200 fog-test games, on all CPU cores; ~11 min) | `npm run sim` |
-| Simulator, one scenario / more games / fixed seed | `npm run sim -- --scenario ck --games 5000 --seed x` (scenarios: `classic`, `heading-for-new-shores`, `fog-test`, `ck`, `ck-sea`) |
+| Simulator (1,000 each of classic, Heading for New Shores, C&K and C&K + Seafarers, 200 fog-test games, and 1,000 games with CPU players; on all CPU cores; ~12 min) | `npm run sim` |
+| Simulator, one scenario / more games / fixed seed | `npm run sim -- --scenario ck --games 5000 --seed x` (scenarios: `classic`, `heading-for-new-shores`, `fog-test`, `ck`, `ck-sea`, and `cpu-` + any of the first four but fog-test) |
 | Replay a failing game (the seed encodes scenario, players and house rules) | `npm run sim -- --replay <seed>` |
 | End-to-end (3 browsers, real server build: classic, Seafarers, Cities & Knights) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
 | **Everything CI runs** | `npm run check` |
@@ -53,7 +53,8 @@ Run all commands from the repo root.
 
 ## Server and client tests
 
-- `packages/server/test/rooms.test.ts` drives `Rooms` with fake connections: full games through the server, restart and replay, hidden info in every message sent, failed saves, reset and seat takeover rules. `options.test.ts` covers room options and a full Seafarers game through the server.
+- `packages/server/test/rooms.test.ts` drives `Rooms` with fake connections: full games through the server, restart and replay, hidden info in every message sent, failed saves, reset and seat takeover rules. `options.test.ts` covers room options and a full Seafarers game through the server. `cpu.test.ts` covers CPU seats in the lobby and a full game with CPUs on a fake clock, including a restart mid-pause.
+- `e2e/cpu.spec.ts`: two people and a CPU play a full game; the CPU is added, renamed and recoloured in the lobby and declines a trade offered through the UI (the server runs with `CPU_DELAY_MS` to speed it up).
 - `e2e/cities-knights.spec.ts` plays a full C&K game: C&K switched on in the lobby, knights built and activated, improvements bought and owed choices answered through the UI.
 - `e2e/seafarers.spec.ts` plays a full Seafarers game in 3 browsers: options picked in the lobby, a setup ship placed by clicking, gold picked through the gold sheet, a reload mid-game. Shared steps are in `e2e/table.ts`.
 - `e2e/full-game.spec.ts` runs the production build (`packages/server/dist/server.mjs` serving `packages/client/dist`). Three browsers log in and set up a room by clicking. They play setup, a roll and an end turn through the UI, and the rest with `window.__settlers.botStep()`, the engine bot playing from that browser's own view. Mid-game it reloads a page and kills the server with SIGKILL, then checks every WebSocket frame for leaks.
@@ -71,7 +72,8 @@ Run all commands from the repo root.
 - Rules for an expansion are written down first in `docs/rules/<expansion>.md`, agreed, then implemented exactly; decisions are recorded there.
 - Hands hold resources plus, with C&K, commodities in the same `res` record; iterate `cardKinds(s)`, not `RES`, when a rule is about cards in hand.
 - `test/citiesKnights.test.ts` covers each C&K rule and progress card; `checkInvariants(s, prev)` reuses route lengths when no piece moved (the simulator passes `prev`).
-- The CPU player (later) must never target a human player.
+- **The CPU player** (`src/cpu.ts`, rules in `docs/bot.md`) decides from its own view only: `cpuMove(view, rng, memo)`. Never let it see more. Its rules about humans (no player trades, robber tiers, no nasty cards, hand limit) are checked on every CPU move by `test/cpuSim.ts`, and exactly by `test/cpu.test.ts`. The server makes its moves (`Rooms.scheduleCpu`) after a 1–2 s pause (`CPU_DELAY_MS` overrides it).
+- `src/bot.ts` is the test bot, not the CPU player.
 
 ## Server conventions
 

@@ -27,6 +27,7 @@ export const PCOL: Record<Color, string> = {
   white: '#f1ede4',
   purple: '#a970ff',
   orange: '#f28a2e',
+  gray: '#8b969c',
 };
 export const PNAME: Record<Color, string> = {
   red: 'Red',
@@ -34,6 +35,7 @@ export const PNAME: Record<Color, string> = {
   white: 'White',
   purple: 'Purple',
   orange: 'Orange',
+  gray: 'Gray',
 };
 export const DEV_LABEL: Record<DevType, string> = {
   knight: 'Knight',

@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1 (base game) and 2 (Seafarers: Heading for New Shores) done and deployed. Milestone 3 (Cities & Knights) — see below.**
+Status: **Milestones 1 (base game) and 2 (Seafarers: Heading for New Shores) done and deployed. Milestone 3 (Cities & Knights) done and deployed. CPU player — see below.**
 
 ## Milestone 1: base game
 
@@ -115,10 +115,18 @@ The rules are written down, with your decisions, in **docs/rules/cities-and-knig
 - **House rules** (C&K only, each off by default): re-roll 7s, or no discards on a 7, until the barbarians have attacked; barbarians and progress cards wait N rounds.
 - **Done means:** 1,000+ random C&K games and 1,000+ C&K + Seafarers games in the simulator with invariants for commodity and card conservation, deck counts, the barbarian track and knight limits; all earlier tests passing; a 3-browser C&K end-to-end test; deployed. The test bot plays it (badly).
 
+## CPU player
+
+The rules are written down, with your decisions, in **docs/bot.md**.
+
+- Any seated player adds a CPU in the lobby; anyone in the lobby renames it, recolours it (gray by default) or removes it. At least one person must play.
+- It plays legally but badly (builds on 1 turn in 4), and is never mean: no trading with players (it declines every offer), bank trades only for its hand limit and toward a city, the robber/pirate on an empty hex, else a hex only it uses, else its own hex shared with the fewest players, robbing a CPU before a person; no Monopoly or nasty progress cards; in C&K it builds and activates knights but never displaces or chases.
+- It takes 1–2 seconds a move and never chats. Works with every expansion.
+
 ## Later milestones (design for these now, don't build them)
 - Map editor (custom boards, saved and shared).
 - More Seafarers scenarios: The Four Islands, The Fog Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan.
-- A deliberately weak CPU player. It joins as a normal client and sees only its own view, and never targets a human player.
+- Options for a more competent CPU player.
 - Accounts and game history / stats.
 - A replay viewer.
 

@@ -300,6 +300,18 @@ export class Client {
   start() {
     this.send({ t: 'start' });
   }
+  addCpu() {
+    this.send({ t: 'addCpu' });
+  }
+
+  editCpu(pid: string, change: { nick?: string; color?: Color }) {
+    this.send({ t: 'editCpu', pid, ...change });
+  }
+
+  removeCpu(pid: string) {
+    this.send({ t: 'removeCpu', pid });
+  }
+
   setOptions(options: RoomOptions) {
     this.send({ t: 'setOptions', options });
   }
