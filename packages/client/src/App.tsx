@@ -1,0 +1,70 @@
+import { useEffect } from 'react';
+import { Flights } from './anim';
+import { Game } from './Game';
+import { Home, Lobby, Login } from './Lobby';
+import { client, useClient } from './net';
+
+function roomFromPath(): string | null {
+  const m = /^\/r\/([A-Za-z0-9]{4,8})\/?$/.exec(location.pathname);
+  return m ? m[1]!.toUpperCase() : null;
+}
+
+export function App() {
+  const st = useClient();
+
+  useEffect(() => {
+    void client.checkAuth();
+    const onPop = () => {
+      const code = roomFromPath();
+      if (code) client.openRoom(code);
+      else client.leaveRoom();
+    };
+    const nudge = () => client.nudge();
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('online', nudge);
+    window.addEventListener('focus', nudge);
+    document.addEventListener('visibilitychange', nudge);
+    const beat = setInterval(nudge, 15_000);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('online', nudge);
+      window.removeEventListener('focus', nudge);
+      document.removeEventListener('visibilitychange', nudge);
+      clearInterval(beat);
+    };
+  }, []);
+
+  // Open the room in the URL once we're connected.
+  useEffect(() => {
+    if (st.auth !== 'ok' || st.status !== 'live') return;
+    const code = roomFromPath();
+    if (code && st.roomCode !== code) client.openRoom(code);
+  }, [st.auth, st.status, st.roomCode]);
+
+  let body;
+  if (st.auth === 'checking') body = <div className="center">Loading…</div>;
+  else if (st.auth === 'needed') body = <Login />;
+  else if (!st.roomCode || st.roomError) body = <Home error={st.roomError} />;
+  else if (!st.room) body = <div className="center">Joining room {st.roomCode}…</div>;
+  else if (!st.game) body = <Lobby room={st.room} />;
+  else body = <Game v={st.game} room={st.room} log={st.log} status={st.status} pending={st.pending} />;
+
+  return (
+    <>
+      {body}
+      <Flights />
+      <div className="toasts" aria-live="polite">
+        {st.toasts.map((t) => (
+          <div key={t.id} className={`toast${t.kind === 'err' ? ' err' : ''}`} data-testid="toast">
+            {t.text}
+          </div>
+        ))}
+      </div>
+      {st.auth === 'ok' && st.status === 'offline' ? (
+        <div className="offline" data-testid="offline">
+          Reconnecting…
+        </div>
+      ) : null}
+    </>
+  );
+}

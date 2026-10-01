@@ -1,0 +1,246 @@
+/* The board, drawn as SVG strings like the prototype, with click targets for legal spots. */
+
+import { useMemo, useRef } from 'react';
+import { geometryFor, type Board as BoardData, type Geometry, type PlayerView } from '@settlers/engine';
+import { GLYPH, K, PCOL, RES_LABEL, TILE_COLOR, cityPath, f1, hexPts, settlementPath } from './art';
+
+export interface Targets {
+  verts: number[];
+  edges: number[];
+  hexes: number[];
+  /** Selected setup corner, drawn as a ghost settlement. */
+  ghost: number | null;
+  dimVerts?: boolean;
+}
+
+export const NO_TARGETS: Targets = { verts: [], edges: [], hexes: [], ghost: null };
+
+/** The live board SVG, used to place flying cards over hexes. */
+export const boardRef: { svg: SVGSVGElement | null; geo: Geometry | null } = { svg: null, geo: null };
+
+export function hexScreenPoint(h: number): { x: number; y: number } | null {
+  const { svg, geo } = boardRef;
+  const hex = geo?.hexes[h];
+  const ctm = svg?.getScreenCTM();
+  if (!svg || !hex || !ctm) return null;
+  const p = svg.createSVGPoint();
+  p.x = hex.x * K;
+  p.y = hex.y * K;
+  const s = p.matrixTransform(ctm);
+  return { x: s.x, y: s.y };
+}
+
+function viewBox(g: Geometry): number[] {
+  const xs = g.verts.map((v) => v.x);
+  const ys = g.verts.map((v) => v.y);
+  const m = 1.25;
+  const x0 = Math.min(...xs) - m;
+  const y0 = Math.min(...ys) - m;
+  return [x0 * K, y0 * K, (Math.max(...xs) + m - x0) * K, (Math.max(...ys) + m - y0) * K];
+}
+
+const DECOR = [[-90, 0.6], [-30, 0.6], [30, 0.6], [90, 0.62], [150, 0.6], [210, 0.6]] as const; // prettier-ignore
+
+function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
+  const out: string[] = [];
+  out.push(`<defs>
+    <pattern id="waves" width="54" height="26" patternUnits="userSpaceOnUse"><path d="M2 15q12.5-9 25 0t25 0" fill="none" stroke="#2a7183" stroke-width="2" stroke-linecap="round" opacity=".55"/></pattern>
+    ${Object.entries(GLYPH)
+      .map(([k, v]) => `<symbol id="g-${k}" viewBox="-12 -12 24 24">${v}</symbol>`)
+      .join('')}
+    <radialGradient id="tokshade" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#eadfc2"/></radialGradient>
+  </defs>`);
+  const sea = `x="${vb[0]! + 2}" y="${vb[1]! + 2}" width="${vb[2]! - 4}" height="${vb[3]! - 4}" rx="${0.45 * K}"`;
+  out.push(
+    `<rect ${sea} fill="#12404f"/><rect ${sea} fill="url(#waves)"/><rect ${sea} fill="none" stroke="#1d5767" stroke-width="2"/>`,
+  );
+  for (const h of g.hexes)
+    out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.1 * K)}" fill="#d9c69a"/>`);
+  for (const h of g.hexes)
+    out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.035 * K)}" fill="#c9b382"/>`);
+  for (const pt of board.ports) {
+    const e = g.edges[pt.e]!;
+    const a = g.verts[e.a]!;
+    const b = g.verts[e.b]!;
+    const h = g.hexes[e.hexes[0]!]!;
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    const L = Math.hypot(mx - h.x, my - h.y);
+    const px = (mx + ((mx - h.x) / L) * 0.66) * K;
+    const py = (my + ((my - h.y) / L) * 0.66) * K;
+    for (const v of [a, b]) {
+      const x1 = v.x * K;
+      const y1 = v.y * K;
+      const x2 = f1(x1 + (px - x1) * 0.62);
+      const y2 = f1(y1 + (py - y1) * 0.62);
+      out.push(
+        `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${x2}" y2="${y2}" stroke="#7a5a37" stroke-width="7" stroke-linecap="round"/>`,
+      );
+      out.push(
+        `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${x2}" y2="${y2}" stroke="#a9845a" stroke-width="3" stroke-linecap="round" stroke-dasharray="3 4"/>`,
+      );
+    }
+    if (pt.t === 'any') {
+      out.push(
+        `<g><title>3:1 port, any resource</title><circle cx="${f1(px)}" cy="${f1(py)}" r="${0.3 * K}" fill="#f4ecd6" stroke="#0a1b23" stroke-width="2.5"/><text x="${f1(px)}" y="${f1(py)}" text-anchor="middle" dominant-baseline="central" font-size="${0.2 * K}" fill="#1b2a30">3:1</text></g>`,
+      );
+    } else {
+      out.push(
+        `<g><title>2:1 ${RES_LABEL[pt.t].toLowerCase()} port</title><circle cx="${f1(px)}" cy="${f1(py)}" r="${0.32 * K}" fill="${TILE_COLOR[pt.t]}" stroke="#0a1b23" stroke-width="2.5"/><use href="#g-${pt.t}" x="${f1(px - 0.2 * K)}" y="${f1(py - 0.27 * K)}" width="${0.4 * K}" height="${0.4 * K}"/><text x="${f1(px)}" y="${f1(py + 0.19 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.15 * K}" fill="#10181c" font-weight="700">2:1</text></g>`,
+      );
+    }
+  }
+  board.hexes.forEach((hx, i) => {
+    const h = g.hexes[i]!;
+    const cx = h.x * K;
+    const cy = h.y * K;
+    out.push(
+      `<polygon points="${hexPts(cx, cy, 0.965 * K)}" fill="${TILE_COLOR[hx.t]}" stroke="rgba(10,27,35,.35)" stroke-width="2"/>`,
+    );
+    out.push(
+      `<polygon points="${hexPts(cx, cy, 0.8 * K)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>`,
+    );
+    DECOR.forEach(([ang, rad], j) => {
+      if ((i + j) % 6 === 2) return;
+      const a = (Math.PI / 180) * ang;
+      const s = (hx.t === 'ore' ? 0.42 : hx.t === 'desert' ? 0.36 : 0.34) * K;
+      out.push(
+        `<use href="#g-${hx.t}" x="${f1(cx + Math.cos(a) * rad * K - s / 2)}" y="${f1(cy + Math.sin(a) * rad * K - s / 2)}" width="${f1(s)}" height="${f1(s)}" opacity="${hx.t === 'desert' ? 0.7 : 0.85}"/>`,
+      );
+    });
+  });
+  return out.join('');
+}
+
+function tokenSVG(g: Geometry, i: number, n: number, hot: boolean, blocked: boolean): string {
+  if (!n) return '';
+  const h = g.hexes[i]!;
+  const cx = h.x * K;
+  const cy = h.y * K;
+  const red = n === 6 || n === 8;
+  const pips = 6 - Math.abs(7 - n);
+  let dots = '';
+  for (let k = 0; k < pips; k++) {
+    const x = cx + (k - (pips - 1) / 2) * 0.085 * K;
+    dots += `<circle cx="${f1(x)}" cy="${f1(cy + 0.19 * K)}" r="${0.032 * K}" fill="${red ? '#b3261e' : '#28343a'}"/>`;
+  }
+  return `<g opacity="${blocked ? 0.5 : 1}" data-token="${i}">${hot ? `<circle class="hotring" cx="${f1(cx)}" cy="${f1(cy)}" r="${0.44 * K}"/>` : ''}<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="url(#tokshade)" stroke="rgba(10,27,35,.45)" stroke-width="2"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.31) * K}" fill="${red ? '#b3261e' : '#1d2a30'}">${n}</text>${dots}</g>`;
+}
+
+function robberSVG(g: Geometry, i: number): string {
+  const h = g.hexes[i]!;
+  const x = (h.x - 0.52) * K;
+  const y = (h.y + 0.02) * K;
+  return `<g class="piece" data-robber="${i}"><ellipse cx="${f1(x)}" cy="${f1(y + 0.3 * K)}" rx="${0.19 * K}" ry="${0.06 * K}" fill="rgba(0,0,0,.35)"/><path d="M${f1(x - 0.16 * K)} ${f1(y + 0.29 * K)}Q${f1(x - 0.17 * K)} ${f1(y - 0.02 * K)} ${f1(x)} ${f1(y - 0.07 * K)}Q${f1(x + 0.17 * K)} ${f1(y - 0.02 * K)} ${f1(x + 0.16 * K)} ${f1(y + 0.29 * K)}Z" fill="#20242b" stroke="#efe7d2" stroke-width="2.2"/><circle cx="${f1(x)}" cy="${f1(y - 0.17 * K)}" r="${0.105 * K}" fill="#20242b" stroke="#efe7d2" stroke-width="2.2"/></g>`;
+}
+
+function roadLine(g: Geometry, e: number, inset: number) {
+  const E = g.edges[e]!;
+  const a = g.verts[E.a]!;
+  const b = g.verts[E.b]!;
+  return {
+    x1: f1((a.x + (b.x - a.x) * inset) * K),
+    y1: f1((a.y + (b.y - a.y) * inset) * K),
+    x2: f1((a.x + (b.x - a.x) * (1 - inset)) * K),
+    y2: f1((a.y + (b.y - a.y) * (1 - inset)) * K),
+  };
+}
+
+export function Board(props: {
+  view: PlayerView;
+  targets: Targets;
+  myColor: string | null;
+  onVert: (v: number) => void;
+  onEdge: (e: number) => void;
+  onHex: (h: number) => void;
+}) {
+  const { view, targets } = props;
+  const g = geometryFor(view.board.hexes);
+  const vb = useMemo(() => viewBox(g), [g]);
+  const staticHtml = useMemo(() => staticSVG(view.board, g, vb), [view.board.hexes, view.board.ports, g, vb]);
+  const seen = useRef<Set<string> | null>(null);
+
+  const sum = view.dice ? view.dice[0] + view.dice[1] : 0;
+  const hot = view.dice && ['main', 'discard', 'robber', 'roads'].includes(view.stage) && sum !== 7 ? sum : 0;
+  const parts: string[] = [];
+  view.board.hexes.forEach((hx, i) =>
+    parts.push(tokenSVG(g, i, hx.n, hot > 0 && hx.n === hot, i === view.board.robber)),
+  );
+
+  const now = new Set<string>();
+  const first = seen.current == null;
+  const fresh = (key: string) => {
+    now.add(key);
+    return !first && !seen.current!.has(key);
+  };
+  view.edges.forEach((p, e) => {
+    if (p == null) return;
+    const l = roadLine(g, e, 0.16);
+    const col = PCOL[view.players[p]!.color];
+    parts.push(
+      `<g class="piece${fresh(`e${e}:${p}`) ? ' fresh' : ''}" data-road="${e}" data-owner="${p}"><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#0b1418" stroke-width="${0.22 * K}" stroke-linecap="round"/><line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${col}" stroke-width="${0.13 * K}" stroke-linecap="round"/></g>`,
+    );
+  });
+  parts.push(robberSVG(g, view.board.robber));
+  view.verts.forEach((b, v) => {
+    if (!b) return;
+    const V = g.verts[v]!;
+    const d = b[1] === 2 ? cityPath(V.x * K, V.y * K) : settlementPath(V.x * K, V.y * K);
+    parts.push(
+      `<path class="piece${fresh(`v${v}:${b.join(',')}`) ? ' fresh' : ''}" data-building="${v}" data-owner="${b[0]}" data-kind="${b[1] === 2 ? 'city' : 'settlement'}" d="${d}" fill="${PCOL[view.players[b[0]]!.color]}" stroke="#0b1418" stroke-width="2.6" stroke-linejoin="round"/>`,
+    );
+  });
+  seen.current = now;
+
+  if (targets.ghost != null && props.myColor) {
+    const V = g.verts[targets.ghost]!;
+    parts.push(
+      `<path class="ghost" d="${settlementPath(V.x * K, V.y * K)}" fill="${props.myColor}" stroke="#fff6dc" stroke-width="2.6" stroke-linejoin="round"/>`,
+    );
+  }
+  for (const h of targets.hexes) {
+    const H = g.hexes[h]!;
+    parts.push(
+      `<g class="target" data-h="${h}"><polygon class="hit" points="${hexPts(H.x * K, H.y * K, 0.97 * K)}"/><polygon class="hexglow" points="${hexPts(H.x * K, H.y * K, 0.86 * K)}"/></g>`,
+    );
+  }
+  for (const e of targets.edges) {
+    const l = roadLine(g, e, 0.2);
+    parts.push(
+      `<g class="target" data-e="${e}"><circle class="hit" cx="${f1((l.x1 + l.x2) / 2)}" cy="${f1((l.y1 + l.y2) / 2)}" r="${0.24 * K}"/><line class="hit" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke-width="${0.44 * K}" stroke-linecap="round"/><line class="eback" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}"/><line class="espot" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}"/></g>`,
+    );
+  }
+  for (const v of targets.verts) {
+    const V = g.verts[v]!;
+    parts.push(
+      `<g class="target" data-v="${v}"${targets.dimVerts ? ' opacity=".4"' : ''}><circle class="hit" cx="${f1(V.x * K)}" cy="${f1(V.y * K)}" r="${0.36 * K}"/><circle class="ring" cx="${f1(V.x * K)}" cy="${f1(V.y * K)}" r="${0.2 * K}"/><circle class="spot" cx="${f1(V.x * K)}" cy="${f1(V.y * K)}" r="${0.1 * K}"/></g>`,
+    );
+  }
+
+  const onClick = (ev: React.MouseEvent) => {
+    const el = (ev.target as Element).closest('[data-v],[data-e],[data-h]') as
+      HTMLElement | SVGElement | null;
+    if (!el) return;
+    const d = el.dataset;
+    if (d.v != null) props.onVert(Number(d.v));
+    else if (d.e != null) props.onEdge(Number(d.e));
+    else if (d.h != null) props.onHex(Number(d.h));
+  };
+
+  return (
+    <svg
+      id="board"
+      viewBox={vb.join(' ')}
+      role="img"
+      aria-label="Island board"
+      ref={(el) => {
+        boardRef.svg = el;
+        boardRef.geo = g;
+      }}
+      onClick={onClick}
+    >
+      <g dangerouslySetInnerHTML={{ __html: staticHtml }} />
+      <g dangerouslySetInnerHTML={{ __html: parts.join('') }} />
+    </svg>
+  );
+}

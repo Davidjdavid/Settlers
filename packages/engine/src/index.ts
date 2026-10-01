@@ -7,3 +7,4 @@ export * from './rules';
 export * from './view';
 export * from './legal';
 export * from './invariants';
+export * from './bot';

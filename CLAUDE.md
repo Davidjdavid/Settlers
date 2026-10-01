@@ -22,16 +22,16 @@ Run all commands from the repo root.
 | What | Command |
 |---|---|
 | Install | `npm ci` |
-| Dev (server + client, hot reload) | `npm run dev` _(not built yet)_ |
+| Dev (server + client, hot reload) | `npm run dev`, then open http://localhost:5173 (passphrase `dev`) |
 | Typecheck | `npm run typecheck` |
 | Lint + format check | `npm run lint` |
 | Unit tests (all packages) | `npm test` |
 | Simulator (default 1,000 games) | `npm run sim` |
 | Simulator, more games / fixed seed | `npm run sim -- --games 20000 --seed 12345` |
 | Replay a failing game | `npm run sim -- --replay <seed>` |
-| End-to-end (3 browsers, real server) | `npm run test:e2e` _(not built yet)_ |
+| End-to-end (3 browsers, real server build) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
 | **Everything CI runs** | `npm run check` |
-| Build | `npm run build` _(not built yet)_ |
+| Build (client to `packages/client/dist`, server bundle to `packages/server/dist`) | `npm run build` |
 | Deploy | see `deploy/README.md` _(not built yet)_ |
 
 ## Definition of done
@@ -48,6 +48,11 @@ Run all commands from the repo root.
 - A failing game prints its seed. `npm run sim -- --replay <seed>` reruns it with every check on every step.
 - Test helpers (`test/helpers.ts`) can rig the dice (`rigDice`), set hands, and place pieces directly, for exact rule tests.
 - When you add a check, plant the bug it should catch and confirm it fails before trusting it.
+
+## Server and client tests
+
+- `packages/server/test/rooms.test.ts` drives `Rooms` with fake connections: full games through the server, restart and replay, hidden info in every message sent, failed saves, reset and seat takeover rules.
+- `e2e/full-game.spec.ts` runs the production build (`packages/server/dist/server.mjs` serving `packages/client/dist`). Three browsers log in and set up a room by clicking. They play setup, a roll and an end turn through the UI, and the rest with `window.__settlers.botStep()`, the engine bot playing from that browser's own view. Mid-game it reloads a page and kills the server with SIGKILL, then checks every WebSocket frame for leaks.
 
 ## Engine conventions
 

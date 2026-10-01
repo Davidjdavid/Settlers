@@ -119,3 +119,56 @@ export function eventFor(e: GameEvent, seat: Seat | null): GameEvent {
 export function eventsFor(events: GameEvent[], seat: Seat | null): GameEvent[] {
   return events.map((e) => eventFor(e, seat));
 }
+
+/**
+ * A GameState rebuilt from a view, for running engine queries (legal spots, rates) in the
+ * client. Hidden information is filled with placeholders: other players' cards all count as
+ * wood, the deck as knights. Good for your own legal moves; never for deciding outcomes.
+ */
+export function stateFromView(v: PlayerView): GameState {
+  const zero = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 };
+  const noDev = { knight: 0, road: 0, plenty: 0, mono: 0 };
+  return cloneJson({
+    v: 1,
+    config: { winVP: v.winVP },
+    rng: [0, 0, 0, 0],
+    seq: v.seq,
+    phase: v.phase,
+    stage: v.stage,
+    board: v.board,
+    verts: v.verts,
+    edges: v.edges,
+    players: v.players.map((p, i) => {
+      const mine = i === v.me && v.hand;
+      return {
+        pid: p.pid,
+        color: p.color,
+        nick: p.nick,
+        res: mine ? v.hand!.res : { ...zero, wood: p.resCount },
+        dev: mine ? v.hand!.dev : noDev,
+        fresh: mine ? v.hand!.fresh : noDev,
+        vpCards: mine ? v.hand!.vpCards : 0,
+        knights: p.knights,
+        played: p.played,
+        pieces: p.pieces,
+      };
+    }),
+    bank: v.bank,
+    deck: { knight: v.deckCount, road: 0, plenty: 0, mono: 0, vp: 0 },
+    turn: v.turn,
+    turnN: v.turnN,
+    setupI: v.setupI,
+    dice: v.dice,
+    discard: v.discard,
+    robberReturn: v.stage === 'robber' || v.stage === 'discard' ? 'main' : null,
+    freeRoads: v.freeRoads,
+    roadsReturn: v.stage === 'roads' ? 'main' : null,
+    devPlayed: v.devPlayed,
+    longest: v.longest,
+    largest: v.largest,
+    roadLens: v.players.map((p) => p.roadLen),
+    offers: v.offers,
+    offerN: 0,
+    winner: v.winner,
+  } satisfies GameState);
+}

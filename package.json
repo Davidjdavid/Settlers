@@ -9,14 +9,18 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc -p packages/engine && tsc -p packages/server",
+    "typecheck": "tsc -p packages/engine && tsc -p packages/server && tsc -p packages/client",
     "lint": "prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
     "sim": "tsx packages/engine/scripts/sim.ts",
-    "check": "npm run typecheck && npm run lint && npm test && npm run sim"
+    "check": "npm run typecheck && npm run lint && npm test && npm run sim && npm run test:e2e",
+    "build": "npm run build -w @settlers/client && npm run build -w @settlers/server",
+    "dev": "node scripts/dev.mjs",
+    "test:e2e": "npm run build && playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.4",
     "prettier": "^3.9.9",
     "tsx": "^4.23.15",
