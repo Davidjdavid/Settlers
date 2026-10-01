@@ -18,6 +18,8 @@ export interface RoomRow {
   createdAt: number;
   seats: SeatRow[];
   gameId: string | null;
+  /** Room options as JSON (validated by the caller), or null for defaults. */
+  options: unknown;
 }
 
 export interface GameRow {
@@ -111,6 +113,10 @@ export class Store {
     this.db.pragma('busy_timeout = 5000');
     this.db.exec(SCHEMA);
     this.setMetaIfMissing('schema_version', '1');
+    // Schema 2: room options. Older databases get the column added.
+    const cols = this.db.prepare('PRAGMA table_info(rooms)').all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'options_json'))
+      this.db.exec('ALTER TABLE rooms ADD COLUMN options_json TEXT');
   }
 
   close() {
@@ -140,6 +146,10 @@ export class Store {
       .run(r.code, r.createdAt, JSON.stringify(r.seats), r.gameId);
   }
 
+  saveOptions(code: string, options: unknown) {
+    this.db.prepare('UPDATE rooms SET options_json = ? WHERE code = ?').run(JSON.stringify(options), code);
+  }
+
   saveRoom(code: string, seats: SeatRow[], gameId: string | null) {
     this.db
       .prepare('UPDATE rooms SET seats_json = ?, game_id = ? WHERE code = ?')
@@ -147,17 +157,21 @@ export class Store {
   }
 
   loadRooms(): RoomRow[] {
-    const rows = this.db.prepare('SELECT code, created_at, seats_json, game_id FROM rooms').all() as {
+    const rows = this.db
+      .prepare('SELECT code, created_at, seats_json, game_id, options_json FROM rooms')
+      .all() as {
       code: string;
       created_at: number;
       seats_json: string;
       game_id: string | null;
+      options_json: string | null;
     }[];
     return rows.map((r) => ({
       code: r.code,
       createdAt: r.created_at,
       seats: JSON.parse(r.seats_json),
       gameId: r.game_id,
+      options: r.options_json ? JSON.parse(r.options_json) : null,
     }));
   }
 

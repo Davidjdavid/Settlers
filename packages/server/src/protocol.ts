@@ -46,6 +46,18 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('chooseGold'), cards }),
 ]);
 
+export const OptionsSchema = z.strictObject({
+  scenario: z.enum(['classic', 'heading-for-new-shores']),
+  winVP: z.number().int().min(5).max(30),
+  houseRules: z.strictObject({
+    no7FirstRound: z.boolean().optional(),
+    bank3to1: z.boolean().optional(),
+    freeShipMoves: z.boolean().optional(),
+  }),
+});
+export type RoomOptions = z.infer<typeof OptionsSchema>;
+export const DEFAULT_OPTIONS: RoomOptions = { scenario: 'classic', winVP: 10, houseRules: {} };
+
 const roomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);
 const nick = z.string().min(1).max(40);
 
@@ -57,6 +69,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('setColor'), color: COLOR }),
   z.strictObject({ t: z.literal('leave') }),
   z.strictObject({ t: z.literal('start') }),
+  /** Lobby only: scenario, points to win and house rules for the next game. */
+  z.strictObject({ t: z.literal('setOptions'), options: OptionsSchema }),
   /** `id` makes resends after a dropped connection safe: an id is applied at most once. */
   z.strictObject({ t: z.literal('act'), id: z.string().min(1).max(64), action: ActionSchema }),
   z.strictObject({ t: z.literal('chat'), text: z.string().min(1).max(240) }),
@@ -82,6 +96,8 @@ export interface RoomInfo {
   /** Your seat's pid, or null if you are watching. */
   me: string | null;
   phase: 'lobby' | 'play' | 'over';
+  /** Options for the next game (shown in the lobby). */
+  options: RoomOptions;
   pendingReset: { pid: string; nick: string; expiresAt: number } | null;
 }
 

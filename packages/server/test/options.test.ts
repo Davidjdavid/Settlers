@@ -1,0 +1,170 @@
+import Database from 'better-sqlite3';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { botMove, seedRng, viewFor, type GameState } from '@settlers/engine';
+import { DEFAULT_OPTIONS, type ClientMsg, type RoomOptions, type ServerMsg } from '../src/protocol';
+import { Rooms, gameConfigFor, type Conn } from '../src/rooms';
+import { Store } from '../src/store';
+
+class FakeConn implements Conn {
+  room: Conn['room'] = null;
+  pid: string | null = null;
+  msgs: ServerMsg[] = [];
+  send(m: ServerMsg) {
+    this.msgs.push(structuredClone(m));
+  }
+  last<T extends ServerMsg['t']>(t: T): Extract<ServerMsg, { t: T }> {
+    const m = [...this.msgs].reverse().find((x) => x.t === t);
+    if (!m) throw new Error(`no ${t} message`);
+    return m as Extract<ServerMsg, { t: T }>;
+  }
+}
+
+let dir: string;
+let store: Store;
+let rooms: Rooms;
+const quiet = () => {};
+const HFNS: RoomOptions = { scenario: 'heading-for-new-shores', winVP: 14, houseRules: {} };
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'settlers-opts-'));
+  store = new Store(join(dir, 'test.db'));
+  rooms = new Rooms(store, { log: quiet });
+});
+afterEach(() => {
+  store.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+const send = (c: FakeConn, m: ClientMsg) => rooms.handle(c, m);
+
+function table(n: number) {
+  const host = new FakeConn();
+  send(host, { t: 'create' });
+  const code = host.last('sync').room.code;
+  const colors = ['red', 'blue', 'white', 'purple'] as const;
+  const conns = [host];
+  for (let i = 1; i < n; i++) {
+    const c = new FakeConn();
+    send(c, { t: 'hello', room: code });
+    conns.push(c);
+  }
+  const tokens = conns.map((c, i) => {
+    send(c, { t: 'join', nick: `P${i}`, color: colors[i]! });
+    return c.last('seat').token;
+  });
+  return { code, conns, tokens };
+}
+
+const state = (code: string): GameState => rooms.getRoom(code)!.game!.state;
+
+/** Each seat's bot plays from that seat's own view until the game ends. */
+function playOut(code: string, conns: FakeConn[], seed: string, maxMoves = 20000) {
+  const rng = seedRng(seed);
+  let n = 0;
+  for (; state(code).phase === 'play' && n < maxMoves; n++) {
+    const s = state(code);
+    let moved = false;
+    for (let seat = 0; seat < s.players.length && !moved; seat++) {
+      const a = botMove(viewFor(s, seat), rng);
+      if (!a) continue;
+      const c = conns.find((x) => x.pid === s.players[seat]!.pid)!;
+      send(c, { t: 'act', id: `${seed}-${n}`, action: a });
+      const ack = c.last('ack');
+      if (!ack.ok) throw new Error(`rejected ${JSON.stringify(a)}: ${ack.error}`);
+      moved = true;
+    }
+    if (!moved) throw new Error(`stuck at ${s.stage}`);
+  }
+  return n;
+}
+
+describe('room options', () => {
+  it('only seated players change them, only in the lobby, and everyone sees them', () => {
+    const { conns } = table(3);
+    const watcher = new FakeConn();
+    send(watcher, { t: 'hello', room: conns[0]!.last('sync').room.code });
+    send(watcher, { t: 'setOptions', options: HFNS });
+    expect(watcher.last('error').text).toMatch(/seat/);
+    send(conns[1]!, { t: 'setOptions', options: { ...HFNS, houseRules: { no7FirstRound: true } } });
+    expect(conns[2]!.last('update').room.options).toEqual({ ...HFNS, houseRules: { no7FirstRound: true } });
+    send(conns[0]!, { t: 'start' });
+    send(conns[0]!, { t: 'setOptions', options: DEFAULT_OPTIONS });
+    expect(conns[0]!.last('error').text).toMatch(/before the game starts/);
+  });
+
+  it('Seafarers needs 3 or 4 players', () => {
+    const { conns, code } = table(2);
+    send(conns[0]!, { t: 'setOptions', options: HFNS });
+    send(conns[0]!, { t: 'start' });
+    expect(conns[0]!.last('error').text).toMatch(/3 or 4 players/);
+    expect(rooms.getRoom(code)!.game).toBeNull();
+  });
+
+  it('a classic game with default options keeps exactly the classic config', () => {
+    expect(gameConfigFor(DEFAULT_OPTIONS)).toEqual({});
+    expect(
+      gameConfigFor({ ...DEFAULT_OPTIONS, winVP: 12, houseRules: { bank3to1: true, freeShipMoves: true } }),
+    ).toEqual({
+      winVP: 12,
+      houseRules: { bank3to1: true },
+    });
+    const sea = gameConfigFor({ ...HFNS, houseRules: { freeShipMoves: true } });
+    expect(sea.map?.id).toBe('heading-for-new-shores');
+    expect(sea.houseRules).toEqual({ freeShipMoves: true });
+  });
+
+  it('options and the scenario survive a restart', () => {
+    const { conns, code } = table(3);
+    send(conns[0]!, { t: 'setOptions', options: { ...HFNS, winVP: 12 } });
+    send(conns[0]!, { t: 'start' });
+    expect(state(code).config.winVP).toBe(12);
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    rooms = new Rooms(store, { log: quiet });
+    expect(rooms.getRoom(code)!.options).toEqual({ ...HFNS, winVP: 12 });
+    expect(state(code).config.map?.id).toBe('heading-for-new-shores');
+  });
+
+  it('older databases get the options column added', () => {
+    store.close();
+    const file = join(dir, 'old.db');
+    const old = new Database(file);
+    old.exec(
+      "CREATE TABLE rooms (code TEXT PRIMARY KEY, created_at INTEGER NOT NULL, seats_json TEXT NOT NULL, game_id TEXT); INSERT INTO rooms VALUES ('ABCD', 1, '[]', NULL);",
+    );
+    old.close();
+    store = new Store(file);
+    rooms = new Rooms(store, { log: quiet });
+    expect(rooms.getRoom('ABCD')!.options).toEqual(DEFAULT_OPTIONS);
+  });
+});
+
+describe('a Seafarers game through the server', () => {
+  it('plays to the end, then replays identically after a restart', () => {
+    const { conns, code } = table(4);
+    send(conns[0]!, {
+      t: 'setOptions',
+      options: { ...HFNS, houseRules: { no7FirstRound: true, freeShipMoves: true } },
+    });
+    send(conns[0]!, { t: 'start' });
+    playOut(code, conns, 'srv-sea');
+    expect(state(code).phase).toBe('over');
+    const final = JSON.stringify(state(code));
+    // Nobody was ever sent the fog stack or anyone else's hand.
+    for (const c of conns) {
+      for (const m of c.msgs) {
+        if (m.t !== 'update' && m.t !== 'sync') continue;
+        const json = JSON.stringify(m);
+        expect(json).not.toContain('"rng"');
+        expect(json).not.toContain('"fog":{');
+      }
+    }
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    rooms = new Rooms(store, { log: quiet });
+    expect(JSON.stringify(state(code))).toBe(final);
+  });
+});

@@ -6,10 +6,21 @@
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
-  ENGINE_VERSION, applyAction, checkInvariants, eventsFor, newGame, viewFor,
+  ENGINE_VERSION,
+  SCENARIOS,
+  type GameConfig,
+  type HouseRules, applyAction, checkInvariants, eventsFor, newGame, viewFor,
   type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView,
 } from '@settlers/engine'; // prettier-ignore
-import type { ClientMsg, LogItem, RoomInfo, ServerMsg } from './protocol';
+import {
+  DEFAULT_OPTIONS,
+  OptionsSchema,
+  type ClientMsg,
+  type LogItem,
+  type RoomInfo,
+  type RoomOptions,
+  type ServerMsg,
+} from './protocol';
 import type { ActionRow, ChatRow, GameRow, SeatRow, Store } from './store';
 
 export interface Conn {
@@ -34,6 +45,7 @@ export interface Room {
   game: LiveGame | null;
   pendingReset: { pid: string; expiresAt: number } | null;
   conns: Set<Conn>;
+  options: RoomOptions;
 }
 
 export interface RoomsOptions {
@@ -135,7 +147,9 @@ export class Rooms {
 
   private loadAll() {
     for (const r of this.store.loadRooms()) {
+      const parsed = OptionsSchema.safeParse(r.options);
       const room: Room = {
+        options: parsed.success ? parsed.data : structuredClone(DEFAULT_OPTIONS),
         code: r.code,
         createdAt: r.createdAt,
         seats: r.seats,
@@ -200,6 +214,8 @@ export class Rooms {
         return this.leave(conn, room);
       case 'start':
         return this.start(conn, room);
+      case 'setOptions':
+        return this.setOptions(conn, room, msg.options);
       case 'act':
         return this.act(conn, room, msg.id, msg.action);
       case 'chat':
@@ -242,8 +258,9 @@ export class Rooms {
       game: null,
       pendingReset: null,
       conns: new Set(),
+      options: structuredClone(DEFAULT_OPTIONS),
     };
-    this.store.insertRoom({ code, createdAt: room.createdAt, seats: [], gameId: null });
+    this.store.insertRoom({ code, createdAt: room.createdAt, seats: [], gameId: null, options: null });
     this.rooms.set(code, room);
     this.log(`room ${code} created`);
     this.attach(conn, room, null);
@@ -304,11 +321,24 @@ export class Rooms {
     this.broadcast(room, this.takeSys(room));
   }
 
+  private setOptions(conn: Conn, room: Room, options: RoomOptions) {
+    const seat = room.seats.find((s) => s.pid === conn.pid);
+    if (!seat) return conn.send({ t: 'error', text: 'Take a seat first' });
+    if (room.game) return conn.send({ t: 'error', text: 'Options can be changed before the game starts' });
+    room.options = structuredClone(options);
+    this.store.saveOptions(room.code, room.options);
+    this.broadcast(room, []);
+  }
+
   private start(conn: Conn, room: Room) {
     if (room.game) return conn.send({ t: 'error', text: 'The game has already started' });
     if (!room.seats.some((s) => s.pid === conn.pid))
       return conn.send({ t: 'error', text: 'Take a seat first' });
     if (room.seats.length < 2) return conn.send({ t: 'error', text: 'You need at least 2 players' });
+    const map = SCENARIOS[room.options.scenario]!;
+    if (!map.players.includes(room.seats.length)) {
+      return conn.send({ t: 'error', text: `${map.name} needs ${map.players.join(' or ')} players` });
+    }
     const players: NewPlayer[] = room.seats.map((s) => ({ pid: s.pid, color: s.color, nick: s.nick }));
     const row: GameRow = {
       id: randomUUID(),
@@ -316,12 +346,17 @@ export class Rooms {
       seed: randomBytes(16).toString('hex'),
       engineVersion: ENGINE_VERSION,
       players,
-      config: this.opts.gameConfig ?? {},
+      config: { ...gameConfigFor(room.options), ...this.opts.gameConfig },
       createdAt: this.now(),
       endedAt: null,
       endReason: null,
     };
-    const state = newGame(row.seed, players, row.config);
+    let state;
+    try {
+      state = newGame(row.seed, players, row.config);
+    } catch (e) {
+      return conn.send({ t: 'error', text: e instanceof Error ? e.message : 'Couldn’t start the game' });
+    }
     this.store.tx(() => {
       this.store.insertGame(row);
       this.store.saveRoom(room.code, room.seats, row.id);
@@ -501,6 +536,7 @@ export class Rooms {
       })),
       me: conn.pid,
       phase: room.game ? room.game.state.phase : 'lobby',
+      options: room.options,
       pendingReset: pr
         ? { pid: pr.pid, nick: room.seats.find((s) => s.pid === pr.pid)?.nick ?? '', expiresAt: pr.expiresAt }
         : null,
@@ -529,6 +565,24 @@ export class Rooms {
       });
     }
   }
+}
+
+/**
+ * The game config for room options. A classic game with default options gets exactly the
+ * config it always had ({}), so nothing changes for classic games.
+ */
+export function gameConfigFor(o: RoomOptions): Partial<GameConfig> {
+  const map = SCENARIOS[o.scenario]!;
+  const seafarers = map.modules.includes('seafarers');
+  const hr: HouseRules = {};
+  if (o.houseRules.no7FirstRound) hr.no7FirstRound = true;
+  if (o.houseRules.bank3to1) hr.bank3to1 = true;
+  if (o.houseRules.freeShipMoves && seafarers) hr.freeShipMoves = true;
+  const c: Partial<GameConfig> = {};
+  if (o.scenario !== 'classic') c.map = map;
+  if (o.winVP !== map.winVP || o.scenario !== 'classic') c.winVP = o.winVP;
+  if (Object.keys(hr).length) c.houseRules = hr;
+  return c;
 }
 
 function chatItem(r: ChatRow): LogItem {
