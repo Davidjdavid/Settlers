@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–3 (base game, Seafarers, Cities & Knights) and the CPU player done. Milestone 4 (table polish): rules drafted below, waiting for OK.**
+Status: **Milestones 1–3 (base game, Seafarers, Cities & Knights) and the CPU player done. Milestone 4 (table polish) agreed and being built.**
 
 ## Milestone 1: base game
 
@@ -117,7 +117,7 @@ The rules are written down, with your decisions, in **docs/rules/cities-and-knig
 
 ## Milestone 4: Table polish
 
-**Status: draft. Waiting for your OK on these rules and the questions at the end of this section.**
+**Status: agreed (your answers are in 4.7). Being implemented.**
 
 These come from years of misclicks in Catan Universe, so they are about feel. If one of them makes the game less reliable, reliability still wins.
 
@@ -138,16 +138,15 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
 
 ### 4.2 Piece colours
 
-- **At least 10 colours.** Gray stays the CPU's default. Proposed set (final hex values come out of the tests below):
-  red, blue, white, orange, purple, gray, black, pink, teal, yellow, brown.
+- **8 colours for people**, plus **gray, which only CPU players can have** (it's their default; a CPU can be recoloured to any free colour, but no person can pick gray).
 - **Every colour must be easy to tell apart:**
   - from every other colour, including for colorblind players (simulated protanopia, deuteranopia and tritanopia);
   - on every tile colour (forest, hills, pasture, fields, mountains, desert, gold, sea, fog) and on the water around the island.
 - **How it's tested:**
-  - **On the tiles:** every piece keeps its dark outline, and each colour must contrast with each tile.
+  - **On the tiles:** each colour must contrast with each tile (pieces keep their outline).
   - **From each other:** each pair of colours must stay far enough apart (a colour-difference score) with normal vision and under each of the three colorblind simulations.
-  - **By eye:** a screenshot of every colour's road, settlement, city, ship and knight on every tile type, which I'll look at and send you.
-  - Colours that fail get replaced before anything ships.
+  - **By eye:** a screenshot of every colour's pieces on every tile type, sent to you.
+  - Colours that fail are swapped. No extra colorblind marks on the pieces (**D3**).
 - **No two players can have the same colour** (as now, enforced by the server).
 - **Picking a colour shows a small preview** of that colour's road, settlement and city, in the lobby and when recolouring a CPU.
 
@@ -159,16 +158,18 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
   - This covers roads, ships, settlements, cities, knights, walls, the robber, the pirate and the merchant.
 - **On phones and tablets** (no hover): **the first tap only shows the ghost**, with **Confirm** and **Cancel** buttons. Nothing is placed until you press Confirm. Tapping another spot moves the ghost there.
 
-**Confirmation settings,** saved per player, each on by default:
+**Confirmation settings,** per person, each on by default:
 
 | Setting | When on |
 |---|---|
-| Confirm before placing a piece | Clicking a spot with a mouse shows the ghost with Confirm and Cancel instead of placing at once. (On phones and tablets you always confirm.) |
+| Confirm before placing a piece (mouse) | Clicking a spot with a mouse shows the ghost with Confirm and Cancel instead of placing at once. |
+| Confirm before placing a piece (touch screens) | On phones and tablets, the first tap shows the ghost with Confirm and Cancel. Off: a tap places at once, as with a mouse when the setting above is off (**D2**). |
 | Confirm before ending my turn | "End turn" asks "End your turn?" first. |
 | Confirm before playing a card | Development and progress cards ask "Play Knight?" (or whichever card) first. |
 | Confirm before accepting a trade | Accepting an offer (or confirming a trade you offered) shows the trade and asks first. |
 
 - They live in the menu, under **"My settings"**, as on/off switches.
+- **Every switch, here and in the room options, has a "?" with a detailed explanation** of what it does: shown when you hover over it, or tap it on a phone.
 
 ### 4.4 Handing the dice back
 
@@ -177,7 +178,7 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
 - **Who can ask:** after a player ends their turn, they (the previous player) can press **"Wait, give the dice back"**.
 - **Who decides:** the player who now has the dice sees the request. They can **hand the dice back** or **say no**.
 - **Without being asked:** the new player can also hand the dice back.
-- **A "no" is final** for that turn: the previous player can't ask again (**Q4**).
+- **A "no" is final** for that turn: the previous player can't ask again (**D4**).
 
 **When it's possible:**
 
@@ -193,9 +194,10 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
   - whether they'd already played a card;
   - ships built that turn still unable to move (Seafarers);
   - knights activated that turn still unable to act (Cities & Knights);
-  - their trade offers (**Q5**).
+  - their trade offers (**D5**).
 - **Only one step back,** to the player just before. Once handed back, that player's turn goes on normally. When they end it again, the next player can be asked again.
 - **A CPU always hands the dice back** when asked.
+- **During setup:** a starting settlement and road, once placed, stay placed. A game option (off by default) allows handing the dice back during the starting placements too (**D6**).
 
 **How it fits the engine:**
 
@@ -203,7 +205,45 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
 - **Not visible to players:** the snapshot of the turn to restore stays on the server. The only public parts are that a hand-back is possible and whether one was asked for.
 - **Earlier saved games** were recorded without this rule and keep replaying exactly as before; only games started after this ships get it.
 
-### 4.5 Done means
+### 4.5 Settings: per person and per game
+
+**Per person** (your own preferences):
+
+- **Which settings:** the four confirmation settings and the touch-screen one.
+- **Saved under your nickname** on the server (**D1**). They follow you to any device and any room where you use the same nickname.
+- **Changed any time** from "My settings" in the menu, during a game too.
+
+**Per game** (the table's rules):
+
+- **Which settings:**
+  - points to win;
+  - every house rule;
+  - allow handing the dice back (on by default);
+  - allow it during setup (off by default).
+- **Set in the lobby** by any seated player, as now.
+- **Changeable during the game:** **the player whose turn it is** can change them from the menu, so nobody needs to restart.
+  - The change is a normal move. It is saved, replayed with the game, and announced in the log ("Ann turned on 3:1 bank trades").
+  - Points to win can't be set at or below the highest score at the table.
+- **The game mode itself** (Base, Seafarers, Knights, Full) can't change once the game has started.
+
+### 4.6 Rejoining by name
+
+- **How:** if you leave a game (or lose your device), open the room code and enter **the same nickname**. If that player's seat is disconnected, you get it straight back, with no takeover warning.
+- **If the seat is in use:** when someone using that nickname is still connected, you're told the seat is in use.
+- **The game simply waits** while someone is away, and carries on once they're back.
+- **Taking over someone else's seat** keeps its two-step warning.
+
+### 4.7 Decisions
+
+1. **D1** Personal settings follow your nickname, and rejoining a room by nickname gets your seat back (4.6).
+2. **D2** A separate setting can turn off tap-then-Confirm on touch screens. Every switch has a detailed hover (or tap) explanation.
+3. **D3** No colorblind marks: 8 well-separated colours for people, and gray only for CPUs.
+4. **D4** One ask per turn; a "no" is final. Everyone can switch their own settings on and off at any time.
+5. **D5** Open trade offers come back with the hand-back.
+6. **D6** No hand-back during setup by default; a game option turns it on.
+7. **D7** Per-person settings can be changed any time. Game rules can be changed mid-game by the player whose turn it is, as a recorded move.
+
+### 4.8 Done means
 
 1. **Hand-back tests:**
    - allowed before the new player does anything;
@@ -213,7 +253,7 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
    - the turn is restored exactly (state compared field by field, including the hidden parts);
    - a CPU always hands back;
    - the simulator mixes hand-backs into random games with all the usual checks.
-2. **A test for each confirmation setting,** on and off.
+2. **A test for each confirmation setting,** on and off, and for settings following a nickname. A test for game rules changed mid-game (recorded, replayed, refused off-turn), and for rejoining by name.
 3. **Every colour checked** for contrast against every tile, and against each other colour (with the colorblind simulations), plus the screenshot.
 4. **A 3-player game in 3 browsers, start to finish,** using:
    - the mode picker;
@@ -222,25 +262,6 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
    - the confirmation settings;
    - a hand-back.
 5. **`npm run check` green, then deploy.**
-
-### 4.6 Questions
-
-Answer "default" to any you're happy with.
-
-1. **Q1 Where settings are saved.**
-   - **Default:** on the device (each browser), so your phone and laptop can differ, and they work in every room.
-   - Alternative: saved on the server under your nickname, so they follow you to any device.
-2. **Q2 Confirm on touch screens.**
-   - **Default:** phones and tablets always use the tap-then-Confirm flow, whatever the "confirm before placing" setting says, as you described.
-   - Alternative: the setting can turn it off on touch screens too.
-3. **Q3 Colorblind marks.** Telling 10+ colours apart under every kind of colorblindness is at the edge of what colour alone can do.
-   - **Default:** also give each colour a small mark on its pieces (a dot, stripe, ring…), so pieces can be told apart by shape too.
-   - Alternative: colour only, and fewer colours if needed.
-4. **Q4 Asking again after a "no".**
-   - **Default:** no, one ask per turn.
-   - Alternative: ask as often as you like until the new player acts.
-5. **Q5 Trade offers on hand-back.** Default: offers you had open come back too (exactly as it was).
-6. **Q6 Hand-back during setup.** Default: not possible during the starting placements, only after a normal End turn.
 
 ## CPU player
 
