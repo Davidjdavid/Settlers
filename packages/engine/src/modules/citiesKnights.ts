@@ -355,7 +355,7 @@ export const citiesKnights: RuleModule = {
       c.event = null;
       return false;
     }
-    const face = EVENT_FACES[nextInt(s.rng, 6)]!;
+    const face = EVENT_FACES[x.die('event') - 1]!;
     c.event = face;
     events.push({ k: 'eventDie', face });
     if (face === 'ship') {

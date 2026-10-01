@@ -7,6 +7,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   ENGINE_VERSION,
+  NEED_DICE,
   SCENARIOS,
   type GameConfig,
   type HouseRules, applyAction, checkInvariants, cpuMove, eventsFor, newCpuMemo, newGame, seedRng, viewFor,
@@ -24,6 +25,7 @@ import {
   type RoomOptions,
   type ServerMsg,
 } from './protocol';
+import { diceForRoll } from './dice';
 import { nickKey, type ActionRow, type ChatRow, type GameRow, type SeatRow, type Store } from './store';
 
 export interface Conn {
@@ -587,7 +589,13 @@ export class Rooms {
     action: Action,
   ): { ok: boolean; error?: string } {
     const g = room.game!;
-    const r = applyAction(g.state, seat, action);
+    // Rolls get the server's dice (SPEC 5.3); they're saved with the move, so replays use them.
+    if (action.type === 'roll') action = { type: 'roll', dice: diceForRoll() };
+    let r = applyAction(g.state, seat, action);
+    for (let pairs = 16; !r.ok && r.error === NEED_DICE && pairs <= 64; pairs *= 2) {
+      action = { type: 'roll', dice: diceForRoll(pairs) };
+      r = applyAction(g.state, seat, action);
+    }
     if (!r.ok) return { ok: false, error: r.error };
     const at = this.now();
     const over = r.state.phase === 'over';

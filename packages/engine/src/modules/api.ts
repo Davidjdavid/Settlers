@@ -14,6 +14,8 @@ export interface Ctx {
   me: Player;
   myTurn: boolean;
   events: GameEvent[];
+  /** Roll one die (1–6): the server's dice for this roll, or the game's own PRNG in old games. */
+  die: (kind: 'number' | 'event') => number;
 }
 
 export interface RuleModule {

@@ -9,7 +9,7 @@ import {
   legalActions, newCpuMemo, newGame, nextFloat, nextInt, robberVictims, seedRng, total, viewFor, type Action,
   type CpuMemo, type GameState, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
-import { configFor, perturbHidden, randomOffer, seatsFor, type SimOptions } from './simulate';
+import { configFor, perturbHidden, randomOffer, seatsFor, withDice, type SimOptions } from './simulate';
 
 export interface CpuResult {
   seed: string;
@@ -68,6 +68,7 @@ export function cpuGame(
 ): CpuResult {
   const maxTurns = opts.maxTurns ?? 3000;
   const rng: RngState = seedRng(`cpu-agent:${seed}`);
+  const dice = seedRng(`dice:${seed}`);
   const seats = seatsFor(n).map((x, i) => (i < cpus ? { ...x, cpu: true } : x));
   let s = newGame(seed, seats, configFor(opts));
   const memo: CpuMemo[] = s.players.map(() => newCpuMemo());
@@ -177,7 +178,7 @@ export function cpuGame(
           );
       }
     }
-    const r = applyAction(s, p, a);
+    const r = applyAction(s, p, withDice(a, dice));
     if (!r.ok) {
       fail(`${cpu ? 'CPU' : 'bot'} move rejected: ${JSON.stringify(a)} -> ${r.error}`);
       break;

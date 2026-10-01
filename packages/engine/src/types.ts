@@ -328,10 +328,20 @@ export interface GameState {
 
 /* ---------- Actions (what a seat asks to do) ---------- */
 
+/**
+ * Dice rolled by the server (SPEC 5.3): one value from 1 to 6 per die, used in order. `d` are
+ * the number dice (two per roll, more if a 7 is rolled again), `e` the event die (Cities &
+ * Knights). Players never send these; the server adds them to every roll it accepts.
+ */
+export interface ServerDice {
+  d: number[];
+  e?: number[];
+}
+
 export type Action =
   /** Setup placement: a settlement plus a road on `e`, or a ship when `ship` is true (Seafarers). */
   | { type: 'setup'; v: number; e: number; ship?: boolean }
-  | { type: 'roll' }
+  | { type: 'roll'; dice?: ServerDice }
   | { type: 'discard'; cards: PartialRes }
   | { type: 'robber'; hex: number; victim?: Seat | null }
   | { type: 'end' }

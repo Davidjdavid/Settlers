@@ -449,12 +449,20 @@ export function canonical(x: unknown): string {
   );
 }
 
+/** Rolls get dice from their own stream, like the server's dice function (SPEC 5.3). */
+export function withDice(a: Action, dice: RngState): Action {
+  if (a.type !== 'roll') return a;
+  const die = () => 1 + nextInt(dice, 6);
+  return { type: 'roll', dice: { d: Array.from({ length: 32 }, die), e: [die()] } };
+}
+
 export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}): SimResult {
   const maxTurns = opts.maxTurns ?? 1500;
   const deep = opts.deepCheckRate ?? 0.03;
   const rng = seedRng(`agent:${seed}`);
   // Checks draw from their own stream, so checking more often (as --replay does) plays the same game.
   const crng = seedRng(`check:${seed}`);
+  const dice = seedRng(`dice:${seed}`);
   const errors: string[] = [];
   const log: [Seat, Action][] = [];
   const config = configFor(opts);
@@ -504,7 +512,8 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       if (leak) fail(leak);
     }
 
-    const [p, a] = chooseMove(s, rng);
+    const [p, a0] = chooseMove(s, rng);
+    const a = withDice(a0, dice);
     const before = chance(crng, deep) ? JSON.stringify(s) : null;
     const r = applyAction(s, p, a);
     if (before && before !== JSON.stringify(s)) fail('applyAction mutated its input');

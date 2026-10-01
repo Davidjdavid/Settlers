@@ -22,7 +22,13 @@ import {
 } from './types'; // prettier-ignore
 
 /** Bump when a rules change would replay saved games differently. */
-export const ENGINE_VERSION = 1;
+// 2: rolls use dice supplied by the server (SPEC 5.3). Games saved by version 1 have rolls
+// without dice, which still roll from the game's PRNG exactly as before.
+export const ENGINE_VERSION = 2;
+
+/** The error when a roll needs more server dice than it was given (a long run of re-rolled 7s). */
+export const NEED_DICE = 'More dice needed';
+class NeedDice extends Error {}
 
 export const CLASSIC_MAP = classicMap as MapData;
 
@@ -111,7 +117,8 @@ export function applyAction(s0: GameState, seat: Seat, action: Action): ApplyRes
   try {
     error = reduce(s, seat, action, events);
   } catch (e) {
-    error = `Something went wrong (${e instanceof Error ? e.message : String(e)})`;
+    if (e instanceof NeedDice) error = NEED_DICE;
+    else error = `Something went wrong (${e instanceof Error ? e.message : String(e)})`;
   }
   if (error) return { ok: false, error };
   keepForHandBack(s0, s, seat, action);
@@ -203,7 +210,15 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
   const g = geo(s);
   const me = s.players[p]!;
   const myTurn = s.turn === p;
-  const x: Ctx = { s, p, me, myTurn, events };
+  const given = a.type === 'roll' ? a.dice : undefined;
+  const used = { number: 0, event: 0 };
+  const die = (kind: 'number' | 'event'): number => {
+    if (!given) return 1 + nextInt(s.rng, 6);
+    const v = (kind === 'number' ? given.d : given.e)?.[used[kind]++];
+    if (v === undefined) throw new NeedDice();
+    return v;
+  };
+  const x: Ctx = { s, p, me, myTurn, events, die };
 
   // Expansion actions first; a module returns undefined for actions that aren't its own.
   for (const m of mods(s)) {
@@ -301,13 +316,19 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     case 'roll': {
       if (!myTurn) return 'Wait for your turn';
       if (s.stage !== 'preroll') return s.stage === 'setup' ? 'Finish setup first' : 'You already rolled';
+      if (given !== undefined) {
+        const ok = (xs: unknown, max: number) =>
+          Array.isArray(xs) && xs.length <= max && xs.every((v) => isInt(v) && v >= 1 && v <= 6);
+        if (!given || typeof given !== 'object' || !ok(given.d, 64) || (given.e !== undefined && !ok(given.e, 4)))
+          return 'Those aren’t dice';
+      }
       const fixed = mods(s).reduce<[number, number] | null>((d, m) => d ?? m.fixedDice?.(s) ?? null, null);
       let d1: number;
       let d2: number;
       if (fixed) [d1, d2] = fixed;
       else {
-        d1 = 1 + nextInt(s.rng, 6);
-        d2 = 1 + nextInt(s.rng, 6);
+        d1 = die('number');
+        d2 = die('number');
         // House rules: no 7s while it is anyone's first turn (or while a module says so); the 7
         // is shown, then rolled again.
         const again = () =>
@@ -315,8 +336,8 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
           mods(s).some((m) => m.rerollSeven?.(s));
         while (d1 + d2 === 7 && again()) {
           events.push({ k: 'roll', p, d: [d1, d2], redo: true });
-          d1 = 1 + nextInt(s.rng, 6);
-          d2 = 1 + nextInt(s.rng, 6);
+          d1 = die('number');
+          d2 = die('number');
         }
       }
       s.dice = [d1, d2];
