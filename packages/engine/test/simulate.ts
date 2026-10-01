@@ -611,7 +611,15 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       if (leak) fail(leak);
     }
 
+    // A fuzz move above can end the game (a turn ends, the next player wins).
+    if (s.phase !== 'play') break;
     const [p, a0] = chooseMove(s, rng);
+    if (!a0) {
+      fail(
+        `no move to make at stage ${s.stage} (turn ${s.turn}): ${JSON.stringify(legalActions(s, s.turn))}`,
+      );
+      break;
+    }
     const a = withDice(a0, dice);
     const before = chance(crng, deep) ? JSON.stringify(s) : null;
     const r = applyAction(s, p, a);
