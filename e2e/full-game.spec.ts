@@ -9,6 +9,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
+import { sitAs } from './table';
 
 interface Frame {
   t: string;
@@ -51,12 +52,10 @@ test('three players play a full game, surviving a reload and a server crash', as
     const code = (await a.getByTestId('room-code').textContent())!.trim();
     expect(code).toMatch(/^[A-Z0-9]{4}$/);
     const nicks = ['Ann', 'Bob', 'Cat'];
-    await a.fill('[data-testid=nick]', nicks[0]!);
-    await a.click('[data-testid=sit]');
+    await sitAs(a, nicks[0]!);
     for (const [i, p] of [b, c].entries()) {
       await p.goto(`${server.url}/r/${code}`);
-      await p.fill('[data-testid=nick]', nicks[i + 1]!);
-      await p.click('[data-testid=sit]');
+      await sitAs(p, nicks[i + 1]!);
     }
     await expect(a.locator('.seat:not(.open)')).toHaveCount(3);
     await a.click('[data-testid=start]');

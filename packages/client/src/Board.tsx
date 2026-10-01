@@ -183,7 +183,7 @@ function shipSVG(g: Geometry, e: number, color: string, isFresh: boolean, lifted
   const x = ((a.x + b.x) / 2) * K;
   const y = ((a.y + b.y) / 2) * K;
   const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
-  const u = 0.11 * K;
+  const u = 0.125 * K;
   return `<g class="piece${isFresh ? ' fresh' : ''}" data-ship="${e}" transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})"${lifted ? ' opacity=".45"' : ''}>
     <path d="M${f1(-2.6 * u)} ${f1(-0.2 * u)}L${f1(2.6 * u)} ${f1(-0.2 * u)}L${f1(1.7 * u)} ${f1(1.1 * u)}L${f1(-1.7 * u)} ${f1(1.1 * u)}Z" fill="${color}" stroke="${edgeOf(color)}" stroke-width="2.2" stroke-linejoin="round"/>
     <path d="M${f1(-0.1 * u)} ${f1(-0.3 * u)}V${f1(-2.4 * u)}L${f1(1.5 * u)} ${f1(-0.6 * u)}Z" fill="#f4ecd6" stroke="#0b1418" stroke-width="1.6" stroke-linejoin="round"/>
@@ -445,12 +445,8 @@ export function Board(props: {
   }
   seen.current = now;
 
-  if (targets.ghost != null && props.myColor) {
-    const V = g.verts[targets.ghost]!;
-    parts.push(
-      `<path class="ghost" d="${settlementPath(V.x * K, V.y * K)}" fill="${props.myColor}" stroke="#fff6dc" stroke-width="2.6" stroke-linejoin="round"/>`,
-    );
-  }
+  if (targets.ghost != null && props.myColor)
+    parts.push(ghostSVG(g, { kind: 'settlement', at: targets.ghost }, props.myColor, false));
   // Previews: where the mouse points, and whatever waits for Confirm.
   const ghostColor = props.myColor ?? '#f4ecd6';
   const waiting = props.pending ?? [];

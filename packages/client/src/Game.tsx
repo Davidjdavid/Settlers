@@ -838,7 +838,7 @@ export function Game({
         />
         {dice ? (
           <button className="btn small ghost" onClick={() => setSheet({ k: 'dice' })} data-testid="open-dice">
-            Dice stats
+            Dice<span className="wide-only"> stats</span>
           </button>
         ) : null}
         <EventDie v={v} />
@@ -854,10 +854,18 @@ export function Game({
           <div className="banner" data-testid="reset-banner">
             {pr.pid === myPid ? (
               <>
-                <span>You asked to end this game. Everyone has been warned.</span>
+                <span>
+                  {pr.kind === 'quit'
+                    ? 'You asked to save the game and stop for tonight. Everyone has been told.'
+                    : 'You asked to end this game. Everyone has been warned.'}
+                </span>
                 <span className="acts">
-                  <button className="btn small danger" onClick={() => client.resetConfirm()}>
-                    Yes, end the game
+                  <button
+                    className={`btn small${pr.kind === 'quit' ? ' primary' : ' danger'}`}
+                    onClick={() => client.resetConfirm()}
+                    data-testid="reset-confirm"
+                  >
+                    {pr.kind === 'quit' ? 'Yes, save and quit' : 'Yes, end the game'}
                   </button>
                   <button className="btn small" onClick={() => client.resetCancel()}>
                     Never mind
@@ -866,7 +874,11 @@ export function Game({
               </>
             ) : (
               <>
-                <span>{pr.nick} wants to end this game and start a new one.</span>
+                <span>
+                  {pr.kind === 'quit'
+                    ? `${pr.nick} wants to save the game and stop for tonight.`
+                    : `${pr.nick} wants to end this game and start a new one.`}
+                </span>
                 {myPid ? (
                   <span className="acts">
                     <button className="btn small primary" onClick={() => client.resetCancel()}>

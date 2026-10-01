@@ -13,7 +13,7 @@
 
 import { expect, test, type BrowserContextOptions, type Locator, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, view, type Frame } from './table';
+import { checkFrames, sitAs, view, type Frame } from './table';
 
 // A click that can't happen should fail the test quickly, not wait for the 10-minute limit.
 test.use({ actionTimeout: 15000 });
@@ -64,17 +64,13 @@ test('three players use the table polish features through a whole game', async (
     await expect(a.locator('.colorbtn svg')).toHaveCount(8);
     await expect(a.locator('.colorbtn[data-color=gray]')).toHaveCount(0);
     const colors = ['pink', 'yellow', 'black'];
-    await a.fill('[data-testid=nick]', nicks[0]!);
-    await a.click('.colorbtn[data-color=pink]');
-    await a.click('[data-testid=sit]');
+    await sitAs(a, nicks[0]!, 'pink');
     for (const i of [1, 2]) {
       const p = pages[i]!;
       await p.goto(`${server.url}/r/${code}`);
       // No two players can have the same colour.
       await expect(p.locator('.colorbtn[data-color=pink]')).toBeDisabled();
-      await p.fill('[data-testid=nick]', nicks[i]!);
-      await p.click(`.colorbtn[data-color=${colors[i]}]`);
-      await p.click('[data-testid=sit]');
+      await sitAs(p, nicks[i]!, colors[i]);
     }
     await expect(a.locator('.seat:not(.open)')).toHaveCount(3);
     // The four game modes, picked by anyone seated and shown to everyone.
@@ -321,7 +317,7 @@ test('three players use the table polish features through a whole game', async (
       await seqUp(p, seq);
     };
 
-    /** Leave on one device, come back on another by entering the same name. */
+    /** Leave on one device, come back on another by picking the same name. */
     const rejoin = async () => {
       const old = pages[1]!;
       const seat = await seatOf(old);
@@ -330,9 +326,8 @@ test('three players use the table polish features through a whole game', async (
       await expect(a.locator(`.player[data-seat="${seat}"]`)).toHaveClass(/away/);
       const fresh = await open(rejoinFrames);
       await fresh.goto(`${server.url}/r/${code}`);
-      await expect(fresh.getByTestId('rejoin-nick')).toBeVisible();
-      await fresh.getByTestId('rejoin-nick').fill('bob'); // names match ignoring case
-      await fresh.getByTestId('rejoin').click();
+      // Watching: pick your name to get your seat back.
+      await fresh.locator('[data-testid=rejoin][data-name=Bob]').click();
       await expect.poll(() => seatOf(fresh)).toBe(seat);
       expect(await settingsOf(fresh)).toEqual(mine);
       await expect(a.locator(`.player[data-seat="${seat}"]`)).not.toHaveClass(/away/);
@@ -377,7 +372,8 @@ test('three players use the table polish features through a whole game', async (
     expect(errors).toEqual([]);
 
     // No browser was sent anything it shouldn't see, before or after rejoining.
-    checkFrames({ pages, frames, errors, code }, seats);
+    // The browser that left mid-game saw only part of it.
+    checkFrames({ pages, frames, errors, code }, seats, 30);
     for (const f of rejoinFrames) {
       const raw = JSON.stringify(f);
       expect(raw).not.toContain('"rng"');

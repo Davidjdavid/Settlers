@@ -16,6 +16,27 @@ export interface Table {
   code: string;
 }
 
+/**
+ * Sit down as a profile (SPEC 5.1): pick the name from the list, or make it first. With `color`,
+ * that colour is picked; otherwise the profile's favourite (or the first free one).
+ */
+export async function sitAs(page: Page, name: string, color?: string) {
+  const existing = page.locator(`[data-testid=profile][data-name="${name}"]`);
+  await page.getByTestId('profiles').waitFor();
+  if (!(await existing.count())) {
+    await page.getByTestId('new-profile').click();
+    await page.getByTestId('new-name').fill(name);
+    if (color) await page.getByTestId('new-color').selectOption(color);
+    await page.getByTestId('new-save').click();
+    await expect(existing).toHaveCount(1);
+  }
+  if ((await existing.getAttribute('aria-pressed')) !== 'true') await existing.click();
+  await expect(existing).toHaveAttribute('aria-pressed', 'true');
+  if (color) await page.click(`.colorbtn[data-color=${color}]`);
+  await page.click('[data-testid=sit]');
+  await expect(page.locator('[data-testid=sit]')).toHaveCount(0);
+}
+
 /** Open n browsers, log in, create a room and seat everyone. */
 export async function seatedTable(browser: Browser, server: TestServer, nicks: string[]): Promise<Table> {
   const frames: Frame[][] = nicks.map(() => []);
@@ -35,12 +56,10 @@ export async function seatedTable(browser: Browser, server: TestServer, nicks: s
   const host = pages[0]!;
   await host.click('[data-testid=create]');
   const code = (await host.getByTestId('room-code').textContent())!.trim();
-  await host.fill('[data-testid=nick]', nicks[0]!);
-  await host.click('[data-testid=sit]');
+  await sitAs(host, nicks[0]!);
   for (let i = 1; i < pages.length; i++) {
     await pages[i]!.goto(`${server.url}/r/${code}`);
-    await pages[i]!.fill('[data-testid=nick]', nicks[i]!);
-    await pages[i]!.click('[data-testid=sit]');
+    await sitAs(pages[i]!, nicks[i]!);
   }
   await expect(host.locator('.seat:not(.open)')).toHaveCount(nicks.length);
   return { pages, frames, errors, code };
@@ -94,7 +113,7 @@ export async function playUntil(
 }
 
 /** No frame any browser received may contain another seat's secrets. */
-export function checkFrames(t: Table, seats: (number | null)[]) {
+export function checkFrames(t: Table, seats: (number | null)[], minFrames = 100) {
   t.frames.forEach((frames, i) => {
     const seat = seats[i];
     for (const f of frames) {
@@ -113,6 +132,6 @@ export function checkFrames(t: Table, seats: (number | null)[]) {
         if (it.e.k === 'buyDev' && it.e.p !== seat) expect(it.e.card).toBeNull();
       }
     }
-    expect(frames.length).toBeGreaterThan(100);
+    expect(frames.length).toBeGreaterThan(minFrames);
   });
 }

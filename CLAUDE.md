@@ -29,7 +29,7 @@ Run all commands from the repo root.
 | Simulator (1,000 each of classic, Heading for New Shores, C&K and C&K + Seafarers, 200 fog-test games, and 1,000 games with CPU players; on all CPU cores; ~12 min) | `npm run sim` |
 | Simulator, one scenario / more games / fixed seed | `npm run sim -- --scenario ck --games 5000 --seed x` (scenarios: `classic`, `heading-for-new-shores`, `fog-test`, `ck`, `ck-sea`, and `cpu-` + any of the first four but fog-test) |
 | Replay a failing game (the seed encodes scenario, players and house rules) | `npm run sim -- --replay <seed>` |
-| End-to-end (3 browsers, real server build: classic, Seafarers, Cities & Knights, CPU, table polish) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
+| End-to-end (3 browsers, real server build: classic, Seafarers, Cities & Knights, CPU, table polish, Milestone 5) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
 | **Everything CI runs** | `npm run check` |
 | Build (client to `packages/client/dist`, server bundle to `packages/server/dist`) | `npm run build` |
 | Deploy | GitHub → Actions → Deploy → Run workflow, or `npm run deploy` (see `deploy/README.md`) |
@@ -56,6 +56,8 @@ Run all commands from the repo root.
 - `packages/server/test/rooms.test.ts` drives `Rooms` with fake connections: full games through the server, restart and replay, hidden info in every message sent, failed saves, reset and seat takeover rules. `options.test.ts` covers room options and a full Seafarers game through the server. `cpu.test.ts` covers CPU seats in the lobby and a full game with CPUs on a fake clock, including a restart mid-pause.
 - `e2e/cpu.spec.ts`: two people and a CPU play a full game; the CPU is added, renamed and recoloured in the lobby and declines a trade offered through the UI (the server runs with `CPU_DELAY_MS` to speed it up).
 - `e2e/polish.spec.ts` (Milestone 4) plays a full game in two desktop browsers and an emulated phone: mode picker and colours in the lobby, placement ghosts with Confirm/Cancel by mouse and touch, every confirmation setting both on and off, settings surviving a rejoin by name on a new device, table rules changed mid-game, and the dice handed back (in setup, refused, and unasked). The test hook `botStep(['end', …])` returns `skip:<type>` for moves the test makes through the UI. Existing specs press Confirm via `confirmPlace()` in `e2e/table.ts`.
+- `e2e/m5.spec.ts` (Milestone 5) plays a full game on a laptop, a tablet and a phone (reduced motion): profiles made in the lobby, undo approved and denied by clicking, a tap while zoomed lands where aimed, rolls by clicking the dice and the button (every screen lands on the server's dice; the dice sound respects the switch), the turn sound only for whoever must act, score breakdowns and pieces left on every screen, every display size on every device without overflow, Save and quit then Resume, confetti (calm with reduced motion), end-screen and Stats-page stats. `SHOTS=<dir>` saves screenshots.
+- `packages/server/test/m5.test.ts`: profiles and merging, the one-time migration, server dice saved with every roll, stats rebuilt from the log equal the live ones (and only finished games with 2+ people count), saved games across a restart, undo, CPU chatter limits. `dice.test.ts` rolls the dice function 1,000,000 times.
 - `packages/client/test/colors.test.ts` checks every piece colour against every other and every tile (CIEDE2000, with simulated colorblindness). `npx tsx packages/client/scripts/colorsheet.ts out.png` draws the pieces in every colour on every tile for a visual check.
 - `e2e/cities-knights.spec.ts` plays a full C&K game: C&K picked in the lobby (the Knights mode), knights built and activated, improvements bought and owed choices answered through the UI.
 - `e2e/seafarers.spec.ts` plays a full Seafarers game in 3 browsers: options picked in the lobby, a setup ship placed by clicking, gold picked through the gold sheet, a reload mid-game. Shared steps are in `e2e/table.ts`.
@@ -75,7 +77,9 @@ Run all commands from the repo root.
 - Hands hold resources plus, with C&K, commodities in the same `res` record; iterate `cardKinds(s)`, not `RES`, when a rule is about cards in hand.
 - `test/citiesKnights.test.ts` covers each C&K rule and progress card; `checkInvariants(s, prev)` reuses route lengths when no piece moved (the simulator passes `prev`).
 - **The CPU player** (`src/cpu.ts`, rules in `docs/bot.md`) decides from its own view only: `cpuMove(view, rng, memo)`. Never let it see more. Its rules about humans (no player trades, robber tiers, no nasty cards, hand limit) are checked on every CPU move by `test/cpuSim.ts`, and exactly by `test/cpu.test.ts`. The server makes its moves (`Rooms.scheduleCpu`) after a 1–2 s pause (`CPU_DELAY_MS` overrides it).
-- `src/bot.ts` is the test bot, not the CPU player.
+- `src/bot.ts` is the test bot, not the CPU player. Neither ever picks `TABLE_TALK` moves (undo, the dice back, rule changes).
+- **Dice come from the server** (SPEC 5.3): `packages/server/src/dice.ts` rolls every die with `crypto.randomInt` and puts them in the roll move (`{ type: 'roll', dice }`), which is saved; the engine uses them in order and only rolls from its PRNG for old saved rolls without dice. Players can't send dice (the zod schema refuses them).
+- **Stats** (`src/stats.ts`) are always worked out by replaying moves (`StatsFold`, `statsFromLog`); every change to a hand must be explained by an event, or the simulator fails the game. `vpBreakdown` and `piecesLeft` feed the score breakdowns and supply counts and are checked after every simulated move.
 
 ## Server conventions
 

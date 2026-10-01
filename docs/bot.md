@@ -250,4 +250,4 @@ We measure it in §11. If it wins too often, we lower its build chance.
 3. **D3 Weakness:** a 1 in 4 chance to build when it can, one build per turn, random starting spots.
 4. **D4 Bank trades toward a city** are allowed on its build turns, besides hand protection at the end of its turn.
 5. **D5 No CPU-only games:** at least one person must be seated to start.
-6. **D6 Names and chat:** players name the CPU in the lobby. The CPU never talks in chat.
+6. **D6 Names and chat:** players name the CPU in the lobby. ~~The CPU never talks in chat.~~ Replaced by SPEC 5.14 (Milestone 5): CPUs now chatter now and then (at most once a turn, room switch to turn it off); Easy only says true things.

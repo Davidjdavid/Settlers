@@ -96,6 +96,29 @@ test('three players play a full Seafarers game', async ({ browser }) => {
     });
     for (const p of t.pages) await expect(p.getByTestId('game-over')).toBeVisible();
 
+    // Ships and roads differ by shape, not just colour (SPEC 5.11): a ship is a boat (hull and
+    // sail), a road a bar. Checked at the smallest display size, zoomed all the way out.
+    await a.getByRole('button', { name: 'Look at the board' }).click();
+    await a.setViewportSize({ width: 360, height: 760 });
+    await a.evaluate(() => {
+      localStorage.setItem('settlers.size', 'small');
+      document.documentElement.style.setProperty('zoom', '0.875');
+    });
+    const boats = a.locator('#board [data-ship]');
+    const bars = a.locator('#board [data-road]');
+    expect(await boats.count()).toBeGreaterThan(0);
+    expect(await bars.count()).toBeGreaterThan(0);
+    for (const sh of await boats.all()) {
+      expect(await sh.locator('path').count()).toBe(2); // hull and sail
+      expect(await sh.locator('line').count()).toBe(0);
+    }
+    for (const rd of await bars.all()) {
+      expect(await rd.locator('line').count()).toBe(2); // outline and fill of one bar
+      expect(await rd.locator('path').count()).toBe(0);
+    }
+    if (process.env.SHOTS)
+      await a.locator('#board').screenshot({ path: `${process.env.SHOTS}/ships-roads-small.png` });
+
     const finals = await Promise.all(t.pages.map(view));
     for (const f of finals) {
       expect(f.winner).toBe(finals[0].winner);

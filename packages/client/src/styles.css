@@ -135,6 +135,19 @@ input:focus-visible,
 .turnchip .sub {
   color: var(--ink-2);
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.turnchip .label {
+  flex: none;
+}
+/* Narrow screens: the name matters more than the stage. */
+@container app (max-width: 520px) {
+  .turnchip .sub,
+  .wide-only {
+    display: none;
+  }
 }
 .dot {
   width: 12px;
