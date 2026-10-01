@@ -191,7 +191,8 @@ function randomRule(s: GameState, rng: RngState): Action {
         mods.includes('citiesKnights')),
   );
   const rule = pick(rng, keys);
-  if (rule === 'winVP') return { type: 'setRule', rule, value: s.config.winVP + 1 };
+  // Mostly lower it (refused at or below the top score), so the target can't drift out of reach.
+  if (rule === 'winVP') return { type: 'setRule', rule, value: s.config.winVP + (chance(rng, 0.7) ? -1 : 1) };
   if (rule === 'barbarianDelay') return { type: 'setRule', rule, value: nextInt(rng, 3) };
   return { type: 'setRule', rule, value: !s.config.houseRules?.[rule] };
 }
@@ -452,6 +453,8 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
   const maxTurns = opts.maxTurns ?? 1500;
   const deep = opts.deepCheckRate ?? 0.03;
   const rng = seedRng(`agent:${seed}`);
+  // Checks draw from their own stream, so checking more often (as --replay does) plays the same game.
+  const crng = seedRng(`check:${seed}`);
   const errors: string[] = [];
   const log: [Seat, Action][] = [];
   const config = configFor(opts);
@@ -476,7 +479,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       }
     }
 
-    if (chance(rng, deep)) {
+    if (chance(crng, deep)) {
       // Every enumerated action must be accepted.
       for (let p = 0; p < nPlayers; p++) {
         for (const a of legalActions(s, p)) {
@@ -485,7 +488,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
         }
       }
       // ...and nothing outside the list may be accepted (handler and list must agree).
-      for (const [cp, ca] of randomCandidates(s, rng)) {
+      for (const [cp, ca] of randomCandidates(s, crng)) {
         // A robber/pirate move without a victim is shorthand for the only possible victim.
         const key = (a: Action) =>
           JSON.stringify(
@@ -497,12 +500,12 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
         if (!listed && applyAction(s, cp, ca).ok)
           fail(`accepted an unlisted action for ${cp}: ${JSON.stringify(ca)}`);
       }
-      const leak = leakCheck(s, nextInt(rng, nPlayers), rng);
+      const leak = leakCheck(s, nextInt(crng, nPlayers), crng);
       if (leak) fail(leak);
     }
 
     const [p, a] = chooseMove(s, rng);
-    const before = chance(rng, deep) ? JSON.stringify(s) : null;
+    const before = chance(crng, deep) ? JSON.stringify(s) : null;
     const r = applyAction(s, p, a);
     if (before && before !== JSON.stringify(s)) fail('applyAction mutated its input');
     if (!r.ok) {
@@ -512,8 +515,8 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       continue;
     }
     // Steals and dev draws are checked every time; rolls (very frequent) on sampled steps.
-    if (EVENT_LEAK_TYPES.has(a.type) && (a.type !== 'roll' || chance(rng, deep * 3))) {
-      const leak = eventLeakCheck(s, p, a, r.events, (p + 1 + nextInt(rng, nPlayers - 1)) % nPlayers, rng);
+    if (EVENT_LEAK_TYPES.has(a.type) && (a.type !== 'roll' || chance(crng, deep * 3))) {
+      const leak = eventLeakCheck(s, p, a, r.events, (p + 1 + nextInt(crng, nPlayers - 1)) % nPlayers, crng);
       if (leak) fail(leak);
     }
     const prev = s;
