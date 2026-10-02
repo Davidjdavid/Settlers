@@ -149,9 +149,15 @@ test('Milestone 9b: sounds with their own settings, and the dice pinned on scree
 
     // Sounds: each browser played what happened, by its own switches.
     const heard = await Promise.all(pages.map(sounds));
-    for (const [i, h] of heard.entries())
-      for (const id of ['cards', 'road', 'settlement', 'city', 'robber', 'buyCard', 'knight', 'barbarians'])
+    // A city or wall built after setup (setup's city sounds like a settlement): a short random
+    // game can end without one.
+    const builtCity = frames[0]!.some((f) => /"what":"city"|"k":"wall"/.test(JSON.stringify(f)));
+    for (const [i, h] of heard.entries()) {
+      for (const id of ['cards', 'road', 'settlement', 'robber', 'buyCard', 'knight', 'barbarians'])
         expect(h, `${names[i]}: ${id}`).toContain(id);
+      if (builtCity) expect(h, `${names[i]}: city`).toContain('city');
+      else expect(h, `${names[i]}: no city built, no city sound`).not.toContain('city');
+    }
     expect(heard[0]).not.toContain('dice');
     expect(heard[1]).toContain('dice');
     expect(heard[2]).toContain('dice');
