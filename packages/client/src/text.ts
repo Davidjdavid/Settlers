@@ -126,6 +126,20 @@ export function segText(v: Who, s: Seg): string {
 
 export const lineText = (v: Who, l: Line) => l.parts.map((s) => segText(v, s)).join('');
 
+/** The event die's faces as players say them: the gate colours, and the barbarian ship. */
+export const EVENT_WORD = { trade: 'yellow', politics: 'blue', science: 'green', ship: 'barbarian' } as const;
+export type EventDieText = 'after' | 'before' | 'off';
+
+/** A roll with the event die beside it, by the player's setting: "9 blue", "blue 9" or "9". */
+export function rollWithEvent(
+  sum: number | string,
+  face: keyof typeof EVENT_WORD | null | undefined,
+  mode: EventDieText | undefined,
+): string {
+  if (!face || mode === 'off') return String(sum);
+  return mode === 'before' ? `${EVENT_WORD[face]} ${sum}` : `${sum} ${EVENT_WORD[face]}`;
+}
+
 /** What each treasure is, in the log and the treasure sheet. */
 export const TREASURE_LABEL = {
   roads: '2 free roads or ships',

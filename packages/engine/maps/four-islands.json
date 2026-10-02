@@ -1,0 +1,469 @@
+{
+  "format": 1,
+  "id": "four-islands",
+  "name": "Four Islands",
+  "modules": ["seafarers"],
+  "players": [3, 4],
+  "winVP": 13,
+  "specialVP": {
+    "newIsland": 2
+  },
+  "hexes": [
+    {
+      "q": -4,
+      "r": 0,
+      "t": "sea"
+    },
+    {
+      "q": -4,
+      "r": 1,
+      "t": "sea"
+    },
+    {
+      "q": -4,
+      "r": 2,
+      "t": "sea"
+    },
+    {
+      "q": -4,
+      "r": 3,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -4,
+      "r": 4,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -3,
+      "r": -1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -3,
+      "r": 0,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -3,
+      "r": 1,
+      "t": "sea"
+    },
+    {
+      "q": -3,
+      "r": 2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -3,
+      "r": 3,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -3,
+      "r": 4,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -2,
+      "r": -2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -2,
+      "r": -1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -2,
+      "r": 0,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -2,
+      "r": 1,
+      "t": "sea"
+    },
+    {
+      "q": -2,
+      "r": 2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -2,
+      "r": 3,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -2,
+      "r": 4,
+      "t": "sea"
+    },
+    {
+      "q": -1,
+      "r": -3,
+      "t": "sea"
+    },
+    {
+      "q": -1,
+      "r": -2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -1,
+      "r": -1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": -1,
+      "r": 0,
+      "t": "sea"
+    },
+    {
+      "q": -1,
+      "r": 1,
+      "t": "sea"
+    },
+    {
+      "q": -1,
+      "r": 2,
+      "t": "sea"
+    },
+    {
+      "q": -1,
+      "r": 3,
+      "t": "sea"
+    },
+    {
+      "q": -1,
+      "r": 4,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": -4,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": -3,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": -2,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": -1,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": 0,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": 1,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": 2,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": 3,
+      "t": "sea"
+    },
+    {
+      "q": 0,
+      "r": 4,
+      "t": "sea"
+    },
+    {
+      "q": 1,
+      "r": -4,
+      "t": "sea"
+    },
+    {
+      "q": 1,
+      "r": -3,
+      "t": "sea"
+    },
+    {
+      "q": 1,
+      "r": -2,
+      "t": "sea"
+    },
+    {
+      "q": 1,
+      "r": -1,
+      "t": "sea"
+    },
+    {
+      "q": 1,
+      "r": 0,
+      "t": "sea"
+    },
+    {
+      "q": 1,
+      "r": 1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 1,
+      "r": 2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 1,
+      "r": 3,
+      "t": "sea"
+    },
+    {
+      "q": 2,
+      "r": -4,
+      "t": "sea"
+    },
+    {
+      "q": 2,
+      "r": -3,
+      "t": "sea"
+    },
+    {
+      "q": 2,
+      "r": -2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 2,
+      "r": -1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 2,
+      "r": 0,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 2,
+      "r": 1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 2,
+      "r": 2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 3,
+      "r": -4,
+      "t": "sea"
+    },
+    {
+      "q": 3,
+      "r": -3,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 3,
+      "r": -2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 3,
+      "r": -1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 3,
+      "r": 0,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 3,
+      "r": 1,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 4,
+      "r": -4,
+      "t": "sea"
+    },
+    {
+      "q": 4,
+      "r": -3,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 4,
+      "r": -2,
+      "t": "random",
+      "pool": "isles",
+      "n": "random"
+    },
+    {
+      "q": 4,
+      "r": -1,
+      "t": "sea"
+    },
+    {
+      "q": 4,
+      "r": 0,
+      "t": "sea"
+    }
+  ],
+  "pools": {
+    "isles": {
+      "terrain": [
+        "wood",
+        "wood",
+        "wood",
+        "wood",
+        "wood",
+        "brick",
+        "brick",
+        "brick",
+        "brick",
+        "brick",
+        "sheep",
+        "sheep",
+        "sheep",
+        "sheep",
+        "sheep",
+        "wheat",
+        "wheat",
+        "wheat",
+        "wheat",
+        "wheat",
+        "ore",
+        "ore",
+        "ore",
+        "ore",
+        "gold",
+        "gold",
+        "desert",
+        "desert"
+      ],
+      "numbers": [5, 9, 4, 10, 6, 8, 3, 11, 2, 12, 4, 10, 5, 9, 6, 8, 3, 11, 5, 9, 4, 10, 6, 8, 3, 11]
+    }
+  },
+  "harbors": [
+    {
+      "q": -3,
+      "r": -1,
+      "side": 2,
+      "t": "random"
+    },
+    {
+      "q": -2,
+      "r": -2,
+      "side": 3,
+      "t": "random"
+    },
+    {
+      "q": -1,
+      "r": -1,
+      "side": 0,
+      "t": "random"
+    },
+    {
+      "q": 3,
+      "r": -3,
+      "side": 3,
+      "t": "random"
+    },
+    {
+      "q": 4,
+      "r": -3,
+      "side": 0,
+      "t": "random"
+    },
+    {
+      "q": -4,
+      "r": 4,
+      "side": 1,
+      "t": "random"
+    },
+    {
+      "q": -2,
+      "r": 2,
+      "side": 0,
+      "t": "random"
+    },
+    {
+      "q": 1,
+      "r": 1,
+      "side": 2,
+      "t": "random"
+    },
+    {
+      "q": 2,
+      "r": 2,
+      "side": 0,
+      "t": "random"
+    }
+  ],
+  "harborPool": ["any", "any", "any", "any", "wood", "brick", "sheep", "wheat", "ore"],
+  "start": "all",
+  "robber": "desert",
+  "pirate": [0, 0]
+}

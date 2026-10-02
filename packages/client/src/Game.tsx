@@ -5,7 +5,7 @@ import {
   COMS, COST, DEV_PLAY, KEEP_MAX, KNIGHT_COST, SHIP_COST, WALL_COST, cardKinds, cardWarning, goldDue, handLimit, has,
   treasureDue,
   isLogNote, keepMinTarget, legalActions,
-  piecesLeft, rateFor, RES, stateFromView, vpBreakdown, type Action, type Card, type DevPlayable, type GameStats, type PlayerView, type Progress, type Seat, type VPPart,
+  piecesLeft, rateFor, RES, stateFromView, vpBreakdown, type Action, type Card, type Cards, type DevPlayable, type GameStats, type PlayerView, type Progress, type Seat, type VPPart,
 } from '@settlers/engine'; // prettier-ignore
 import type { DiceInfo, LogItem, RoomInfo } from '@settlers/server/protocol';
 import {
@@ -26,14 +26,14 @@ import {
   TreasureSheet,
   VictimSheet,
 } from './Sheets'; // prettier-ignore
-import { listNames, nameOf, routeName } from './text';
+import { listNames, nameOf, rollWithEvent, routeName } from './text';
 import { Log } from './log';
 import { DicePin, useLayoutWidth } from './dicepin';
 import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
 import { handRisk } from './handrisk';
 import {
-  BOARD_OWES, BarbarianBox, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
+  BOARD_OWES, BarbarianBox, BarbarianChip, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
   myOwe, owePrompt, paramOf,
 } from './ck'; // prettier-ignore
 
@@ -886,7 +886,7 @@ export function Game({
           ],
         }
       : {
-          title: `You rolled ${sum}`,
+          title: `You rolled ${rollWithEvent(sum, v.ck?.event, my?.eventDieText)}`,
           sub: 'Build, trade, or play a card. End your turn when you’re done.',
           mine: true,
           buttons: [
@@ -919,7 +919,9 @@ export function Game({
               : `${cur} doesn’t trade`;
     pm = {
       title: `${cur}’s turn`,
-      sub: tradable ? `${cur} rolled ${sum}. You can offer them a trade.` : `${cur} rolled ${sum}.`,
+      sub: tradable
+        ? `${cur} rolled ${rollWithEvent(sum, v.ck?.event, my?.eventDieText)}. You can offer them a trade.`
+        : `${cur} rolled ${rollWithEvent(sum, v.ck?.event, my?.eventDieText)}.`,
       buttons: me == null ? [] : tradeButtons(why, 'Only on your turn'),
     };
   }
@@ -1025,6 +1027,33 @@ export function Game({
       }),
     [],
   );
+  // The cards a roll just gave you, flashed above the dice for a moment.
+  const [gains, setGains] = useState<{ n: number; cards: Cards } | null>(null);
+  useEffect(
+    () =>
+      client.onFresh(({ items, after }) => {
+        const me = after?.me;
+        if (me == null) return;
+        const got: Cards = {};
+        const add = (c: Cards | undefined) => {
+          for (const [k, n] of Object.entries(c ?? {}))
+            if (n) got[k as keyof Cards] = (got[k as keyof Cards] ?? 0) + n;
+        };
+        for (const it of items) {
+          if (it.k !== 'ev' || isLogNote(it.e)) continue;
+          const e = it.e;
+          if (e.k === 'produce' || e.k === 'commodities') add(e.gains[me] as Cards | undefined);
+          else if (e.k === 'gold' && e.p === me) add(e.got as Cards);
+        }
+        if (Object.keys(got).length) setGains((g) => ({ n: (g?.n ?? 0) + 1, cards: got }));
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (!gains) return;
+    const t = window.setTimeout(() => setGains(null), 3200);
+    return () => window.clearTimeout(t);
+  }, [gains?.n]);
   // Sounds for what just happened (SPEC 9.4), each by this player's own switches and volumes;
   // the dice, the turn chime and the fanfare play from their own places.
   useEffect(
@@ -1216,6 +1245,20 @@ export function Game({
         ) : null}
       </div>
       <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
+        {gains ? (
+          <div className="gainflash" key={gains.n} data-testid="gain-flash" aria-live="polite">
+            <span className="gf-you">You got</span>
+            {Object.entries(gains.cards).map(([k, n]) => (
+              <span
+                key={k}
+                className="gf-card"
+                style={{ ['--c' as string]: CARD_COLOR[k as keyof typeof CARD_COLOR] }}
+              >
+                +{n} {CARD_LABEL[k as keyof typeof CARD_LABEL]}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <RollDice
           dice={v.dice}
           {...(v.ck ? { event: v.ck.event } : {})}
@@ -1399,7 +1442,7 @@ export function Game({
   const talkEl = (
     <section className="box talk" aria-label="Table talk">
       <span className="eyebrow">Table talk</span>
-      <Log v={v} log={log} />
+      <Log v={v} log={log} dieText={my?.eventDieText} />
       <ChatForm />
     </section>
   );
@@ -1456,6 +1499,7 @@ export function Game({
           <span className="sub">First to</span>
           <span className="label">{v.winVP}</span>
         </span>
+        {v.ck ? <BarbarianChip v={v} /> : null}
         <div className="spacer" />
         <span
           className={`sync ${status === 'live' ? (busy ? 'busy' : 'live') : status === 'offline' ? 'off' : 'busy'}`}

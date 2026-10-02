@@ -123,7 +123,14 @@ export const ActionSchema = z.discriminatedUnion('type', [
 ]);
 
 export const OptionsSchema = z.strictObject({
-  scenario: z.enum(['classic', 'heading-for-new-shores', 'fog-islands']),
+  scenario: z.enum([
+    'classic',
+    'heading-for-new-shores',
+    'fog-islands',
+    'four-islands',
+    'treasure-fog',
+    'classic-isles',
+  ]),
   /** Cities & Knights on top of the scenario. */
   ck: z.boolean().optional(),
   winVP: z.number().int().min(5).max(30),
@@ -203,6 +210,8 @@ export const SettingsSchema = z.strictObject({
   dicePin: z
     .strictObject({ corner: z.enum(['tl', 'tr', 'bl', 'br']), small: z.boolean().optional() })
     .optional(),
+  /** Knights: the event die's colour with a roll, "9 blue" (default), "blue 9" or left out. */
+  eventDieText: z.enum(['after', 'before', 'off']).optional(),
   /** SPEC 11: your own screen layout, one per kind of screen (none: the standard screen). */
   layout: z
     .strictObject({

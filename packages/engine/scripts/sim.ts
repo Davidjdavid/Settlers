@@ -84,6 +84,34 @@ const SIMS: Record<string, Scenario> = {
     maxTurns: 5000,
     rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'wHu', 'I', 'O'],
   },
+  // The maps added on 2 October: Four Islands, Treasure Fog, Classic and the Isles.
+  'four-islands': {
+    map: SCENARIOS['four-islands']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu'],
+  },
+  'treasure-fog': {
+    map: SCENARIOS['treasure-fog']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu'],
+  },
+  'classic-isles': {
+    map: SCENARIOS['classic-isles']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu'],
+  },
+  'treasure-fog-ck': {
+    map: SCENARIOS['treasure-fog']!,
+    modules: ['seafarers', 'citiesKnights'],
+    players: [3, 4],
+    winVP: 17,
+    quickVP: 13,
+    maxTurns: 5000,
+    rules: ['r', 'd', 'w', 'f', 'hu', 'I'],
+  },
   // SPEC 10.5: a test map with treasures, in Seafarers and in Full game mode.
   treasures: {
     map: treasureTest as unknown as MapData,
@@ -125,6 +153,10 @@ const DEFAULT_GAMES: Record<string, number> = {
   treasures: 1000,
   'treasures-ck': 400,
   'cpu-treasures-ck': 100,
+  'four-islands': 200,
+  'treasure-fog': 200,
+  'classic-isles': 200,
+  'treasure-fog-ck': 100,
 };
 
 /** The CPUs the cpu-* scenarios cycle through: Easy, Medium, Hard and a custom one. */

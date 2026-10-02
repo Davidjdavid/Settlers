@@ -3143,8 +3143,8 @@ button.vp {
     margin: 4px 0;
   }
   .app > .side .ckbox .step {
-    height: 20px;
-    font-size: 12px;
+    height: 26px;
+    font-size: 16px;
   }
   .app > .side .ckline {
     gap: 1px 10px;
@@ -3704,4 +3704,143 @@ button.vp {
   overflow: hidden;
   text-overflow: ellipsis;
   min-height: 1.4em;
+}
+
+/* What a roll just gave you, above the dice: fades in, stays a moment, fades out. */
+.prompt {
+  position: relative;
+}
+.gainflash {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(10, 27, 35, 0.92);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: gainflash 3.2s ease forwards;
+}
+.gf-you {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.gf-card {
+  padding: 3px 9px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #0b1418;
+  background: var(--c);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+@keyframes gainflash {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  12%,
+  75% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gainflash {
+    animation: none;
+  }
+}
+
+/* The barbarians, harder to miss: a big count that warms up as they close in, a verdict, and a
+   chip in the top bar that's always in view. */
+.barbhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.barbleft {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.barbleft b {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--ink);
+  margin-right: 2px;
+}
+.ckbox .track .step {
+  min-height: 28px;
+  font-size: 18px;
+}
+.ckbox.barb-near {
+  border-color: #e0a43a;
+}
+.ckbox.barb-near .barbleft b {
+  color: #f0b54a;
+}
+.ckbox.barb-close {
+  border-color: #e0533a;
+  box-shadow:
+    0 0 0 1px #e0533a,
+    0 0 18px rgba(224, 83, 58, 0.35);
+}
+.ckbox.barb-close .barbleft b {
+  color: #ff7a5c;
+}
+.barbverdict {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(120, 200, 140, 0.12);
+  color: #a6e3b4;
+}
+.barbverdict.bad {
+  background: rgba(224, 83, 58, 0.15);
+  color: #ffab98;
+}
+.barbchip .label {
+  font-size: 16px;
+}
+.barbchip.barb-near {
+  border-color: #e0a43a;
+  color: #f0b54a;
+}
+.barbchip.barb-close {
+  border-color: #e0533a;
+  color: #ff7a5c;
+  animation: barbpulse 1.6s ease-in-out infinite;
+}
+@keyframes barbpulse {
+  50% {
+    box-shadow: 0 0 0 3px rgba(224, 83, 58, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .barbchip.barb-close {
+    animation: none;
+  }
+}
+/* The event die's colour in the log's turn lines, in its own colour (and always as a word). */
+.log .evword {
+  font-weight: 650;
+}
+.log .evword[data-ev='trade'] {
+  color: #f0c55a;
+}
+.log .evword[data-ev='politics'] {
+  color: #8cb8ff;
+}
+.log .evword[data-ev='science'] {
+  color: #74d683;
 }

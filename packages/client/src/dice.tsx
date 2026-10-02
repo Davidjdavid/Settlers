@@ -3,6 +3,7 @@
  * are a button that works exactly like "Roll dice". Every roll tumbles for about half a second on
  * every screen, then lands on the server's numbers; for the roller the tumble starts on the click.
  * The animation is only for show: the faces it ends on are always the ones the server rolled.
+ * The first die is yellow and the second red, as in the box (Knights: red decides progress cards).
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -127,8 +128,8 @@ export function RollDice({
       <span
         dangerouslySetInnerHTML={{
           __html:
-            dieSVG(shown ? shown[0] : 1) +
-            dieSVG(shown ? shown[1] : 1) +
+            dieSVG(shown ? shown[0] : 1, 'yellow') +
+            dieSVG(shown ? shown[1] : 1, 'red') +
             (event !== undefined ? eventDieSVG(tumble ? tumbleEvent : event) : ''),
         }}
         style={{ display: 'flex', gap: 6, opacity: shown ? 1 : 0.35 }}

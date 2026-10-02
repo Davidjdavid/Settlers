@@ -85,6 +85,24 @@ export function SettingsSheet({ mine, onClose }: { mine: PlayerSettings | null; 
       </div>
       <DisplaySize />
       <div className="switchrow">
+        <span>Event die with rolls (Knights): “9 blue”, “blue 9”, or leave it out</span>
+        <select
+          value={mine?.eventDieText ?? 'after'}
+          data-testid="setting-eventDieText"
+          aria-label="Event die with rolls"
+          onChange={(e) =>
+            client.saveSettings({
+              ...(mine ?? {}),
+              eventDieText: e.target.value as 'after' | 'before' | 'off',
+            })
+          }
+        >
+          <option value="after">9 blue</option>
+          <option value="before">blue 9</option>
+          <option value="off">Leave it out</option>
+        </select>
+      </div>
+      <div className="switchrow">
         <span>Sounds: each one’s switch, volume and style</span>
         <button className="btn small" onClick={() => setPage('sounds')} data-testid="sounds-open">
           Sounds…

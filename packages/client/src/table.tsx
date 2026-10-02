@@ -59,7 +59,17 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
   }, [st.status]);
   useEffect(() => {
     const i = setInterval(() => tick((x) => x + 1), 15_000);
-    return () => clearInterval(i);
+    // Maps made in another tab or on another device show up when you come back here.
+    const back = () => {
+      if (document.visibilityState === 'visible') client.loadMaps();
+    };
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('focus', back);
+    return () => {
+      clearInterval(i);
+      document.removeEventListener('visibilitychange', back);
+      window.removeEventListener('focus', back);
+    };
   }, []);
   const map = t.board.map;
   const sea = room.options.scenario !== 'classic';
@@ -70,7 +80,11 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
       : OUR_RULES;
   const players = Math.max(2, Math.min(4, room.seats.length || 4));
   const warnings = checkBoard(map, rules, players);
-  const savedMaps = (st.maps ?? []).filter((m) => m.seafarers === sea);
+  // Maps for this mode can be picked; the others are listed too (greyed out) so a new map is
+  // always there to see, with the mode it needs.
+  const allMaps = st.maps ?? [];
+  const savedMaps = allMaps.filter((m) => m.seafarers === sea);
+  const otherMaps = allMaps.filter((m) => m.seafarers !== sea);
   const src = t.board.source;
   const edit = (op: EditOp) => sendTable({ k: 'edit', op } as TableOp);
   const terrains: Terrain[] = [
@@ -125,6 +139,7 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
               aria-label="Board"
               data-testid="board-kind"
               value={src.kind}
+              onFocus={() => client.loadMaps()}
               onChange={(e) => {
                 const k = e.target.value;
                 if (k === 'default') sendTable({ k: 'source', source: 'default' });
@@ -135,7 +150,13 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
                     preset: presets[0]?.id ?? 'builtin:our rules',
                   });
                 else if (savedMaps[0]) sendTable({ k: 'source', source: 'saved', id: savedMaps[0].id });
-                else client.toast(`No saved ${sea ? 'Seafarers ' : ''}maps yet: make one in Maps`, 'err');
+                else
+                  client.toast(
+                    otherMaps.length
+                      ? `Your saved maps are for ${sea ? 'Base or Knights' : 'Seafarers or Full game'}: switch the mode to play them`
+                      : `No saved ${sea ? 'Seafarers ' : ''}maps yet: make one in Maps`,
+                    'err',
+                  );
               }}
             >
               <option value="default">Standard board</option>
@@ -161,6 +182,7 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
                 aria-label="Saved map"
                 data-testid="board-map"
                 value={src.id}
+                onFocus={() => client.loadMaps()}
                 onChange={(e) => sendTable({ k: 'source', source: 'saved', id: e.target.value })}
               >
                 {savedMaps.map((m) => (
@@ -168,6 +190,15 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
                     {m.name}
                   </option>
                 ))}
+                {otherMaps.length ? (
+                  <optgroup label={sea ? 'For Base or Knights' : 'For Seafarers or Full game'}>
+                    {otherMaps.map((m) => (
+                      <option key={m.id} value={m.id} disabled>
+                        {m.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
             ) : null}
           </div>

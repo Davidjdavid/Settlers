@@ -73,15 +73,43 @@ export function owePrompt(v: PlayerView, o: Owe | null): { title: string; sub: s
 
 /* ---------- Side panel: barbarians and decks ---------- */
 
+/** How close the barbarians are: calm, near (3 or fewer steps), or close (1). */
+export const barbLevel = (left: number) => (left <= 1 ? 'close' : left <= 3 ? 'near' : 'calm');
+
+/** The barbarians in the top bar: always in view, whatever the layout. */
+export function BarbarianChip({ v }: { v: PlayerView }) {
+  const ck = v.ck!;
+  const left = 7 - ck.barb;
+  const strength = v.verts.filter((b) => b && b[1] === 2).length;
+  const defense = ck.knights.reduce((a, k) => a + (k?.on ? k.lvl : 0), 0);
+  return (
+    <span
+      className={`turnchip barbchip barb-${barbLevel(left)}`}
+      data-testid="barb-chip"
+      title={`Barbarians: ${left} ${left === 1 ? 'step' : 'steps'} to attack · strength ${strength} vs defense ${defense}`}
+    >
+      <span aria-hidden="true">⛵</span>
+      <span className="label">{left}</span>
+      <span className="sub">to attack</span>
+    </span>
+  );
+}
+
 export function BarbarianBox({ v }: { v: PlayerView }) {
   const ck = v.ck!;
   const strength = v.verts.filter((b) => b && b[1] === 2).length;
   const defense = ck.knights.reduce((a, k) => a + (k?.on ? k.lvl : 0), 0);
   const delay = v.rules.houseRules.barbarianDelay ?? 0;
   const waiting = v.turnN <= delay * v.players.length;
+  const left = 7 - ck.barb;
   return (
-    <section className="box ckbox" aria-label="Barbarians" data-testid="barbarians">
-      <span className="eyebrow">Barbarians</span>
+    <section className={`box ckbox barb-${barbLevel(left)}`} aria-label="Barbarians" data-testid="barbarians">
+      <div className="barbhead">
+        <span className="eyebrow">Barbarians</span>
+        <span className="barbleft" data-testid="barb-left">
+          <b>{left}</b> {left === 1 ? 'step' : 'steps'} to attack
+        </span>
+      </div>
       <div className="track" title={`${ck.barb} of 7`}>
         {Array.from({ length: 8 }, (_, i) => (
           <span key={i} className={`step${i === ck.barb ? ' ship' : ''}${i === 7 ? ' land' : ''}`}>
@@ -96,6 +124,11 @@ export function BarbarianBox({ v }: { v: PlayerView }) {
         <span>
           Defense <b>{defense}</b> (active knights)
         </span>
+      </div>
+      <div className={`barbverdict${strength > defense ? ' bad' : ''}`} data-testid="barb-verdict">
+        {strength > defense
+          ? `If they landed now, the barbarians would win (${strength} vs ${defense})`
+          : `If they landed now, Catan would hold (${defense} vs ${strength})`}
       </div>
       <div className="ckline">
         {ck.attacks ? (
@@ -599,7 +632,7 @@ function AlchemistSheet({ plays, onClose }: { plays: Play[]; onClose: () => void
         −
       </button>
       <span
-        dangerouslySetInnerHTML={{ __html: dieSVG(d[i]) }}
+        dangerouslySetInnerHTML={{ __html: dieSVG(d[i], i ? 'red' : 'yellow') }}
         style={{ display: 'inline-flex', width: 34 }}
       />
       <button

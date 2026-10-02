@@ -53,7 +53,7 @@ export function Dice({ dice }: { dice: [number, number] | null }) {
       data-testid="dice"
     >
       <span
-        dangerouslySetInnerHTML={{ __html: dieSVG(shown[0]) + dieSVG(shown[1]) }}
+        dangerouslySetInnerHTML={{ __html: dieSVG(shown[0], 'yellow') + dieSVG(shown[1], 'red') }}
         style={{ display: 'flex', gap: 6 }}
       />
       {!flicker && dice ? <span className="sum">{dice[0] + dice[1]}</span> : null}

@@ -20,10 +20,10 @@ import {
   type Track,
 } from '@settlers/engine';
 import type { LogItem } from '@settlers/server/protocol';
-import { CARD_COLOR, PCOL, TRACK_LABEL, cardIcon } from './art';
+import { CARD_COLOR, PCOL, cardIcon } from './art';
 import { cardTextColor, nameColor } from './logcolors';
 import { itemKey } from './net';
-import { eventLines, segText, type Line, type Seg, type Who } from './text';
+import { EVENT_WORD, eventLines, segText, type EventDieText, type Line, type Seg, type Who } from './text';
 
 type Row =
   | { k: 'turn'; key: string; p: Seat; dice?: [number, number]; ev?: 'ship' | Track }
@@ -126,20 +126,28 @@ function Part({ who, s }: { who: Who; s: Seg }) {
   return <span className="warn">{s.warn}</span>;
 }
 
-const EV_TEXT = (f: 'ship' | Track) => (f === 'ship' ? 'barbarian ship' : `${TRACK_LABEL[f]} gate`);
-
 const TurnRow = memo(function TurnRow({
   who,
   p,
   dice,
   ev,
+  mode,
 }: {
   who: Who;
   p: Seat;
   dice?: [number, number] | undefined;
   ev?: 'ship' | Track | undefined;
+  mode?: EventDieText | undefined;
 }) {
   const sum = dice ? dice[0] + dice[1] : 0;
+  // The event die's colour beside the total ("9 blue"), before it ("blue 9"), or left out.
+  const word = ev && mode !== 'off' ? EVENT_WORD[ev] : null;
+  const wordEl = word ? (
+    <span className={ev === 'ship' ? 'warn' : 'evword'} data-ev={ev}>
+      {word}
+    </span>
+  ) : null;
+  const total = sum === 7 ? <span className="warn">7</span> : <b>{sum}</b>;
   return (
     <div className="sep" data-turn={p}>
       <span>
@@ -147,8 +155,17 @@ const TurnRow = memo(function TurnRow({
         {dice ? (
           <>
             {' · rolled '}
-            {dice[0]} + {dice[1]} = {sum === 7 ? <span className="warn">7</span> : <b>{sum}</b>}
-            {ev ? <span className={ev === 'ship' ? 'warn' : undefined}> · {EV_TEXT(ev)}</span> : null}
+            {dice[0]} + {dice[1]} ={' '}
+            {mode === 'before' && wordEl ? (
+              <>
+                {wordEl} {total}
+              </>
+            ) : (
+              <>
+                {total}
+                {wordEl ? <> {wordEl}</> : null}
+              </>
+            )}
           </>
         ) : null}
       </span>
@@ -187,7 +204,15 @@ const ChatRow = memo(function ChatRow({
   );
 });
 
-export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
+export function Log({
+  v,
+  log,
+  dieText,
+}: {
+  v: PlayerView;
+  log: LogItem[];
+  dieText?: EventDieText | undefined;
+}) {
   const box = useRef<HTMLDivElement>(null);
   // Who's who changes rarely (a rename, a new seat); the rows only need that, not the whole view.
   const whoKey = JSON.stringify([v.me, v.players.map((p) => [p.pid, p.nick, p.color])]);
@@ -297,7 +322,8 @@ export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
         ) : null}
         {shown.map((r) => {
           const f = fresh.has(r.key);
-          if (r.k === 'turn') return <TurnRow key={r.key} who={who} p={r.p} dice={r.dice} ev={r.ev} />;
+          if (r.k === 'turn')
+            return <TurnRow key={r.key} who={who} p={r.p} dice={r.dice} ev={r.ev} mode={dieText} />;
           if (r.k === 'sys')
             return (
               <div key={r.key} className={`e big${f ? ' fresh' : ''}`}>

@@ -27,7 +27,7 @@ import {
   nameColor,
   readable,
 } from '../src/logcolors';
-import { eventLines, lineText } from '../src/text';
+import { eventLines, lineText, rollWithEvent } from '../src/text';
 
 describe('Log colours (SPEC 8.10)', () => {
   it('the log background is the panel colour the page uses', () => {
@@ -171,5 +171,28 @@ describe('Log lines (SPEC 8.10)', () => {
       'Alex traded 4 Sheep to the bank for 1 Wheat',
     ]);
     expect(text({ k: 'steal', p: 0, from: 1, r: null })).toEqual(['Alex stole a card from Sam']);
+  });
+});
+
+describe('the event die with a roll (Knights)', () => {
+  it('reads "9 blue", "blue 9" or "9", and the ship is "barbarian"', () => {
+    expect(rollWithEvent(9, 'politics', undefined)).toBe('9 blue');
+    expect(rollWithEvent(9, 'politics', 'after')).toBe('9 blue');
+    expect(rollWithEvent(9, 'politics', 'before')).toBe('blue 9');
+    expect(rollWithEvent(9, 'politics', 'off')).toBe('9');
+    expect(rollWithEvent(6, 'trade', 'after')).toBe('6 yellow');
+    expect(rollWithEvent(6, 'science', 'before')).toBe('green 6');
+    expect(rollWithEvent(8, 'ship', 'after')).toBe('8 barbarian');
+    expect(rollWithEvent(8, 'ship', 'before')).toBe('barbarian 8');
+    expect(rollWithEvent(5, null, 'after')).toBe('5');
+  });
+
+  it('its colours in the log are readable (4.5:1)', () => {
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+    for (const ev of ['trade', 'politics', 'science']) {
+      const m = css.match(new RegExp(`\\.evword\\[data-ev='${ev}'\\] \\{\\s*color: (#[0-9a-f]{6})`, 'i'));
+      expect(m, ev).toBeTruthy();
+      expect(contrast(m![1]!, LOG_BG), ev).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
   });
 });

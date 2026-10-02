@@ -280,11 +280,17 @@ const PIPS: Record<number, [number, number][]> = {
   6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
 }; // prettier-ignore
 
-export function dieSVG(n: number): string {
+/**
+ * A number die. As in the box: the first die is yellow and the second red (in Knights the red
+ * die decides who draws a progress card). Without a colour, plain ivory.
+ */
+export function dieSVG(n: number, color?: 'yellow' | 'red'): string {
+  const face = color === 'yellow' ? '#f3cf3a' : color === 'red' ? '#c62f24' : '#f4ecd6';
+  const pip = color === 'red' ? '#fff6ea' : '#1b2328';
   const pips = (PIPS[n] ?? [])
-    .map(([x, y]) => `<circle cx="${x * 4.4}" cy="${y * 4.4}" r="1.85" fill="#1b2328"/>`)
+    .map(([x, y]) => `<circle cx="${x * 4.4}" cy="${y * 4.4}" r="1.85" fill="${pip}"/>`)
     .join('');
-  return `<svg class="die" viewBox="-10 -10 20 20" aria-hidden="true" data-face="${n}"><rect x="-9" y="-9" width="18" height="18" rx="4" fill="#f4ecd6" stroke="#0a1b23" stroke-width="1"/>${pips}</svg>`;
+  return `<svg class="die${color ? ` die-${color}` : ''}" viewBox="-10 -10 20 20" aria-hidden="true" data-face="${n}"${color ? ` data-color="${color}"` : ''}><rect x="-9" y="-9" width="18" height="18" rx="4" fill="${face}" stroke="#0a1b23" stroke-width="1"/>${pips}</svg>`;
 }
 
 export const BRAND_SVG =

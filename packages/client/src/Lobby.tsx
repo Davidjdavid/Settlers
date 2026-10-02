@@ -385,6 +385,9 @@ const MODES: Record<Mode, { label: string; sub: string; scenario: RoomOptions['s
 const SEA_MAPS: [RoomOptions['scenario'], string][] = [
   ['heading-for-new-shores', 'Heading for New Shores'],
   ['fog-islands', 'Fog Islands'],
+  ['four-islands', 'Four Islands'],
+  ['treasure-fog', 'Treasure Fog'],
+  ['classic-isles', 'Classic and the Isles'],
 ];
 const modeOf = (o: RoomOptions): Mode =>
   o.scenario === 'classic' ? (o.ck ? 'knights' : 'base') : o.ck ? 'full' : 'seafarers';
