@@ -14,6 +14,7 @@ import {
   fairnessSummary,
   fillRest,
   generate,
+  geo,
   greedyDraft,
   legalActions,
   mapProblems,
@@ -208,6 +209,121 @@ describe('editor actions', () => {
     expect(ok(m, { k: 'meta', players: [4, 3, 3], winVP: 12 })).toMatchObject({ players: [3, 4], winVP: 12 });
   });
 
+  it('Seafarers pieces (SPEC 10.1): start area, island points, pirate start, fog stack', () => {
+    let m = blank();
+    expect(refused(m, { k: 'start', at: [0, 0], on: true })).toBe('A start area needs Seafarers');
+    m = ok(m, { k: 'meta', seafarers: true, players: [3] });
+    m = ok(m, { k: 'terrain', at: [2, -2], t: 'sea' });
+    m = ok(m, { k: 'terrain', at: [0, 2], t: 'fog' });
+    // Start area: painted hexes; none painted means all land.
+    expect(m.start ?? 'all').toBe('all');
+    for (const at of [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [-1, 1],
+      [-1, 0],
+      [0, -1],
+      [1, -1],
+    ] as At[]) {
+      // One hex at a time: the area is too small until there's room for everyone.
+      const r = applyEdit(m, { k: 'start', at, on: true });
+      if (!r.ok) throw new Error(r.error);
+      m = r.map;
+    }
+    expect(mapProblems(m)).toEqual([]);
+    expect(m.start).toHaveLength(7);
+    m = ok(m, { k: 'start', at: [1, -1], on: false });
+    expect(m.start).toHaveLength(6);
+    // Island points 0–3; 0 means none.
+    m = ok(m, { k: 'islandVP', n: 2 });
+    expect(m.specialVP).toEqual({ newIsland: 2 });
+    expect(refused(m, { k: 'islandVP', n: 4 })).toBe('Island points go from 0 to 3');
+    // The pirate starts on the sea, or off the board.
+    expect(refused(m, { k: 'pirate', at: [0, 0] })).toBe('The pirate starts on the sea');
+    m = ok(m, { k: 'pirate', at: [2, -2] });
+    expect(m.pirate).toEqual([2, -2]);
+    // The fog stack: set by hand, checked, or back to standard.
+    m = ok(m, { k: 'fogStack', terrain: ['gold', 'sea'], numbers: [6] });
+    expect(m.fog).toEqual({ terrain: ['gold', 'sea'], numbers: [6] });
+    expect(refused(m, { k: 'fogStack', terrain: ['gold'], numbers: [] })).toMatch(/needs 1 numbers/);
+    expect(refused(m, { k: 'fogStack', terrain: [], numbers: [] })).toMatch(
+      /a tile for each of the 1 fog hex/,
+    );
+    expect(refused(m, { k: 'fogStack', terrain: ['fog'], numbers: [] })).toBe('Fog hides land, gold or sea');
+    m = ok(m, { k: 'fogStack', standard: true });
+    expect(m.fog!.terrain.length).toBeGreaterThanOrEqual(1);
+    // A game plays it: settlements only in the start area, the pirate where it was put.
+    const s = newGame('sea-start', seatsFor(3), { map: m, modules: ['seafarers'], winVP: 10 });
+    const setup = new Set(legalActions(s, s.turn).flatMap((a) => (a.type === 'setup' ? [a.v] : [])));
+    expect(setup.size).toBeGreaterThan(0);
+    const startHex = new Set(
+      (m.start as [number, number][]).map(([q, r]) => s.board.hexes.findIndex((h) => h.q === q && h.r === r)),
+    );
+    for (const v of setup) expect(geo(s).verts[v]!.hexes.some((h) => startHex.has(h))).toBe(true);
+    expect(s.board.pirate).toBe(s.board.hexes.findIndex((h) => h.q === 2 && h.r === -2));
+  });
+
+  it('filling a Seafarers map keeps its start area, pirate, island points and fog (SPEC 10.1)', () => {
+    let m = ok(blank(), { k: 'meta', seafarers: true, players: [3] });
+    for (const at of [
+      [2, -2],
+      [-2, 2],
+    ] as At[])
+      m = ok(m, { k: 'terrain', at, t: 'sea' });
+    m = ok(m, { k: 'terrain', at: [0, 2], t: 'fog' });
+    m = ok(m, { k: 'pirate', at: [2, -2] });
+    m = ok(m, { k: 'islandVP', n: 2 });
+    for (const at of [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [-1, 1],
+      [-1, 0],
+      [0, -1],
+      [1, -1],
+    ] as At[]) {
+      const r = applyEdit(m, { k: 'start', at, on: true });
+      if (r.ok) m = r.map;
+    }
+    m = ok(m, { k: 'fogStack', terrain: ['gold', 'wheat'], numbers: [6, 8] });
+    const r = fillRest(m, ANYTHING_GOES, 'sea-fill', 3);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.map.hexes.every((h) => h.t !== 'random')).toBe(true);
+    expect(r.map.start).toEqual(m.start);
+    expect(r.map.pirate).toEqual([2, -2]);
+    expect(r.map.specialVP).toEqual({ newIsland: 2 });
+    expect(r.map.fog).toEqual({ terrain: ['gold', 'wheat'], numbers: [6, 8] });
+    const s = newGame('sea-play', seatsFor(3), { map: r.map, modules: ['seafarers'], winVP: 10 });
+    expect(s.sea!.fog.terrain.slice().sort()).toEqual(['gold', 'wheat']);
+  });
+
+  it('a start area too small for everyone is the one hard check (SPEC 10.1)', () => {
+    let m = ok(blank(), { k: 'meta', seafarers: true, players: [4] });
+    const r = applyEdit(m, { k: 'start', at: [0, 0], on: true });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(mapProblems(r.map)).toContain(
+      'the start area has room for 3 starting settlements; 4 players need 8',
+    );
+    m = r.map;
+    // Unbalanced on purpose is fine: a big enough start area anywhere passes.
+    for (const at of [
+      [1, 0],
+      [0, 1],
+      [-1, 1],
+      [-1, 0],
+      [0, -1],
+      [1, -1],
+      [2, -1],
+      [-2, 1],
+    ] as At[]) {
+      const x = applyEdit(m, { k: 'start', at, on: true });
+      if (x.ok) m = x.map;
+    }
+    expect(mapProblems(m)).toEqual([]);
+  });
+
   it('undo and redo step back and forward through every kind of action', () => {
     const start = blank();
     const hist = new EditHistory(start);
@@ -227,6 +343,15 @@ describe('editor actions', () => {
       { k: 'removeHex', at: [-2, 2] },
       { k: 'meta', name: 'Renamed' },
       { k: 'clear' },
+      { k: 'meta', seafarers: true },
+      { k: 'terrain', at: [2, -2], t: 'sea' },
+      { k: 'terrain', at: [0, 2], t: 'fog' },
+      { k: 'start', at: [0, 0], on: true },
+      { k: 'start', at: [0, 0], on: false },
+      { k: 'islandVP', n: 1 },
+      { k: 'pirate', at: [2, -2] },
+      { k: 'fogStack', terrain: ['wood'], numbers: [8] },
+      { k: 'fogStack', standard: true },
     ];
     const states = [hist.map];
     for (const op of ops) {

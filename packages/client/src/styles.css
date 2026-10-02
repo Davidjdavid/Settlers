@@ -3294,3 +3294,47 @@ button.vp {
 .dicepin.phone .minichart {
   max-height: 22px;
 }
+
+/* ---------- Seafarers pieces in the map editor (SPEC 10.1, 10.2) ---------- */
+.mapboard .startarea {
+  fill: rgba(127, 214, 140, 0.18);
+  stroke: #7fd68c;
+  stroke-width: 4;
+  stroke-dasharray: 10 6;
+  pointer-events: none;
+}
+.mapboard .piratestart circle {
+  fill: #20242b;
+  stroke: #efe7d2;
+  stroke-width: 3;
+}
+.mapboard .piratestart text {
+  fill: #efe7d2;
+  font-size: 26px;
+}
+.fogstack .fogcounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 4px 0 8px;
+}
+.fogstack .fogcount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.fogstack .fogcount button {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  padding: 0;
+  line-height: 1;
+}
+.fogstack .fogcount b {
+  min-width: 2ch;
+  text-align: center;
+}

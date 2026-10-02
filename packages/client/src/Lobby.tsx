@@ -372,10 +372,15 @@ function CpuSeat({ seat, taken }: { seat: RoomInfo['seats'][number]; taken: Set<
 type Mode = 'base' | 'seafarers' | 'knights' | 'full';
 const MODES: Record<Mode, { label: string; sub: string; scenario: RoomOptions['scenario']; ck: boolean }> = {
   base: { label: 'Base game', sub: 'The classic island', scenario: 'classic', ck: false },
-  seafarers: { label: 'Seafarers', sub: 'Heading for New Shores: ships and islands', scenario: 'heading-for-new-shores', ck: false },
+  seafarers: { label: 'Seafarers', sub: 'Ships, islands and gold across the water', scenario: 'heading-for-new-shores', ck: false },
   knights: { label: 'Knights', sub: 'Cities & Knights on the classic island', scenario: 'classic', ck: true },
   full: { label: 'Full game', sub: 'Seafarers and Cities & Knights together', scenario: 'heading-for-new-shores', ck: true },
 }; // prettier-ignore
+/** The Seafarers maps to play on (SPEC 10.2: the Fog Islands). */
+const SEA_MAPS: [RoomOptions['scenario'], string][] = [
+  ['heading-for-new-shores', 'Heading for New Shores'],
+  ['fog-islands', 'Fog Islands'],
+];
 const modeOf = (o: RoomOptions): Mode =>
   o.scenario === 'classic' ? (o.ck ? 'knights' : 'base') : o.ck ? 'full' : 'seafarers';
 
@@ -413,7 +418,9 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
       <div className="modes">
         {(Object.keys(MODES) as Mode[]).map((m) => {
           const x = MODES[m];
-          const next = { ...o, scenario: x.scenario, ck: x.ck };
+          // Switching between Seafarers and Full game keeps the Seafarers map you picked.
+          const scenario = x.scenario !== 'classic' && sea ? o.scenario : x.scenario;
+          const next = { ...o, scenario, ck: x.ck };
           return (
             <button
               key={m}
@@ -433,6 +440,27 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
           );
         })}
       </div>
+      {sea ? (
+        <div className="seg seamaps" role="radiogroup" aria-label="Seafarers map" style={{ marginBottom: 6 }}>
+          {SEA_MAPS.map(([id, name]) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={o.scenario === id}
+              className={`btn small${o.scenario === id ? ' on' : ''}`}
+              disabled={!editable}
+              data-testid={`scenario-${id}`}
+              onClick={() => {
+                const next = { ...o, scenario: id };
+                set({ ...next, winVP: defaultVP(next) });
+              }}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {sea && SCENARIOS[o.scenario]!.specialVP?.newIsland ? (
         <p className="hint" style={{ margin: '2px 0 6px' }}>
           {SCENARIOS[o.scenario]!.specialVP!.newIsland} points for each new island you settle

@@ -8,6 +8,7 @@
  */
 
 import { cornerPip, DEFAULT_PIPS, modelOf } from './mapcheck';
+import { geometryFor } from './geometry';
 import { validateMap, type MapData, type MapHex, type TileSet } from './map';
 import { isLand, type PortType, type Terrain } from './types';
 
@@ -129,6 +130,8 @@ export function standardSet(land: number, harbors: number): TileSet {
 
 const FOG_TERRAIN: Terrain[] = ['sea', 'wood', 'sheep', 'wheat', 'brick', 'ore', 'sea', 'gold'];
 const FOG_NUMBERS = [5, 9, 4, 10, 6, 8, 3, 11, 2, 12];
+/** What fog can hide. */
+const FOG_CAN: readonly Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore', 'gold', 'desert', 'sea'];
 
 /**
  * Bring an editor map back in line after any change: the set follows the board's size, blanks
@@ -255,6 +258,15 @@ export type EditOp =
   | { k: 'lockHarbor'; at: At; side: number; on: boolean }
   /** Turn everything that isn't locked back to blank. */
   | { k: 'clear' }
+  /** Seafarers (SPEC 10.1): paint a hex in or out of the start area (none painted = all land). */
+  | { k: 'start'; at: At; on: boolean }
+  /** Seafarers: points for settling a new island, 0–3. */
+  | { k: 'islandVP'; n: number }
+  /** Seafarers: where the pirate starts, a sea hex or off the board (null). */
+  | { k: 'pirate'; at: At | null }
+  /** Seafarers (10.2): what can turn up under the fog, or the standard stack. */
+  | { k: 'fogStack'; terrain: Terrain[]; numbers: number[] }
+  | { k: 'fogStack'; standard: true }
   /** Name, player counts, points to win, Seafarers. */
   | { k: 'meta'; name?: string; players?: number[]; winVP?: number; seafarers?: boolean }
   /** Replace the whole map (a fill, or a generated board). */
@@ -328,8 +340,38 @@ export function mapProblems(m: MapData): string[] {
   )
     bad.push('sea, gold and fog tiles need Seafarers');
   if (m.players.some((n) => n > 4)) bad.push('maps are for 2 to 4 players');
+  // A game can't start without room for everyone's two starting settlements (SPEC 10.1).
+  if (m.modules.includes('seafarers') && Array.isArray(m.start)) {
+    const need = 2 * Math.max(...m.players);
+    const spots = startSpots(m);
+    if (spots < need)
+      bad.push(
+        `the start area has room for ${spots} starting settlements; ${Math.max(...m.players)} players need ${need}`,
+      );
+  }
   if (m.hexes.length > MAX_HEXES) bad.push('the map is too big');
   return bad;
+}
+
+/**
+ * How many starting settlements fit in the start area at once: corners on its land (blank
+ * tiles count as land), two apart, picked greedily. Used for the one hard check on a start area.
+ */
+export function startSpots(m: MapData): number {
+  if (!Array.isArray(m.start)) return Infinity;
+  const g = geometryFor(m.hexes);
+  const start = new Set(m.start.map(([q, r]) => m.hexes.findIndex((h) => h.q === q && h.r === r)));
+  const land = (h: number) => setLand(m.hexes[h]!.t);
+  const taken = new Set<number>();
+  let n = 0;
+  g.verts.forEach((V, v) => {
+    if (!V.hexes.some((h) => start.has(h) && land(h))) return;
+    const near = V.edges.map((e) => (g.edges[e]!.a === v ? g.edges[e]!.b : g.edges[e]!.a));
+    if (taken.has(v) || near.some((u) => taken.has(u))) return;
+    taken.add(v);
+    n++;
+  });
+  return n;
 }
 
 /** Apply one edit. */
@@ -460,6 +502,51 @@ export function applyEdit(m0: MapData, op: EditOp): EditResult {
         if (!h.lock?.n && producing(h.t)) h.n = 'random';
       }
       for (const h of m.harbors) if (!h.lock) h.t = 'random';
+      break;
+    }
+    case 'start': {
+      if (!m.modules.includes('seafarers')) return fail('A start area needs Seafarers');
+      if (!hex(op.at)) return fail('There’s no hex there');
+      const list = (Array.isArray(m.start) ? m.start : []).filter(
+        (x) => !sameAt({ q: x[0], r: x[1] }, op.at),
+      );
+      if (op.on) list.push([op.at[0], op.at[1]]);
+      // Nothing painted means everywhere, as before.
+      m.start = list.length ? list : 'all';
+      break;
+    }
+    case 'islandVP': {
+      if (!m.modules.includes('seafarers')) return fail('Island points need Seafarers');
+      if (!(Number.isInteger(op.n) && op.n >= 0 && op.n <= 3)) return fail('Island points go from 0 to 3');
+      if (op.n) m.specialVP = { ...m.specialVP, newIsland: op.n };
+      else delete m.specialVP;
+      break;
+    }
+    case 'pirate': {
+      if (!m.modules.includes('seafarers')) return fail('The pirate needs Seafarers');
+      if (op.at) {
+        const h = hex(op.at);
+        if (!h || h.t !== 'sea') return fail('The pirate starts on the sea');
+        m.pirate = [op.at[0], op.at[1]];
+      } else m.pirate = null;
+      break;
+    }
+    case 'fogStack': {
+      if (!m.modules.includes('seafarers')) return fail('Fog needs Seafarers');
+      if ('standard' in op) {
+        delete m.fog;
+        break;
+      }
+      if (op.terrain.some((t) => t === 'fog' || !FOG_CAN.includes(t)))
+        return fail('Fog hides land, gold or sea');
+      if (op.numbers.some((n) => !(Number.isInteger(n) && n >= 2 && n <= 12 && n !== 7)))
+        return fail('Numbers go from 2 to 12, without 7');
+      const fogHexes = m.hexes.filter((h) => h.t === 'fog').length;
+      if (op.terrain.length < fogHexes)
+        return fail(`The fog stack needs a tile for each of the ${fogHexes} fog hexes`);
+      const producing = op.terrain.filter((t) => isLand(t) && t !== 'desert').length;
+      if (op.numbers.length < producing) return fail(`The fog stack needs ${producing} numbers for its land`);
+      m.fog = { terrain: op.terrain.slice(), numbers: op.numbers.slice() };
       break;
     }
     case 'meta': {

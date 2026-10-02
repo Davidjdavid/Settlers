@@ -118,7 +118,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
 ]);
 
 export const OptionsSchema = z.strictObject({
-  scenario: z.enum(['classic', 'heading-for-new-shores']),
+  scenario: z.enum(['classic', 'heading-for-new-shores', 'fog-islands']),
   /** Cities & Knights on top of the scenario. */
   ck: z.boolean().optional(),
   winVP: z.number().int().min(5).max(30),

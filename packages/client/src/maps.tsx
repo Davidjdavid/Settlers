@@ -46,7 +46,10 @@ export type Tool =
   | { k: 'harbor'; t: PortType | 'random' | null }
   | { k: 'move' }
   | { k: 'lock' }
-  | { k: 'shape'; add: 'random' | 'sea' };
+  | { k: 'shape'; add: 'random' | 'sea' }
+  /** Seafarers (SPEC 10.1): paint the start area, or place the pirate's start. */
+  | { k: 'start' }
+  | { k: 'pirate' };
 
 export const TERRAIN_NAME: Record<Terrain | 'random', string> = {
   wood: 'Wood',
@@ -178,8 +181,16 @@ export function MapBoard(props: {
         if (t.k === 'ghost') onEdit({ k: 'addHex', at: t.at, t: tool.add });
         else if (t.k === 'hex' || t.k === 'token') onEdit({ k: 'removeHex', at: t.at });
         return;
+      case 'start':
+        if (t.k === 'hex' || t.k === 'token') onEdit({ k: 'start', at: t.at, on: !inStart(t.at) });
+        return;
+      case 'pirate':
+        if (t.k === 'hex' || t.k === 'token') onEdit({ k: 'pirate', at: t.at });
+        return;
     }
   };
+  const start = Array.isArray(map.start) ? map.start : [];
+  const inStart = (at: At) => start.some(([q, r]) => q === at[0] && r === at[1]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     const t = targetOf(e.target as Element);
@@ -380,6 +391,35 @@ export function MapBoard(props: {
           </g>
         );
       })}
+      {/* The start area and the pirate's start (SPEC 10.1). */}
+      {start.map(([q, r]) => {
+        const i = hexAt(map.hexes, q, r);
+        if (i < 0) return null;
+        const p = g.hexes[i]!;
+        return (
+          <polygon
+            key={`s${q},${r}`}
+            className="startarea"
+            data-start={`${q},${r}`}
+            points={hexPts(p.x * K, p.y * K, 0.86 * K)}
+          />
+        );
+      })}
+      {map.pirate
+        ? (() => {
+            const i = hexAt(map.hexes, map.pirate[0], map.pirate[1]);
+            if (i < 0) return null;
+            const p = g.hexes[i]!;
+            return (
+              <g className="piratestart" data-testid="pirate-start" pointerEvents="none">
+                <circle cx={p.x * K} cy={p.y * K} r={0.34 * K} />
+                <text x={p.x * K} y={p.y * K} textAnchor="middle" dominantBaseline="central">
+                  ☠
+                </text>
+              </g>
+            );
+          })()
+        : null}
       {ghosts.map((at) => {
         const x = Math.sqrt(3) * (at[0] + at[1] / 2) * K;
         const y = 1.5 * at[1] * K;
@@ -961,6 +1001,7 @@ export function MapEditorPage({ id }: { id: string }) {
             </div>
             <p className="hint small">{TOOL_HINT[tool.k]}</p>
           </section>
+          {seafarers ? <SeafarersPanel map={map} tool={tool} setTool={setTool} edit={edit} /> : null}
           <section>
             <h4>Fill</h4>
             <div className="row tight">
@@ -1090,6 +1131,126 @@ export function MapEditorPage({ id }: { id: string }) {
   );
 }
 
+const FOG_KINDS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore', 'gold', 'desert', 'sea'];
+
+/**
+ * Seafarers pieces (SPEC 10.1, 10.2): the start area and the pirate's start (board tools),
+ * points for a new island, and the fog stack (what fog can hide), set by hand or left standard.
+ */
+function SeafarersPanel({
+  map,
+  tool,
+  setTool,
+  edit,
+}: {
+  map: MapData;
+  tool: Tool;
+  setTool: (t: Tool) => void;
+  edit: (op: EditOp) => void;
+}) {
+  const fogHexes = map.hexes.filter((h) => h.t === 'fog').length;
+  const stack = map.fog ?? { terrain: [], numbers: [] };
+  const [nums, setNums] = useState(stack.numbers.join(', '));
+  useEffect(() => setNums(stack.numbers.join(', ')), [stack.numbers.join(',')]);
+  const countOf = (t: Terrain) => stack.terrain.filter((x) => x === t).length;
+  const setCount = (t: Terrain, n: number) => {
+    const terrain = [...stack.terrain.filter((x) => x !== t), ...new Array<Terrain>(Math.max(0, n)).fill(t)];
+    edit({ k: 'fogStack', terrain, numbers: stack.numbers });
+  };
+  const start = Array.isArray(map.start) ? map.start.length : 0;
+  return (
+    <section data-testid="seafarers-panel">
+      <h4>Seafarers</h4>
+      <div className="palette">
+        <ToolButton on={tool.k === 'start'} onClick={() => setTool({ k: 'start' })} testid="tool-start">
+          Start area{start ? ` (${start})` : ''}
+        </ToolButton>
+        <ToolButton on={tool.k === 'pirate'} onClick={() => setTool({ k: 'pirate' })} testid="tool-pirate">
+          Pirate start
+        </ToolButton>
+        <ToolButton
+          on={false}
+          onClick={() => edit({ k: 'pirate', at: null })}
+          testid="pirate-off"
+          title="The pirate starts off the board"
+        >
+          Pirate off the board
+        </ToolButton>
+      </div>
+      <div className="row tight">
+        <label className="check">
+          Points for a new island
+          <select
+            value={map.specialVP?.newIsland ?? 0}
+            onChange={(e) => edit({ k: 'islandVP', n: Number(e.target.value) })}
+            data-testid="island-vp"
+          >
+            {[0, 1, 2, 3].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {fogHexes ? (
+        <div className="fogstack" data-testid="fog-stack">
+          <p className="small">
+            Under the fog ({stack.terrain.length} tiles for {fogHexes} fog hexes):
+          </p>
+          <div className="fogcounts">
+            {FOG_KINDS.map((t) => (
+              <span key={t} className="fogcount" data-t={t}>
+                <i className="sw" style={{ background: TILE_COLOR[t] }} />
+                {TERRAIN_NAME[t]}
+                <button
+                  type="button"
+                  aria-label={`One less ${t}`}
+                  onClick={() => setCount(t, countOf(t) - 1)}
+                >
+                  −
+                </button>
+                <b data-testid={`fog-${t}`}>{countOf(t)}</b>
+                <button
+                  type="button"
+                  aria-label={`One more ${t}`}
+                  onClick={() => setCount(t, countOf(t) + 1)}
+                >
+                  +
+                </button>
+              </span>
+            ))}
+          </div>
+          <label className="check">
+            Numbers
+            <input
+              className="text"
+              value={nums}
+              data-testid="fog-numbers"
+              onChange={(e) => setNums(e.target.value)}
+              onBlur={() => {
+                const numbers = nums
+                  .split(/[\s,]+/)
+                  .filter(Boolean)
+                  .map(Number);
+                if (numbers.join(',') !== stack.numbers.join(','))
+                  edit({ k: 'fogStack', terrain: stack.terrain, numbers });
+              }}
+            />
+          </label>
+          <button
+            className="btn small"
+            onClick={() => edit({ k: 'fogStack', standard: true })}
+            data-testid="fog-standard"
+          >
+            Standard
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 const TOOL_HINT: Record<Tool['k'], string> = {
   terrain: 'Click a hex to place the tile.',
   number: 'Click a tile to place the number.',
@@ -1097,6 +1258,9 @@ const TOOL_HINT: Record<Tool['k'], string> = {
   move: 'Drag a tile, number or harbor onto another to swap them (or tap one, then the other).',
   lock: 'Click a tile, number or harbor to lock or unlock it. Filling keeps locked things.',
   shape: 'Click + to add a hex, or a hex to remove it.',
+  start:
+    'Click hexes to paint the start area: starting settlements go only there. None painted means anywhere.',
+  pirate: 'Click a sea hex for the pirate’s start.',
 };
 
 /* ---------- Presets (5.18) ---------- */

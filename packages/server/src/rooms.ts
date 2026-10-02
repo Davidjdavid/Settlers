@@ -1731,9 +1731,12 @@ export function gameConfigFor(o: RoomOptions, board?: MapData): Partial<GameConf
 /** Room options matching a game's config (for a resumed game's room). */
 export function optionsFor(c: Partial<GameConfig>): RoomOptions {
   // Any Seafarers board resumes in the Seafarers modes; anything else in the base modes.
-  const scenario: RoomOptions['scenario'] = c.map?.modules.includes('seafarers')
-    ? 'heading-for-new-shores'
-    : 'classic';
+  const scenario: RoomOptions['scenario'] =
+    c.map?.id === 'fog-islands'
+      ? 'fog-islands'
+      : c.map?.modules.includes('seafarers')
+        ? 'heading-for-new-shores'
+        : 'classic';
   const hr = c.houseRules ?? {};
   const o: RoomOptions = {
     scenario: SCENARIOS[scenario] ? scenario : 'classic',

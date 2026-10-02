@@ -50,6 +50,22 @@ const SIMS: Record<string, Scenario> = {
     rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH'],
   },
   'fog-test': { map: fogTest as unknown as MapData, players: [3, 4], rules: ['n', 'b', 'nb', 'fu', 'nbf'] },
+  // SPEC 10.5: the Fog Islands in Seafarers and in Full game mode.
+  'fog-islands': {
+    map: SCENARIOS['fog-islands']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'I'],
+  },
+  'fog-islands-ck': {
+    map: SCENARIOS['fog-islands']!,
+    modules: ['seafarers', 'citiesKnights'],
+    players: [3, 4],
+    winVP: 15,
+    quickVP: 12,
+    maxTurns: 5000,
+    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O'],
+  },
   ck: {
     modules: ['citiesKnights'],
     players: [3, 4],
@@ -81,6 +97,8 @@ const DEFAULT_GAMES: Record<string, number> = {
   'heading-for-new-shores': 1000,
   'heading-for-new-shores-3': 500,
   'fog-test': 200,
+  'fog-islands': 1000,
+  'fog-islands-ck': 1000,
   ck: 1000,
   'ck-sea': 1000,
   'cpu-classic': 250,

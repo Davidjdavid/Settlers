@@ -2,12 +2,15 @@
 
 import hfns from '../maps/heading-for-new-shores.json';
 import hfns3 from '../maps/heading-for-new-shores-3.json';
+import fogIslands from '../maps/fog-islands.json';
 import type { MapData } from './map';
 import { CLASSIC_MAP } from './rules';
 
 export const SCENARIOS: Record<string, MapData> = {
   classic: CLASSIC_MAP,
   'heading-for-new-shores': hfns as unknown as MapData,
+  /** Our own Fog Islands (SPEC 10.2): a home island, fog hiding islands and gold across the water. */
+  'fog-islands': fogIslands as unknown as MapData,
 };
 
 /** Layouts for a particular number of players (docs/rules/seafarers.md D15). */
