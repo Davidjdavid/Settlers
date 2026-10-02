@@ -44,7 +44,8 @@ describe('Log colours (SPEC 8.10)', () => {
   });
 
   it('every card colour, and the log’s own text colours, read at 4.5:1', () => {
-    for (const c of [...RES, ...COMS]) expect(contrast(cardTextColor(c), LOG_BG), c).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    for (const c of [...RES, ...COMS])
+      expect(contrast(cardTextColor(c), LOG_BG), c).toBeGreaterThanOrEqual(MIN_CONTRAST);
     // --ink, --ink-2 (lines), --lantern-2 (big lines), --alarm (warnings).
     for (const c of ['#eef3ef', '#a9bec1', '#ffd27a', '#ff8a75'])
       expect(contrast(c, LOG_BG), c).toBeGreaterThanOrEqual(MIN_CONTRAST);
