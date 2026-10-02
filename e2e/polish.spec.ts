@@ -377,7 +377,7 @@ test('three players use the table polish features through a whole game', async (
     for (const f of rejoinFrames) {
       const raw = JSON.stringify(f);
       expect(raw).not.toContain('"rng"');
-      expect(raw).not.toContain('"seed"');
+      if (f.game) expect(raw).not.toContain('"seed"');
       if (f.game) expect([null, seats[1]]).toContain(f.game.me);
     }
   } finally {

@@ -149,7 +149,8 @@ test('three players play a full game, surviving a reload and a server crash', as
       for (const f of frames[i]!) {
         const raw = JSON.stringify(f);
         expect(raw).not.toContain('"rng"');
-        expect(raw).not.toContain('"seed"');
+        // The pre-game table's board seed is public (docs/pregame.md 1.1); a game never carries one.
+        if (f.game) expect(raw).not.toContain('"seed"');
         expect(raw).not.toContain('"deck"');
         if (f.game) {
           expect(f.game.me).toBe(seat);
