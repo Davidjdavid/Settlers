@@ -153,7 +153,7 @@ Hard keeps an estimate of **how many turns** each way to the target would take, 
 
 - It searches the sequences of moves it can make: trades, builds, cards, in different orders.
 - It takes the one that leaves it best placed for its plan.
-- **Thinking time (D3):** small moves still take 1–3 seconds. For the big decisions (planning its turn, the robber, a card play) Hard may think up to about 5 seconds, to play stronger.
+- **Thinking time (D3):** the same 1–3 second pace as every CPU. Hard does its search during that pause, so it never looks slower; it just uses the time better.
 
 ### 3.4 Timing and combinations
 
@@ -236,7 +236,7 @@ You can make your own CPU personalities, saved for everyone like maps and preset
    - Medium robs whoever is ahead, only once someone is within 3 points of winning; before that it robs like Easy.
    - Hard always goes for the real leader, people included.
 2. **D2 Tournament targets:** Hard wins at least 40% against three Mediums, and Medium at least 60% against three Easys.
-3. **D3 Hard's thinking time:** up to about 5 seconds for big decisions, so it can play stronger; 1–3 seconds otherwise.
+3. **D3 Hard's thinking time:** the same 1–3 seconds per move as every CPU; its search runs inside that pause.
 4. **D4 CPU offers:** made to everyone. "One CPU offer per turn" and "CPU trading" are both switches set before the game starts.
 5. **D5 Default difficulty:** Easy.
 6. **D6 Custom CPUs and the CPU page:** section 5.

@@ -825,7 +825,7 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
    - Year of Plenty with an empty bank.
 5. **D5 Bank button:**
    - It shows "Bank · 4:1", or 3:1 with that house rule, when no card has a better rate.
-   - With the "3:1 bank trades for everyone" house rule on, the **3:1 harbors disappear from the board**, since they'd do nothing.
+   - With the "3:1 bank trades for everyone" house rule on, the **3:1 harbors disappear from the board**. They'd give nothing extra, and someone might build there for a harbor they already have.
    - 2:1 harbors stay.
 6. **D6 Card names:** keep Wood, Sheep and Wheat. **Cloth is renamed Linen** everywhere it's shown: hand, bank, log, stats, help. The rules engine's internal name doesn't change, so saved games still load.
 
