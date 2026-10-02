@@ -204,6 +204,12 @@ const token = z
 const many = z.number().int().min(0).max(200);
 const mapName = z.string().trim().min(1).max(40);
 
+const TileSetSchema = z.strictObject({
+  terrain: z.partialRecord(TERRAIN, many),
+  numbers: z.record(z.string().regex(/^\d{1,2}$/), many),
+  harbors: z.partialRecord(PORT, many),
+});
+
 export const MapSchema = z.strictObject({
   format: z.literal(1),
   id: z.string().min(1).max(60),
@@ -221,6 +227,7 @@ export const MapSchema = z.strictObject({
         pool: z.string().min(1).max(20).optional(),
         n: z.union([token, z.literal('random')]).optional(),
         lock: z.strictObject({ t: z.boolean().optional(), n: z.boolean().optional() }).optional(),
+        region: z.string().min(1).max(20).optional(),
       }),
     )
     .max(120),
@@ -249,12 +256,11 @@ export const MapSchema = z.strictObject({
   start: z.union([z.literal('all'), z.array(at).max(120)]).optional(),
   robber: z.union([z.literal('desert'), at, z.null()]),
   pirate: z.union([at, z.null()]).optional(),
-  set: z
-    .strictObject({
-      terrain: z.partialRecord(TERRAIN, many),
-      numbers: z.record(z.string().regex(/^\d{1,2}$/), many),
-      harbors: z.partialRecord(PORT, many),
-    })
+  set: TileSetSchema.optional(),
+  /** SPEC 10.4: regions, each with its own tile set. */
+  regions: z
+    .record(z.string().min(1).max(20), z.strictObject({ name: mapName, set: TileSetSchema }))
+    .refine((r) => Object.keys(r).length <= 12, 'at most 12 regions')
     .optional(),
   made: z
     .strictObject({

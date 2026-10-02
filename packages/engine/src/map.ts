@@ -29,6 +29,14 @@ export interface MapHex {
   n?: number | 'random';
   /** Kept as they are when the generator fills the board (docs/maps.md 4.2). */
   lock?: { t?: boolean; n?: boolean };
+  /** Editor maps (SPEC 10.4): the region whose tile set this hex's blanks are drawn from. */
+  region?: string;
+}
+
+/** A group of hexes with its own tile set, shuffled only within the region (SPEC 10.4). */
+export interface MapRegion {
+  name: string;
+  set: TileSet;
 }
 
 export interface MapHarbor {
@@ -88,6 +96,8 @@ export interface MapData {
   pirate?: [number, number] | null;
   /** Editor maps: the tile set blanks are filled from (blanks get what's left after what's placed). */
   set?: TileSet;
+  /** Editor maps: regions with their own tile sets; hexes outside every region use `set`. */
+  regions?: Record<string, MapRegion>;
   made?: MapMade;
 }
 
@@ -139,6 +149,7 @@ export function validateMap(m: MapData): string[] {
       bad.push(`hex ${k}: bad number ${h.n}`);
     if (h.t !== 'random' && typeof h.n === 'number' && !produces(h.t))
       bad.push(`hex ${k}: ${h.t} can't have a number`);
+    if (h.region !== undefined && !m.regions?.[h.region]) bad.push(`hex ${k}: unknown region ${h.region}`);
   }
   for (const [name, pool] of Object.entries(m.pools ?? {})) {
     const hs = m.hexes.filter((h) => h.t === 'random' && h.pool === name);

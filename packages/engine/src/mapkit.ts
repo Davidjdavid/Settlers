@@ -97,20 +97,29 @@ function fit(want: Counts, placed: Counts, n: number, std: Readonly<Counts>): st
     .flatMap((k) => new Array<string>(left[k]!).fill(k));
 }
 
-/** What's placed on the board (blanks left out). */
-export function placedOf(m: MapData): TileSet {
+/** The hexes of one region, or (null) the hexes outside every region, which use the main set. */
+export const hexesOf = (m: MapData, region: string | null): MapHex[] =>
+  m.hexes.filter((h) => (h.region ?? null) === region);
+
+/** What's placed on these hexes (all by default; blanks left out), and every placed harbor. */
+export function placedOf(m: MapData, hexes: readonly MapHex[] = m.hexes): TileSet {
   return {
-    terrain: bag(m.hexes.flatMap((h) => (h.t !== 'random' && isLand(h.t) ? [h.t] : []))),
-    numbers: bag(m.hexes.flatMap((h) => (typeof h.n === 'number' ? [h.n] : []))),
+    terrain: bag(hexes.flatMap((h) => (h.t !== 'random' && isLand(h.t) ? [h.t] : []))),
+    numbers: bag(hexes.flatMap((h) => (typeof h.n === 'number' ? [h.n] : []))),
     harbors: bag(m.harbors.flatMap((h) => (h.t !== 'random' ? [h.t] : []))),
   };
 }
 
-/** The tile set a map stands for: its `set`, or what's placed plus what its pools hold. */
+/**
+ * The main tile set: the map's `set`, or what's placed outside regions plus what those hexes'
+ * pools hold. Each region has its own set (SPEC 10.4).
+ */
 export function setOf(m: MapData): TileSet {
   if (m.set) return structuredClone(m.set);
-  const p = placedOf(m);
-  const pools = Object.values(m.pools ?? {});
+  const main = hexesOf(m, null);
+  const p = placedOf(m, main);
+  const used = new Set(main.flatMap((h) => (h.pool ? [h.pool] : [])));
+  const pools = Object.entries(m.pools ?? {}).flatMap(([k, v]) => (used.has(k) ? [v] : []));
   return {
     terrain: bag([...unbag(p.terrain as Counts), ...pools.flatMap((x) => x.terrain.filter(isLand))]),
     numbers: bag([...unbag(p.numbers), ...pools.flatMap((x) => x.numbers)]),
@@ -140,40 +149,56 @@ const FOG_CAN: readonly Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore', '
  */
 export function normalize(m0: MapData): MapData {
   const m = structuredClone(m0);
+  adoptPools(m);
+  for (const h of m.hexes) if (h.region !== undefined && !m.regions?.[h.region]) delete h.region;
   const set = setOf(m);
   delete m.set;
   for (const h of m.hexes) {
     if (h.t !== 'random' && !producing(h.t)) delete h.n;
     if (h.t === 'random' && !(typeof h.n === 'number' && h.lock?.n)) h.n = 'random';
     if (producing(h.t) && h.n === undefined) h.n = 'random';
-    if (h.t === 'random' || h.n === 'random') h.pool = 'auto';
+    // Blanks draw from their region's pool, or the main one (SPEC 10.4).
+    if (h.t === 'random' || h.n === 'random') h.pool = h.region ?? 'auto';
     else delete h.pool;
     if (h.lock && !h.lock.t && !h.lock.n) delete h.lock;
   }
 
-  // The set follows the board: one tile per land hex, one token per producing tile, one per harbor.
+  // Each set follows its hexes: one tile per land hex, one token per producing tile. Blanks
+  // get what's left of their set after what's placed.
+  const pools: NonNullable<MapData['pools']> = {};
+  const follow = (set: TileSet, hexes: MapHex[], pool: string) => {
+    const placed = placedOf(m, hexes);
+    const terrain = set.terrain as Counts;
+    const land = hexes.filter((h) => setLand(h.t)).length;
+    while (sum(terrain) < land) growOne(terrain, STANDARD_TERRAIN as Counts);
+    while (sum(terrain) > land) shrinkOne(terrain, placed.terrain as Counts, STANDARD_TERRAIN as Counts);
+    const prod = land - (terrain.desert ?? 0);
+    while (sum(set.numbers) < prod) growOne(set.numbers, STANDARD_NUMBERS);
+    while (sum(set.numbers) > prod) shrinkOne(set.numbers, placed.numbers, STANDARD_NUMBERS);
+    const blanks = hexes.filter((h) => h.t === 'random').length;
+    const poolT = fit(terrain, placed.terrain as Counts, blanks, STANDARD_TERRAIN as Counts) as Terrain[];
+    const numbered = hexes.filter((h) => h.n === 'random').length;
+    const deserts = poolT.filter((t) => !producing(t)).length;
+    const poolN = fit(set.numbers, placed.numbers, Math.max(0, numbered - deserts), STANDARD_NUMBERS).map(
+      Number,
+    );
+    if (blanks || numbered) pools[pool] = { terrain: poolT, numbers: poolN };
+  };
+  follow(set, hexesOf(m, null), 'auto');
+  for (const [id, r] of Object.entries(m.regions ?? {})) {
+    r.set.harbors = {};
+    follow(r.set, hexesOf(m, id), id);
+  }
+  delete m.pools;
+  if (Object.keys(pools).length) m.pools = pools;
+
+  // Harbors are the main set's.
   const placed = placedOf(m);
-  const terrain = set.terrain as Counts;
-  const land = m.hexes.filter((h) => setLand(h.t)).length;
-  while (sum(terrain) < land) growOne(terrain, STANDARD_TERRAIN as Counts);
-  while (sum(terrain) > land) shrinkOne(terrain, placed.terrain as Counts, STANDARD_TERRAIN as Counts);
-  const prod = land - (terrain.desert ?? 0);
-  while (sum(set.numbers) < prod) growOne(set.numbers, STANDARD_NUMBERS);
-  while (sum(set.numbers) > prod) shrinkOne(set.numbers, placed.numbers, STANDARD_NUMBERS);
   const harbors = set.harbors as Counts;
   while (sum(harbors) < m.harbors.length) growOne(harbors, STANDARD_HARBORS as Counts);
   while (sum(harbors) > m.harbors.length)
     shrinkOne(harbors, placed.harbors as Counts, STANDARD_HARBORS as Counts);
 
-  const blanks = m.hexes.filter((h) => h.t === 'random').length;
-  const poolT = fit(terrain, placed.terrain as Counts, blanks, STANDARD_TERRAIN as Counts) as Terrain[];
-  const numbered = m.hexes.filter((h) => h.n === 'random').length;
-  const deserts = poolT.filter((t) => !producing(t)).length;
-  const poolN = fit(set.numbers, placed.numbers, Math.max(0, numbered - deserts), STANDARD_NUMBERS).map(
-    Number,
-  );
-  delete m.pools;
-  if (blanks || numbered) m.pools = { auto: { terrain: poolT, numbers: poolN } };
   const randomH = m.harbors.filter((h) => h.t === 'random').length;
   delete m.harborPool;
   if (randomH)
@@ -199,6 +224,31 @@ export function normalize(m0: MapData): MapData {
   if (Array.isArray(m.start)) m.start = m.start.filter(([q, r]) => has(q, r, () => true));
   m.set = set;
   return m;
+}
+
+/**
+ * A scenario map with several pools (Heading for New Shores: the main island and the isles)
+ * opens in the editor with each pool as a region, so its blanks stay where they belong.
+ */
+function adoptPools(m: MapData) {
+  if (m.regions || m.set) return;
+  const names = [...new Set(m.hexes.flatMap((h) => (h.pool ? [h.pool] : [])))];
+  if (names.length < 2) return;
+  m.regions = {};
+  for (const name of names) {
+    const hexes = m.hexes.filter((h) => h.pool === name);
+    const placed = placedOf(m, hexes);
+    const pool = m.pools?.[name] ?? { terrain: [], numbers: [] };
+    m.regions[name] = {
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      set: {
+        terrain: bag([...unbag(placed.terrain as Counts), ...pool.terrain.filter(isLand)]),
+        numbers: bag([...unbag(placed.numbers), ...pool.numbers]),
+        harbors: {},
+      },
+    };
+    for (const h of hexes) h.region = name;
+  }
 }
 
 /** A new map: the standard board's 19 hexes and 9 harbor spots, all blank. */
@@ -267,6 +317,16 @@ export type EditOp =
   /** Seafarers (10.2): what can turn up under the fog, or the standard stack. */
   | { k: 'fogStack'; terrain: Terrain[]; numbers: number[] }
   | { k: 'fogStack'; standard: true }
+  /** Regions (SPEC 10.4): add one, rename or remove it, paint a hex into one or out (null). */
+  | { k: 'addRegion'; name?: string }
+  | { k: 'renameRegion'; region: string; name: string }
+  | { k: 'removeRegion'; region: string }
+  | { k: 'region'; at: At; region: string | null }
+  /**
+   * Swap one tile of a kind into (+1) or out of (−1) the main set (null) or a region's. The
+   * set keeps one tile per land hex: another kind makes room, or fills the gap.
+   */
+  | { k: 'setTile'; region: string | null; t: Terrain; delta: 1 | -1 }
   /** Name, player counts, points to win, Seafarers. */
   | { k: 'meta'; name?: string; players?: number[]; winVP?: number; seafarers?: boolean }
   /** Replace the whole map (a fill, or a generated board). */
@@ -279,6 +339,7 @@ export const SIDE_DIR: readonly At[] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1
 const SIDES = [0, 1, 2, 3, 4, 5];
 const SEAFARERS_ONLY: readonly string[] = ['sea', 'gold', 'fog'];
 export const MAX_HEXES = 120;
+export const MAX_REGIONS = 12;
 
 const sameAt = (h: { q: number; r: number }, at: At) => h.q === at[0] && h.r === at[1];
 export const across = (at: At, side: number): At => [at[0] + SIDE_DIR[side]![0], at[1] + SIDE_DIR[side]![1]];
@@ -549,6 +610,73 @@ export function applyEdit(m0: MapData, op: EditOp): EditResult {
       m.fog = { terrain: op.terrain.slice(), numbers: op.numbers.slice() };
       break;
     }
+    case 'addRegion': {
+      const regions = (m.regions ??= {});
+      if (Object.keys(regions).length >= MAX_REGIONS) return fail(`A map can have ${MAX_REGIONS} regions`);
+      let i = 1;
+      while (regions[`r${i}`]) i++;
+      const name = (op.name ?? `Region ${String.fromCharCode(64 + i)}`).trim().slice(0, 40);
+      regions[`r${i}`] = { name: name || `Region ${i}`, set: { terrain: {}, numbers: {}, harbors: {} } };
+      break;
+    }
+    case 'renameRegion': {
+      const r = m.regions?.[op.region];
+      if (!r) return fail('There’s no such region');
+      const name = op.name.trim().slice(0, 40);
+      if (!name) return fail('Give the region a name');
+      r.name = name;
+      break;
+    }
+    case 'removeRegion': {
+      if (!m.regions?.[op.region]) return fail('There’s no such region');
+      delete m.regions[op.region];
+      for (const h of m.hexes) if (h.region === op.region) delete h.region;
+      if (!Object.keys(m.regions).length) delete m.regions;
+      break;
+    }
+    case 'region': {
+      const h = hex(op.at);
+      if (!h) return fail('There’s no hex there');
+      if (op.region === null) delete h.region;
+      else if (!m.regions?.[op.region]) return fail('There’s no such region');
+      else h.region = op.region;
+      break;
+    }
+    case 'setTile': {
+      const set = op.region === null ? m.set : m.regions?.[op.region]?.set;
+      if (!set) return fail('There’s no such region');
+      if (!isLand(op.t)) return fail('Sets hold land tiles');
+      if (op.t === 'gold' && !m.modules.includes('seafarers')) return fail('Gold needs Seafarers');
+      const hexes = hexesOf(m, op.region);
+      const land = hexes.filter((h) => setLand(h.t)).length;
+      const placed = placedOf(m, hexes).terrain as Counts;
+      const c = set.terrain as Counts;
+      const spare = (k: string) => (c[k] ?? 0) - (placed[k] ?? 0);
+      if (op.delta === 1) {
+        if (!land) return fail('Paint some hexes into it first');
+        // The kind with the most spare tiles makes room.
+        const out = Object.keys(c)
+          .filter((k) => k !== op.t && spare(k) > 0)
+          .sort((a, b) => spare(b) - spare(a))[0];
+        if (!out) return fail('Every other tile is on the board');
+        c[out]!--;
+        if (!c[out]) delete c[out];
+        c[op.t] = (c[op.t] ?? 0) + 1;
+      } else {
+        if (spare(op.t) <= 0)
+          return fail(c[op.t] ? 'They’re all on the board' : 'There are none to take out');
+        c[op.t]!--;
+        if (!c[op.t]) delete c[op.t];
+        // The kind furthest below its standard share fills the gap.
+        const want = scaled(STANDARD_TERRAIN as Counts, sum(c) + 1);
+        const fill =
+          Object.keys(want)
+            .filter((k) => k !== op.t)
+            .sort((a, b) => want[b]! - (c[b] ?? 0) - (want[a]! - (c[a] ?? 0)))[0] ?? 'desert';
+        c[fill] = (c[fill] ?? 0) + 1;
+      }
+      break;
+    }
     case 'meta': {
       if (op.name !== undefined) {
         const name = op.name.trim().slice(0, 40);
@@ -654,8 +782,10 @@ export function cornerPips(m: MapData, pips: Record<number, number> = DEFAULT_PI
 }
 
 /** What's on the board against the set, for the editor's counts line. */
-export function counts(m: MapData): { placed: TileSet; set: TileSet } {
-  return { placed: placedOf(m), set: setOf(m) };
+/** What's placed against the set: the main set's (null) or a region's (SPEC 10.4). */
+export function counts(m: MapData, region: string | null = null): { placed: TileSet; set: TileSet } {
+  const set = region === null ? setOf(m) : (structuredClone(m.regions?.[region]?.set) ?? setOf(m));
+  return { placed: placedOf(m, hexesOf(m, region)), set };
 }
 
 /** The editor's undo and redo: every edit is one step. */

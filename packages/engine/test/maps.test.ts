@@ -324,6 +324,83 @@ describe('editor actions', () => {
     expect(mapProblems(m)).toEqual([]);
   });
 
+  it('regions (SPEC 10.4): their own tile set, drawn only into their own hexes', () => {
+    let m = ok(blank(), { k: 'meta', seafarers: true });
+    m = ok(m, { k: 'addRegion' });
+    expect(Object.entries(m.regions!)).toEqual([
+      ['r1', { name: 'Region A', set: { terrain: {}, numbers: {}, harbors: {} } }],
+    ]);
+    const isles: At[] = [
+      [2, -2],
+      [2, -1],
+      [2, 0],
+    ];
+    for (const at of isles) m = ok(m, { k: 'region', at, region: 'r1' });
+    // The region's set follows its 3 hexes; the main set the other 16.
+    const tiles = (t: Record<string, number | undefined>) =>
+      Object.values(t).reduce<number>((a, b) => a + (b ?? 0), 0);
+    expect(tiles(m.regions!.r1!.set.terrain)).toBe(3);
+    expect(tiles(m.set!.terrain)).toBe(16);
+    // Gold in, swapped for another of the region's tiles: still 3.
+    m = ok(m, { k: 'setTile', region: 'r1', t: 'gold', delta: 1 });
+    m = ok(m, { k: 'setTile', region: 'r1', t: 'gold', delta: 1 });
+    expect(m.regions!.r1!.set.terrain.gold).toBe(2);
+    expect(tiles(m.regions!.r1!.set.terrain)).toBe(3);
+    expect(m.pools!.r1!.terrain.filter((t) => t === 'gold')).toHaveLength(2);
+    expect(m.pools!.auto!.terrain).not.toContain('gold');
+    // Taking one out puts back what the region is shortest of.
+    m = ok(m, { k: 'setTile', region: 'r1', t: 'gold', delta: -1 });
+    expect(m.regions!.r1!.set.terrain.gold).toBe(1);
+    expect(tiles(m.regions!.r1!.set.terrain)).toBe(3);
+    const none = (['wood', 'brick', 'sheep', 'wheat', 'ore', 'desert'] as const).find(
+      (t) => !m.regions!.r1!.set.terrain[t],
+    )!;
+    expect(refused(m, { k: 'setTile', region: 'r1', t: none, delta: -1 })).toBe('There are none to take out');
+    // Every fill draws the region's tiles into the region only.
+    for (let i = 0; i < 20; i++) {
+      const r = fillRest(m, ANYTHING_GOES, `regions-${i}`, 4);
+      if (!r.ok) throw new Error(r.error);
+      const inIsles = (h: { q: number; r: number }) => isles.some(([q, rr]) => q === h.q && rr === h.r);
+      expect(r.map.hexes.filter((h) => h.t === 'gold').every(inIsles)).toBe(true);
+      expect(r.map.hexes.filter((h) => inIsles(h) && h.t === 'gold')).toHaveLength(1);
+    }
+    // Renamed, then removed: its hexes go back to the main set.
+    m = ok(m, { k: 'renameRegion', region: 'r1', name: 'Far isles' });
+    expect(m.regions!.r1!.name).toBe('Far isles');
+    m = ok(m, { k: 'removeRegion', region: 'r1' });
+    expect(m.regions).toBeUndefined();
+    expect(m.hexes.some((h) => h.region)).toBe(false);
+    expect(tiles(m.set!.terrain)).toBe(19);
+  });
+
+  it('regions work without Seafarers too (D5), and a scenario’s pools open as regions', () => {
+    let m = ok(blank(), { k: 'addRegion', name: 'Middle' });
+    m = ok(m, { k: 'region', at: [0, 0], region: 'r1' });
+    m = ok(m, { k: 'setTile', region: 'r1', t: 'desert', delta: 1 });
+    // The main set keeps its own desert until it's taken out.
+    expect(m.set!.terrain.desert).toBe(1);
+    m = ok(m, { k: 'setTile', region: null, t: 'desert', delta: -1 });
+    expect(m.set!.terrain.desert).toBeUndefined();
+    const r = fillRest(m, ANYTHING_GOES, 'desert-middle', 4);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.map.hexes.find((h) => h.q === 0 && h.r === 0)!.t).toBe('desert');
+    expect(r.map.hexes.filter((h) => h.t === 'desert')).toHaveLength(1);
+    // Heading for New Shores: the main island and the isles become regions.
+    const hfns = normalize(SCENARIOS['heading-for-new-shores']!);
+    expect(Object.keys(hfns.regions!).sort()).toEqual(['isles', 'main']);
+    expect(mapProblems(hfns)).toEqual([]);
+    const f = fillRest(hfns, ANYTHING_GOES, 'hfns-regions', 4);
+    if (!f.ok) throw new Error(f.error);
+    const isle = new Set(
+      SCENARIOS['heading-for-new-shores']!.hexes.flatMap((h) =>
+        h.pool === 'isles' ? [`${h.q},${h.r}`] : [],
+      ),
+    );
+    const golds = f.map.hexes.filter((h) => h.t === 'gold');
+    expect(golds.length).toBeGreaterThan(0);
+    expect(golds.every((h) => isle.has(`${h.q},${h.r}`))).toBe(true);
+  });
+
   it('undo and redo step back and forward through every kind of action', () => {
     const start = blank();
     const hist = new EditHistory(start);
@@ -352,6 +429,14 @@ describe('editor actions', () => {
       { k: 'pirate', at: [2, -2] },
       { k: 'fogStack', terrain: ['wood'], numbers: [8] },
       { k: 'fogStack', standard: true },
+      { k: 'addRegion' },
+      { k: 'region', at: [1, 0], region: 'r1' },
+      { k: 'region', at: [0, 1], region: 'r1' },
+      { k: 'setTile', region: 'r1', t: 'gold', delta: 1 },
+      { k: 'setTile', region: null, t: 'ore', delta: 1 },
+      { k: 'renameRegion', region: 'r1', name: 'Gold coast' },
+      { k: 'region', at: [0, 1], region: null },
+      { k: 'removeRegion', region: 'r1' },
     ];
     const states = [hist.map];
     for (const op of ops) {

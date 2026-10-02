@@ -49,7 +49,9 @@ export type Tool =
   | { k: 'shape'; add: 'random' | 'sea' }
   /** Seafarers (SPEC 10.1): paint the start area, or place the pirate's start. */
   | { k: 'start' }
-  | { k: 'pirate' };
+  | { k: 'pirate' }
+  /** Regions (SPEC 10.4): paint hexes into a region, or out of every region (null). */
+  | { k: 'region'; region: string | null };
 
 export const TERRAIN_NAME: Record<Terrain | 'random', string> = {
   wood: 'Wood',
@@ -186,6 +188,9 @@ export function MapBoard(props: {
         return;
       case 'pirate':
         if (t.k === 'hex' || t.k === 'token') onEdit({ k: 'pirate', at: t.at });
+        return;
+      case 'region':
+        if (t.k === 'hex' || t.k === 'token') onEdit({ k: 'region', at: t.at, region: tool.region });
         return;
     }
   };
@@ -391,6 +396,29 @@ export function MapBoard(props: {
           </g>
         );
       })}
+      {/* Regions (SPEC 10.4): an outline in the region's colour and its letter. */}
+      {map.regions
+        ? map.hexes.map((h, i) => {
+            if (!h.region || !map.regions![h.region]) return null;
+            const k = Object.keys(map.regions!).indexOf(h.region);
+            const p = g.hexes[i]!;
+            return (
+              <g key={`rg${i}`} className="regionmark" data-region={h.region} pointerEvents="none">
+                <polygon
+                  points={hexPts(p.x * K, p.y * K, 0.9 * K)}
+                  stroke={REGION_COLORS[k % REGION_COLORS.length]}
+                />
+                <text
+                  x={p.x * K + 0.5 * K}
+                  y={p.y * K - 0.42 * K}
+                  fill={REGION_COLORS[k % REGION_COLORS.length]}
+                >
+                  {String.fromCharCode(65 + k)}
+                </text>
+              </g>
+            );
+          })
+        : null}
       {/* The start area and the pirate's start (SPEC 10.1). */}
       {start.map(([q, r]) => {
         const i = hexAt(map.hexes, q, r);
@@ -1002,6 +1030,7 @@ export function MapEditorPage({ id }: { id: string }) {
             <p className="hint small">{TOOL_HINT[tool.k]}</p>
           </section>
           {seafarers ? <SeafarersPanel map={map} tool={tool} setTool={setTool} edit={edit} /> : null}
+          <RegionsPanel map={map} tool={tool} setTool={setTool} edit={edit} />
           <section>
             <h4>Fill</h4>
             <div className="row tight">
@@ -1128,6 +1157,166 @@ export function MapEditorPage({ id }: { id: string }) {
         </Sheet>
       ) : null}
     </div>
+  );
+}
+
+/** Region outlines: distinct hues that read on every tile. */
+const REGION_COLORS = [
+  '#ffd166',
+  '#7fd6ff',
+  '#ff8fd0',
+  '#b4f06b',
+  '#ffa45c',
+  '#c3a6ff',
+  '#5ce1c0',
+  '#ff6b6b',
+  '#f4ecd6',
+  '#9fb3ff',
+  '#e0c070',
+  '#8cf0ff',
+];
+
+/** One tile set: each kind's count, with a swap in (+) or out (−); the size follows the hexes. */
+function SetEditor({
+  map,
+  region,
+  edit,
+}: {
+  map: MapData;
+  region: string | null;
+  edit: (op: EditOp) => void;
+}) {
+  const c = counts(map, region);
+  const kinds: Terrain[] = [
+    'wood',
+    'brick',
+    'sheep',
+    'wheat',
+    'ore',
+    'desert',
+    ...(map.modules.includes('seafarers') ? (['gold'] as const) : []),
+  ];
+  const hexes = map.hexes.filter((h) => (h.region ?? null) === region && h.t !== 'sea' && h.t !== 'fog');
+  const blank = hexes.filter((h) => h.t === 'random').length;
+  return (
+    <div className="seted" data-testid={`set-${region ?? 'main'}`}>
+      <span className="small">
+        {hexes.length} land hex{hexes.length === 1 ? '' : 'es'}
+        {blank ? `, ${blank} blank` : ''}
+      </span>
+      <div className="fogcounts">
+        {kinds.map((t) => (
+          <span key={t} className="fogcount" data-t={t}>
+            <i className="sw" style={{ background: TILE_COLOR[t] }} />
+            {TERRAIN_NAME[t]}
+            <button
+              type="button"
+              aria-label={`One ${t} fewer`}
+              data-testid={`set-${region ?? 'main'}-${t}-less`}
+              onClick={() => edit({ k: 'setTile', region, t, delta: -1 })}
+            >
+              −
+            </button>
+            <b data-testid={`set-${region ?? 'main'}-${t}`}>{c.set.terrain[t] ?? 0}</b>
+            <button
+              type="button"
+              aria-label={`One ${t} more`}
+              data-testid={`set-${region ?? 'main'}-${t}-more`}
+              onClick={() => edit({ k: 'setTile', region, t, delta: 1 })}
+            >
+              +
+            </button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tile sets and regions (SPEC 10.4): the main set, and regions of hexes with their own sets,
+ * shuffled only within the region. Works in every mode (D5).
+ */
+function RegionsPanel({
+  map,
+  tool,
+  setTool,
+  edit,
+}: {
+  map: MapData;
+  tool: Tool;
+  setTool: (t: Tool) => void;
+  edit: (op: EditOp) => void;
+}) {
+  const ids = Object.keys(map.regions ?? {});
+  return (
+    <section data-testid="regions-panel">
+      <h4>Tile sets</h4>
+      <p className="hint small">
+        Blank hexes are drawn from their set when the board is made, and again on every reroll.
+      </p>
+      <b className="small">{ids.length ? 'Everywhere else' : 'The whole map'}</b>
+      <SetEditor map={map} region={null} edit={edit} />
+      {ids.map((id, k) => (
+        <div key={id} className="regionrow" data-testid={`region-${id}`}>
+          <div className="row tight">
+            <i className="sw" style={{ background: REGION_COLORS[k % REGION_COLORS.length] }} />
+            <b>{String.fromCharCode(65 + k)}</b>
+            <input
+              className="text"
+              defaultValue={map.regions![id]!.name}
+              key={map.regions![id]!.name}
+              aria-label="Region name"
+              data-testid={`region-${id}-name`}
+              onBlur={(e) =>
+                e.target.value.trim() !== map.regions![id]!.name &&
+                edit({ k: 'renameRegion', region: id, name: e.target.value })
+              }
+            />
+            <ToolButton
+              on={tool.k === 'region' && tool.region === id}
+              onClick={() => setTool({ k: 'region', region: id })}
+              testid={`region-${id}-paint`}
+            >
+              Paint
+            </ToolButton>
+            <button
+              className="btn small ghost"
+              onClick={() => edit({ k: 'removeRegion', region: id })}
+              data-testid={`region-${id}-remove`}
+            >
+              Remove
+            </button>
+          </div>
+          <SetEditor map={map} region={id} edit={edit} />
+        </div>
+      ))}
+      <div className="row tight">
+        <button
+          className="btn small"
+          data-testid="region-add"
+          onClick={() => {
+            const before = new Set(ids);
+            edit({ k: 'addRegion' });
+            // Paint with the new region straight away.
+            const fresh = Object.keys(map.regions ?? {}).find((x) => !before.has(x));
+            const next = `r${[...Array(13).keys()].slice(1).find((i) => !before.has(`r${i}`))}`;
+            setTool({ k: 'region', region: fresh ?? next });
+          }}
+        >
+          New region
+        </button>
+        {ids.length ? (
+          <ToolButton
+            on={tool.k === 'region' && tool.region === null}
+            onClick={() => setTool({ k: 'region', region: null })}
+            testid="region-none"
+          >
+            Paint out of regions
+          </ToolButton>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -1261,6 +1450,7 @@ const TOOL_HINT: Record<Tool['k'], string> = {
   start:
     'Click hexes to paint the start area: starting settlements go only there. None painted means anywhere.',
   pirate: 'Click a sea hex for the pirate’s start.',
+  region: 'Click hexes to paint them into the region; its blanks draw only from its own set.',
 };
 
 /* ---------- Presets (5.18) ---------- */
