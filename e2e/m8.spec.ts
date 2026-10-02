@@ -151,7 +151,7 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await expect(c.getByTestId('board-info')).toHaveCount(0);
     // (In setup the road completes the move.)
     await c.locator('#board [data-e]').first().tap();
-    await confirmPlace(c);
+    await confirmPlace(c, 2000);
     await expect.poll(async () => (await view(c)).seq).toBeGreaterThan(seq);
 
     /* ---------- The log on the laptop ---------- */

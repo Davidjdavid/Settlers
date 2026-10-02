@@ -11,6 +11,7 @@ import {
   isLogNote,
   type Card,
   type Cards,
+  type Color,
   type GameEvent,
   type LogNote,
   type PlayerView,
@@ -19,7 +20,10 @@ import {
 } from '@settlers/engine';
 import { CARD_LABEL, DEV_LABEL, PROGRESS_LABEL, RES_LABEL, TRACK_LABEL } from './art';
 
-export function nameOf(v: PlayerView, p: Seat | null): string {
+/** Who's at the table: enough to name players (the log keeps this small for speed). */
+export type Who = { me: Seat | null; players: readonly { pid?: string; nick: string; color: Color }[] };
+
+export function nameOf(v: Who, p: Seat | null): string {
   if (p == null) return 'Nobody';
   if (p === v.me) return 'You';
   return v.players[p]?.nick || 'Someone';
@@ -105,7 +109,7 @@ function tile(v: PlayerView, h: number): string {
 }
 
 /** Plain text for a part. */
-export function segText(v: PlayerView, s: Seg): string {
+export function segText(v: Who, s: Seg): string {
   if (typeof s === 'string') return s;
   if ('p' in s) {
     const me = s.p != null && s.p === v.me;
@@ -120,7 +124,7 @@ export function segText(v: PlayerView, s: Seg): string {
   return s.warn;
 }
 
-export const lineText = (v: PlayerView, l: Line) => l.parts.map((s) => segText(v, s)).join('');
+export const lineText = (v: Who, l: Line) => l.parts.map((s) => segText(v, s)).join('');
 
 /** The log lines for an event or note; none for events that only matter to the UI. */
 export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {

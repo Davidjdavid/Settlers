@@ -3363,3 +3363,7 @@ button.vp {
 .seted {
   margin: 2px 0 6px;
 }
+.log .logmore {
+  align-self: center;
+  margin: 2px 0 6px;
+}

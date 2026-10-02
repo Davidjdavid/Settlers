@@ -55,7 +55,7 @@ test('three players play a full Seafarers game', async ({ browser }) => {
           break;
         }
         // Not a coast edge: it's a road. Confirm it and stop exploring.
-        await confirmPlace(first);
+        await confirmPlace(first, 2000);
         await expect.poll(async () => (await view(first)).seq).toBe(1);
         if ((await view(first)).seq > 0) break;
       }

@@ -6,8 +6,8 @@ on:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    # The full check takes 35-45 minutes on GitHub's runners.
-    timeout-minutes: 75
+    # The full check takes about an hour on GitHub's runners (the simulator alone ~30 minutes).
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

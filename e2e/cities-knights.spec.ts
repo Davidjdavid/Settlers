@@ -41,7 +41,7 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const first = await turnPage(t);
     await first.locator('#board [data-v]').first().click();
     await first.locator('#board [data-e]').first().click();
-    await confirmPlace(first);
+    await confirmPlace(first, 2000);
     await expect.poll(async () => (await view(a)).seq).toBe(1);
 
     const ui = { knight: 0, activate: 0, improve: 0, owed: 0 };
@@ -49,7 +49,7 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const raids = { seen: 0, mine: new Set<number>() };
     const clickVert = async (p: Page) => {
       await p.locator('#board [data-v]').first().click();
-      await confirmPlace(p);
+      await confirmPlace(p, 2000);
     };
 
     /** Make one move through the UI if one of the moves we drive by hand is available. */
@@ -95,7 +95,7 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
         if (['loseCity', 'relocate', 'desert', 'deserterPlace'].includes(owe.k)) await clickVert(p);
         else if (owe.k === 'rebuild') {
           await p.locator('#board [data-e]').first().click();
-          await confirmPlace(p);
+          await confirmPlace(p, 2000);
         } else if (['give', 'discard', 'take'].includes(owe.k)) await fillCount(p);
         else if (owe.k === 'harbor') await p.locator('.sheet .foot button').first().click();
         else await p.locator('.sheet .pick:not([disabled])').first().click();

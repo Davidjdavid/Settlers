@@ -69,10 +69,21 @@ export async function seatedTable(browser: Browser, server: TestServer, nicks: s
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test hook returns plain JSON
 export const view = (p: Page): Promise<any> => p.evaluate(() => (window as any).__settlers.state().game);
 
-/** Press Confirm if a placement is waiting for it (on by default, SPEC 4.3). */
-export async function confirmPlace(p: Page) {
+/**
+ * Press Confirm if a placement is waiting for it (on by default, SPEC 4.3). Right after the test
+ * places a piece itself, pass `wait`: the button comes with the placement's redraw, which can lag
+ * a little on a slow machine (with Confirm switched off it never comes). Without `wait` it only
+ * looks once, for the bot loops that call it on every step.
+ */
+export async function confirmPlace(p: Page, wait = 0) {
   const btn = p.getByTestId('confirm-place');
-  if (await btn.isVisible().catch(() => false)) await btn.click();
+  const shown = wait
+    ? await btn.waitFor({ state: 'visible', timeout: wait }).then(
+        () => true,
+        () => false,
+      )
+    : await btn.isVisible().catch(() => false);
+  if (shown) await btn.click();
 }
 
 /** The page whose turn it is. */
@@ -122,7 +133,9 @@ export function checkFrames(t: Table, seats: (number | null)[], minFrames = 100)
       // The table's board seed is public (docs/pregame.md 1.1); nothing in a game may carry one.
       if (f.game) expect(raw).not.toContain('"seed"');
       expect(raw).not.toContain('"deck"');
-      expect(raw).not.toMatch(/"fog":\{/);
+      // The fog's face-down order lives only on the server. (Before a game, the table's map may
+      // list what fog can hide, as the map file does: that's public, like the deck's make-up.)
+      if (f.game) expect(raw).not.toMatch(/"fog":\{/);
       if (f.game) {
         expect(f.game.me).toBe(seat);
         for (const pl of f.game.players) expect(Object.keys(pl)).not.toContain('res');

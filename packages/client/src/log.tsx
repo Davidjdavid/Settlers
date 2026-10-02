@@ -4,15 +4,26 @@
  * player in their colour and their roll. Names, cards and warnings are drawn in their colours,
  * always with words (and icons for cards), so colour is never the only signal. The log scrolls
  * inside itself only: it never moves the page.
+ *
+ * It's drawn on every update in every browser, so it's kept cheap: each entry's lines are worked
+ * out once, rows that haven't changed aren't drawn again, and only the newest rows are on the
+ * page until you ask for earlier ones.
  */
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { isLogNote, type PlayerView, type Seat, type Track } from '@settlers/engine';
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  isLogNote,
+  type GameEvent,
+  type LogNote,
+  type PlayerView,
+  type Seat,
+  type Track,
+} from '@settlers/engine';
 import type { LogItem } from '@settlers/server/protocol';
 import { CARD_COLOR, PCOL, TRACK_LABEL, cardIcon } from './art';
 import { cardTextColor, nameColor } from './logcolors';
 import { itemKey } from './net';
-import { eventLines, segText, type Line, type Seg } from './text';
+import { eventLines, segText, type Line, type Seg, type Who } from './text';
 
 type Row =
   | { k: 'turn'; key: string; p: Seat; dice?: [number, number]; ev?: 'ship' | Track }
@@ -20,14 +31,27 @@ type Row =
   | { k: 'chat'; key: string; it: Extract<LogItem, { k: 'chat' }> }
   | { k: 'sys'; key: string; text: string };
 
-/** The log's rows: lines for events, with each turn's roll folded into its divider. */
-export function logRows(v: PlayerView, log: LogItem[]): Row[] {
+/** Each log item's key, worked out once (items are kept as the log grows). */
+const KEYS = new WeakMap<LogItem, string>();
+
+/** Rows shown at first; "Show earlier" adds this many more each time. */
+export const LOG_PAGE = 150;
+
+/**
+ * The log's rows: lines for events, with each turn's roll folded into its divider. `lines`
+ * gives an event's lines (cached by the log, so each is worked out once).
+ */
+export function logRows(
+  log: LogItem[],
+  lines: (key: string, e: GameEvent | LogNote) => Extract<Row, { k: 'line' }>[],
+): Row[] {
   const rows: Row[] = [];
   let turn: Extract<Row, { k: 'turn' }> | null = null;
   const used = new Map<string, number>();
   for (const it of log) {
     // Keys stay the same as the log grows; two identical events in one move get a count.
-    const base = itemKey(it);
+    let base = KEYS.get(it);
+    if (base === undefined) KEYS.set(it, (base = itemKey(it)));
     const n = used.get(base) ?? 0;
     used.set(base, n + 1);
     const key = n ? `${base}~${n}` : base;
@@ -55,14 +79,14 @@ export function logRows(v: PlayerView, log: LogItem[]): Row[] {
         continue;
       }
     }
-    eventLines(v, e).forEach((line, i) => rows.push({ k: 'line', key: `${key}#${i}`, line }));
+    rows.push(...lines(key, e));
   }
   return rows;
 }
 
 /** A player's name in their colour, or in normal text with a dot in their colour. */
-function Name({ v, p, text }: { v: PlayerView; p: Seat | null; text: string }) {
-  const color = p == null ? undefined : v.players[p]?.color;
+function Name({ who, p, text }: { who: Who; p: Seat | null; text: string }) {
+  const color = p == null ? undefined : who.players[p]?.color;
   if (!color) return <b className="nm">{text}</b>;
   const ink = nameColor(color);
   return ink ? (
@@ -77,9 +101,9 @@ function Name({ v, p, text }: { v: PlayerView; p: Seat | null; text: string }) {
   );
 }
 
-function Part({ v, s }: { v: PlayerView; s: Seg }) {
+function Part({ who, s }: { who: Who; s: Seg }) {
   if (typeof s === 'string') return <>{s}</>;
-  if ('p' in s) return <Name v={v} p={s.p} text={segText(v, s)} />;
+  if ('p' in s) return <Name who={who} p={s.p} text={segText(who, s)} />;
   if ('c' in s)
     return (
       <span className="cd" style={{ color: cardTextColor(s.c) }} data-card={s.c}>
@@ -89,14 +113,14 @@ function Part({ v, s }: { v: PlayerView; s: Seg }) {
           aria-hidden="true"
           dangerouslySetInnerHTML={{ __html: cardIcon(s.c) }}
         />
-        {segText(v, s)}
+        {segText(who, s)}
       </span>
     );
   if ('hidden' in s)
     return (
       <span className="cd hid">
         <i className="ci" aria-hidden="true" />
-        {segText(v, s)}
+        {segText(who, s)}
       </span>
     );
   return <span className="warn">{s.warn}</span>;
@@ -104,33 +128,97 @@ function Part({ v, s }: { v: PlayerView; s: Seg }) {
 
 const EV_TEXT = (f: 'ship' | Track) => (f === 'ship' ? 'barbarian ship' : `${TRACK_LABEL[f]} gate`);
 
-function TurnRow({ v, r }: { v: PlayerView; r: Extract<Row, { k: 'turn' }> }) {
-  const sum = r.dice ? r.dice[0] + r.dice[1] : 0;
+const TurnRow = memo(function TurnRow({
+  who,
+  p,
+  dice,
+  ev,
+}: {
+  who: Who;
+  p: Seat;
+  dice?: [number, number] | undefined;
+  ev?: 'ship' | Track | undefined;
+}) {
+  const sum = dice ? dice[0] + dice[1] : 0;
   return (
-    <div className="sep" data-turn={r.p}>
+    <div className="sep" data-turn={p}>
       <span>
-        <Name v={v} p={r.p} text={v.players[r.p]?.nick ?? 'Someone'} />
-        {r.dice ? (
+        <Name who={who} p={p} text={who.players[p]?.nick ?? 'Someone'} />
+        {dice ? (
           <>
             {' · rolled '}
-            {r.dice[0]} + {r.dice[1]} = {sum === 7 ? <span className="warn">7</span> : <b>{sum}</b>}
-            {r.ev ? <span className={r.ev === 'ship' ? 'warn' : undefined}> · {EV_TEXT(r.ev)}</span> : null}
+            {dice[0]} + {dice[1]} = {sum === 7 ? <span className="warn">7</span> : <b>{sum}</b>}
+            {ev ? <span className={ev === 'ship' ? 'warn' : undefined}> · {EV_TEXT(ev)}</span> : null}
           </>
         ) : null}
       </span>
     </div>
   );
-}
+});
+
+const LineRow = memo(function LineRow({ who, line, fresh }: { who: Who; line: Line; fresh: boolean }) {
+  return (
+    <div className={`e${line.big ? ' big' : ''}${line.bad ? ' bad' : ''}${fresh ? ' fresh' : ''}`}>
+      {line.parts.map((s, i) => (
+        <Part key={i} who={who} s={s} />
+      ))}
+    </div>
+  );
+});
+
+const ChatRow = memo(function ChatRow({
+  who,
+  it,
+  fresh,
+}: {
+  who: Who;
+  it: Extract<LogItem, { k: 'chat' }>;
+  fresh: boolean;
+}) {
+  const seat = who.players.findIndex((p) => p.pid === it.pid);
+  return (
+    <div
+      className={`e chat${it.cpu ? ' cpu' : ''}${fresh ? ' fresh' : ''}`}
+      data-cpu={it.cpu ? 1 : undefined}
+    >
+      <Name who={who} p={seat >= 0 ? seat : null} text={it.nick} />
+      {it.cpu ? <span className="cputag">CPU</span> : null}: {it.text}
+    </div>
+  );
+});
 
 export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
   const box = useRef<HTMLDivElement>(null);
-  const rows = useMemo(() => logRows(v, log), [v, log]);
+  // Who's who changes rarely (a rename, a new seat); the rows only need that, not the whole view.
+  const whoKey = JSON.stringify([v.me, v.players.map((p) => [p.pid, p.nick, p.color])]);
+  const who = useMemo<Who>(
+    () => ({ me: v.me, players: v.players.map((p) => ({ pid: p.pid, nick: p.nick, color: p.color })) }),
+    [whoKey],
+  );
+  // Each entry's lines, worked out once (again only when who's who changes).
+  const cache = useRef<{ who: Who; rows: Map<string, Extract<Row, { k: 'line' }>[]> } | null>(null);
+  if (cache.current?.who !== who) cache.current = { who, rows: new Map() };
+  const rows = useMemo(
+    () =>
+      logRows(log, (key, e) => {
+        const c = cache.current!.rows;
+        let r = c.get(key);
+        if (!r) {
+          r = eventLines(v, e).map((line, i) => ({ k: 'line' as const, key: `${key}#${i}`, line }));
+          c.set(key, r);
+        }
+        return r;
+      }),
+    [log, who],
+  );
+  const [show, setShow] = useState(LOG_PAGE);
   const [follow, setFollow] = useState(true);
   const [unseen, setUnseen] = useState(0);
   // Rows already shown, so new ones can highlight (none on the first draw).
   const known = useRef<Set<string> | null>(null);
   const fresh = new Set<string>();
   if (known.current) for (const r of rows) if (!known.current.has(r.key)) fresh.add(r.key);
+  const lastHeight = useRef(0);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -139,14 +227,25 @@ export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
     // Counted by key: the log keeps its newest 800 items, so its length can stay the same.
     const added = prev ? rows.filter((r) => !prev.has(r.key)).length : 0;
     if (!el) return;
-    if (follow) el.scrollTop = el.scrollHeight;
-    else if (added) setUnseen((n) => n + added);
+    // Following means the reader was at the bottom before these rows came in. Read from the
+    // page itself: a scroll the browser hasn't reported yet still counts.
+    const wasAtBottom = !prev || el.scrollTop + el.clientHeight >= lastHeight.current - 24;
+    if (wasAtBottom) {
+      el.scrollTop = el.scrollHeight;
+      if (!follow) setFollow(true);
+      if (unseen) setUnseen(0);
+    } else {
+      if (follow) setFollow(false);
+      if (added) setUnseen((n) => n + added);
+    }
+    lastHeight.current = el.scrollHeight;
   }, [rows]);
 
   const atBottom = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 24;
   const onScroll = () => {
     const el = box.current;
     if (!el) return;
+    lastHeight.current = el.scrollHeight;
     const bottom = atBottom(el);
     if (bottom !== follow) setFollow(bottom);
     if (bottom && unseen) setUnseen(0);
@@ -158,39 +257,31 @@ export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
     setUnseen(0);
   };
 
+  const shown = rows.length > show ? rows.slice(-show) : rows;
   return (
     <div className="logwrap">
       <div className="log" ref={box} data-testid="log" onScroll={onScroll} role="log" aria-live="polite">
-        {rows.map((r) => {
-          const f = fresh.has(r.key) ? ' fresh' : '';
-          if (r.k === 'turn') return <TurnRow key={r.key} v={v} r={r} />;
+        {rows.length > show ? (
+          <button
+            type="button"
+            className="btn small ghost logmore"
+            data-testid="log-earlier"
+            onClick={() => setShow((n) => n + LOG_PAGE)}
+          >
+            Show earlier entries
+          </button>
+        ) : null}
+        {shown.map((r) => {
+          const f = fresh.has(r.key);
+          if (r.k === 'turn') return <TurnRow key={r.key} who={who} p={r.p} dice={r.dice} ev={r.ev} />;
           if (r.k === 'sys')
             return (
-              <div key={r.key} className={`e big${f}`}>
+              <div key={r.key} className={`e big${f ? ' fresh' : ''}`}>
                 {r.text}
               </div>
             );
-          if (r.k === 'chat') {
-            const seat = v.players.findIndex((p) => p.pid === r.it.pid);
-            return (
-              <div
-                key={r.key}
-                className={`e chat${r.it.cpu ? ' cpu' : ''}${f}`}
-                data-cpu={r.it.cpu ? 1 : undefined}
-              >
-                <Name v={v} p={seat >= 0 ? seat : null} text={r.it.nick} />
-                {r.it.cpu ? <span className="cputag">CPU</span> : null}: {r.it.text}
-              </div>
-            );
-          }
-          const l = r.line;
-          return (
-            <div key={r.key} className={`e${l.big ? ' big' : ''}${l.bad ? ' bad' : ''}${f}`}>
-              {l.parts.map((s, i) => (
-                <Part key={i} v={v} s={s} />
-              ))}
-            </div>
-          );
+          if (r.k === 'chat') return <ChatRow key={r.key} who={who} it={r.it} fresh={f} />;
+          return <LineRow key={r.key} who={who} line={r.line} fresh={f} />;
         })}
       </div>
       {!follow && unseen > 0 ? (

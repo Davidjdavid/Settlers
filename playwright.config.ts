@@ -14,6 +14,7 @@ export default defineConfig({
   use: {
     viewport: { width: 1280, height: 860 },
     launchOptions: chromium ? { executablePath: chromium } : {},
-    trace: 'retain-on-failure',
+    // DOM snapshots without screenshots: a whole game's trace with screenshots ran to 4 GB.
+    trace: { mode: 'retain-on-failure', snapshots: true, screenshots: false },
   },
 });
