@@ -274,6 +274,22 @@ test('three players use the table polish features through a whole game', async (
       // have been tried, play any playable Knight or Road Building before ending, and otherwise
       // buy a card by clicking, once a turn. The turn then ends on a later step.
       const dev = before.hand?.dev;
+      // Keep the game going until both card settings have been tried: whoever has the dice
+      // raises the points to win (a table rule, SPEC 4.5) when someone gets close.
+      const top = Math.max(...before.players.map((x: { publicVP: number }) => x.publicVP));
+      if (
+        count.card.some((x) => x === 0) &&
+        before.stage === 'main' &&
+        top >= before.winVP - 2 &&
+        before.winVP < 16
+      ) {
+        await openMenu(p);
+        await p.getByTestId('menu-rules').click();
+        await p.locator('[data-testid=table-rules] [aria-label=More]').first().click();
+        await expect.poll(async () => (await view(p)).winVP).toBe(before.winVP + 1);
+        await p.getByTestId('rules-close').click();
+        return;
+      }
       if (count.card.some((x) => x === 0) && before.stage === 'main' && dev) {
         if (!before.devPlayed && dev.knight > 0) return playCard(p, 'playKnight');
         if (!before.devPlayed && dev.road > 0 && before.players[before.me].pieces.road > 0)
