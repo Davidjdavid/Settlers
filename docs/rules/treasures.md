@@ -1,6 +1,6 @@
 # Treasures: rules as we will implement them
 
-**Status: agreed 2 October (your answers are in the Decisions at the end).**
+**Status: agreed and built 2 October (your answers are in the Decisions at the end).** The engine module is `packages/engine/src/modules/treasures.ts`; tests are `test/treasures.test.ts` and the simulator's `treasures` and `treasures-ck` scenarios.
 
 This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the simulator's invariants and the tests will follow it exactly. If something here is wrong, it should be fixed here first. Everything in the base game, Seafarers and Cities & Knights still applies unless this document changes it.
 
@@ -23,7 +23,7 @@ This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the si
 ## 3. Finding a treasure
 
 1. The first player to **build a road or a ship on a spot, or move a ship onto it**, finds it. Free pieces count (Road Building, the Diplomat's rebuilt road, a treasure's own free pieces).
-2. **Setup:** a road or ship placed during setup can go on a treasure spot, and finds it straight away, as at any other time. That's part of the fun. **(D2)**
+2. **Setup:** a road or ship placed during setup can go on a treasure spot, and finds it straight away, as at any other time. That's part of the fun. Choices are made straight away; free roads and ships from a setup treasure are placed at the start of the finder's first turn (setup has no room for them). **(D2)**
 3. The finder draws the **top card** of the treasure deck. **Everyone sees what it is** (the log says "Ann found a treasure: 2 resources of her choice").
 4. The treasure happens **straight away, for the finder only**, before anything else in the turn (§4). The spot is then empty for good.
 5. A piece that finds a treasure stays where it is, as usual.

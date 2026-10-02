@@ -608,7 +608,11 @@ export function soundsFor(events: readonly (GameEvent | LogNote)[], me: Seat | n
         break;
       case 'gold':
       case 'plenty':
+      case 'treasureGot':
         add('cards', count(e.got));
+        break;
+      case 'treasureDev':
+        add('buyCard');
         break;
       case 'steal':
         add('steal');

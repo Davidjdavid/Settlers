@@ -57,6 +57,9 @@ export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameCo
   }
   const cfg: GameConfig = { winVP: config.map ? map.winVP : 10, ...config };
   if (config.map && !config.modules && map.modules.length) cfg.modules = map.modules;
+  // A map with treasure spots plays with treasures, in every mode (docs/rules/treasures.md D8).
+  if (map.treasures?.length && !cfg.modules?.includes('treasures'))
+    cfg.modules = [...(cfg.modules ?? []), 'treasures'];
   for (const m of mods({ config: cfg })) {
     if (m.players && !m.players.includes(seats.length))
       throw new Error(`This game is for ${m.players.join(' or ')} players`);
@@ -124,6 +127,16 @@ export function applyAction(s0: GameState, seat: Seat, action: Action): ApplyRes
     else error = `Something went wrong (${e instanceof Error ? e.message : String(e)})`;
   }
   if (error) return { ok: false, error };
+  if (s.phase === 'play') {
+    const ms = mods(s).filter((m) => m.afterAction);
+    if (ms.length) {
+      const x: Ctx = {
+        s, p: seat, me: s.players[seat]!, myTurn: s.turn === seat, events,
+        die: () => { throw new Error('no dice after a move'); },
+      }; // prettier-ignore
+      for (const m of ms) m.afterAction!(x);
+    }
+  }
   keepForHandBack(s0, s, seat, action);
   keepForUndo(s0, s, seat, action, events);
   s.seq = s0.seq + 1;
@@ -143,7 +156,7 @@ const UNDOABLE = new Set<Action['type']>([
 /** Events that mean a move showed something hidden (or can't be taken back), so no undo. */
 const REVEALING = new Set<GameEvent['k']>([
   'roll', 'produce', 'steal', 'buyDev', 'draw', 'discover', 'spy', 'give', 'gold', 'goldOwed', 'win', 'trade',
-  'eventDie', 'attack',
+  'eventDie', 'attack', 'treasure', 'treasureDev', 'treasureGot',
 ]); // prettier-ignore
 const UNDO_ACTIONS = new Set<Action['type']>(['askUndo', 'answerUndo', 'cancelUndo']);
 

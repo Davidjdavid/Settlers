@@ -10,6 +10,7 @@ import type { CKView } from './modules/citiesKnights';
 import { deckCount, devCount, publicVP, total, totalVP } from './queries';
 import type {
   Board, Building, Color, DevCounts, GameEvent, GameState, Hand, HouseRules, ModuleId, Offer, Seat, Stage,
+  TreasureState,
 } from './types'; // prettier-ignore
 
 export interface PublicPlayer {
@@ -84,6 +85,15 @@ export interface PlayerView {
   sea?: SeaView;
   /** Cities & Knights (public parts, plus the viewer's own cards). */
   ck?: CKView;
+  /** Treasures (docs/rules/treasures.md): spots left, what was found, what's owed. Not the deck. */
+  tr?: TreasureView;
+}
+
+export interface TreasureView {
+  spots: number[];
+  found: TreasureState['found'];
+  owe: TreasureState['owe'];
+  back: Stage | null;
 }
 
 export interface SeaView {
@@ -164,6 +174,7 @@ export function eventFor(e: GameEvent, seat: Seat | null): GameEvent {
     case 'steal':
       return seat === e.p || seat === e.from ? { ...e } : { ...e, r: null };
     case 'buyDev':
+    case 'treasureDev':
       return seat === e.p ? { ...e } : { ...e, card: null };
     case 'draw':
       return seat === e.p || (e.card && PROGRESS_VP.includes(e.card)) ? { ...e } : { ...e, card: null };

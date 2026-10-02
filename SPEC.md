@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–9 done and live (deployed 2026-10-02). Milestone 10: Seafarers maps from the editor, the Fog Islands and regions built; treasures wait for their rules (docs/rules/treasures.md) to be agreed.**
+Status: **Milestones 1–9 done and live (deployed 2026-10-02). Milestone 10 built: Seafarers maps from the editor, the Fog Islands, regions and treasures.**
 
 ## Milestone 1: base game
 
@@ -971,7 +971,7 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
 
 ## Milestone 10: Seafarers maps you design, fog islands and treasures
 
-**Status: agreed (your answers are in 10.6). 10.1, 10.2 and 10.4 built and tested (editor tests, 1,000 simulator games each on the Fog Islands in Seafarers and Full game mode, e2e/m10.spec.ts). 10.3 Treasures: rules drafted in docs/rules/treasures.md, waiting for answers to D1–D8.** Your requests of 2 October.
+**Status: built and tested (editor tests, rules tests for every treasure, 1,000 simulator games each on the Fog Islands and a treasure test map in Seafarers and Full game mode, e2e/m10.spec.ts). Treasure rules as agreed in docs/rules/treasures.md.** Your requests of 2 October.
 
 ### 10.1 Seafarers maps from the editor, "broken" ones too
 

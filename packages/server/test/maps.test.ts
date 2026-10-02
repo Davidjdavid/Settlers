@@ -110,6 +110,8 @@ describe('saved maps', () => {
     ] as [number, number][])
       m = edit(m, { k: 'region', at, region: 'r1' });
     m = edit(m, { k: 'setTile', region: 'r1', t: 'gold', delta: 1 });
+    m = edit(m, { k: 'treasure', at: [0, 0], side: 1, on: true });
+    m = edit(m, { k: 'treasure', at: [2, -2], side: 3, on: true });
     const c = new FakeConn();
     send(c, { t: 'saveMap', map: m, by: 'Ann' });
     const saved = c.last('map');
@@ -117,6 +119,10 @@ describe('saved maps', () => {
     expect(saved.map.regions).toEqual(m.regions);
     expect(saved.map.pirate).toEqual([2, -2]);
     expect(saved.map.specialVP).toEqual({ newIsland: 2 });
+    expect(saved.map.treasures).toEqual([
+      { q: 0, r: 0, side: 1 },
+      { q: 2, r: -2, side: 3 },
+    ]);
     expect(saved.info.seafarers).toBe(true);
     // A board filled from it keeps the region's gold in the region.
     const f = fillRest(saved.map, OUR_RULES, 'gold-coast', 3);

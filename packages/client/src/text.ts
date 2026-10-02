@@ -126,6 +126,14 @@ export function segText(v: Who, s: Seg): string {
 
 export const lineText = (v: Who, l: Line) => l.parts.map((s) => segText(v, s)).join('');
 
+/** What each treasure is, in the log and the treasure sheet. */
+export const TREASURE_LABEL = {
+  roads: '2 free roads or ships',
+  pick: '2 resources of their choice',
+  trio: '1 sheep, 1 brick and 1 wheat',
+  dev: 'a free development card',
+} as const;
+
 /** The log lines for an event or note; none for events that only matter to the UI. */
 export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
   const one = (parts: Seg[], o: Omit<Line, 'parts'> = {}): Line[] => [{ parts, ...o }];
@@ -239,6 +247,32 @@ export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
         e.got ? L`${P(e.p)} discovered ${what} and got ${C(e.got)}` : L`${P(e.p)} discovered ${what}`,
       );
     }
+    /* Treasures */
+    case 'treasure': {
+      const what = TREASURE_LABEL[e.kind];
+      return one(
+        e.from
+          ? L`${P(e.p)} found a treasure: no cards left to give, so ${what} instead`
+          : L`${P(e.p)} found a treasure: ${what}`,
+        { big: true },
+      );
+    }
+    case 'treasureGot':
+      return Object.keys(e.got).length
+        ? one(L`${P(e.p)} took ${C(e.got)} from a treasure`)
+        : one(L`The bank had nothing left to give`);
+    case 'treasureDev':
+      return one(
+        e.card
+          ? L`${P(e.p)} got a ${DEV_LABEL[e.card]} card from a treasure`
+          : L`${P(e.p)} got a development card from a treasure`,
+      );
+    case 'treasureRoads':
+      return one(
+        e.n
+          ? L`${P(e.p)} places ${e.n === 1 ? '1 free road or ship' : `${e.n} free roads or ships`}`
+          : L`${P(e.p)} has nowhere to put free roads or ships`,
+      );
     case 'islandBonus':
       return one(L`${P(e.p)} settled a new island: +${e.vp} points`, { big: true });
     /* Cities & Knights */

@@ -14,6 +14,7 @@
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import fogTest from '../test/fixtures/fog-test.json';
+import treasureTest from '../test/fixtures/treasure-test.json';
 import {
   HARD, MEDIUM, SCENARIOS, scenarioMap, type CpuBrain, type HouseRules, type MapData, type ModuleId,
 } from '../src/index'; // prettier-ignore
@@ -83,8 +84,24 @@ const SIMS: Record<string, Scenario> = {
     maxTurns: 5000,
     rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'wHu', 'I', 'O'],
   },
+  // SPEC 10.5: a test map with treasures, in Seafarers and in Full game mode.
+  treasures: {
+    map: treasureTest as unknown as MapData,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'I'],
+  },
+  'treasures-ck': {
+    map: treasureTest as unknown as MapData,
+    modules: ['seafarers', 'citiesKnights'],
+    players: [3, 4],
+    winVP: 17,
+    quickVP: 13,
+    maxTurns: 5000,
+    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O'],
+  },
 };
-for (const k of ['classic', 'heading-for-new-shores', 'ck', 'ck-sea'] as const) {
+for (const k of ['classic', 'heading-for-new-shores', 'ck', 'ck-sea', 'treasures-ck'] as const) {
   const base = SIMS[k]!;
   SIMS[`cpu-${k}`] = {
     ...base,
@@ -105,6 +122,9 @@ const DEFAULT_GAMES: Record<string, number> = {
   'cpu-heading-for-new-shores': 250,
   'cpu-ck': 250,
   'cpu-ck-sea': 250,
+  treasures: 1000,
+  'treasures-ck': 400,
+  'cpu-treasures-ck': 100,
 };
 
 /** The CPUs the cpu-* scenarios cycle through: Easy, Medium, Hard and a custom one. */

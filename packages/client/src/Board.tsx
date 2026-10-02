@@ -200,6 +200,18 @@ function robberSVG(g: Geometry, i: number): string {
   return `<g class="piece" data-robber="${i}"><ellipse cx="${f1(x)}" cy="${f1(y + 0.3 * K)}" rx="${0.19 * K}" ry="${0.06 * K}" fill="rgba(0,0,0,.35)"/><path d="M${f1(x - 0.16 * K)} ${f1(y + 0.29 * K)}Q${f1(x - 0.17 * K)} ${f1(y - 0.02 * K)} ${f1(x)} ${f1(y - 0.07 * K)}Q${f1(x + 0.17 * K)} ${f1(y - 0.02 * K)} ${f1(x + 0.16 * K)} ${f1(y + 0.29 * K)}Z" fill="#20242b" stroke="#efe7d2" stroke-width="2.2"/><circle cx="${f1(x)}" cy="${f1(y - 0.17 * K)}" r="${0.105 * K}" fill="#20242b" stroke="#efe7d2" stroke-width="2.2"/></g>`;
 }
 
+/** A face-down treasure (docs/rules/treasures.md): a small chest at the middle of its path. */
+export function treasureSVG(g: Geometry, e: number): string {
+  const E = g.edges[e]!;
+  const a = g.verts[E.a]!;
+  const b = g.verts[E.b]!;
+  const x = ((a.x + b.x) / 2) * K;
+  const y = ((a.y + b.y) / 2) * K;
+  const w = 0.4 * K;
+  const h = 0.27 * K;
+  return `<g class="treasure" data-treasure="${e}"><title>Treasure: the first road or ship here finds it</title><rect x="${f1(x - w / 2)}" y="${f1(y - h / 2)}" width="${f1(w)}" height="${f1(h)}" rx="3" fill="#8a5a2b" stroke="#2a1a0c" stroke-width="2"/><path d="M${f1(x - w / 2)} ${f1(y - h / 2 + 0.08 * K)}H${f1(x + w / 2)}" stroke="#2a1a0c" stroke-width="1.8"/><rect x="${f1(x - 0.05 * K)}" y="${f1(y - 0.05 * K)}" width="${f1(0.1 * K)}" height="${f1(0.11 * K)}" fill="#ffd34d" stroke="#2a1a0c" stroke-width="1.2"/></g>`;
+}
+
 /** A small boat on an edge, pointing along it. */
 function shipSVG(g: Geometry, e: number, color: string, isFresh: boolean, lifted: boolean): string {
   const E = g.edges[e]!;
@@ -427,6 +439,7 @@ export function Board(props: {
     now.add(key);
     return !first && !seen.current!.has(key);
   };
+  for (const e of view.tr?.spots ?? []) parts.push(treasureSVG(g, e));
   view.edges.forEach((p, e) => {
     if (p == null) return;
     const l = roadLine(g, e, 0.16);

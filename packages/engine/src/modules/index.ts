@@ -3,7 +3,12 @@
 import { registerModules } from './api';
 import { citiesKnights } from './citiesKnights';
 import { seafarers } from './seafarers';
+import { treasures } from './treasures';
 
-registerModules({ seafarers: () => seafarers, citiesKnights: () => citiesKnights });
+registerModules({
+  seafarers: () => seafarers,
+  citiesKnights: () => citiesKnights,
+  treasures: () => treasures,
+});
 
-export { citiesKnights, seafarers };
+export { citiesKnights, seafarers, treasures };

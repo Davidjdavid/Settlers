@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   COMS, COST, DEV_PLAY, KEEP_MAX, KNIGHT_COST, SHIP_COST, WALL_COST, cardKinds, cardWarning, goldDue, handLimit, has,
+  treasureDue,
   isLogNote, keepMinTarget, legalActions,
   piecesLeft, rateFor, RES, stateFromView, vpBreakdown, type Action, type Card, type DevPlayable, type GameStats, type PlayerView, type Progress, type Seat, type VPPart,
 } from '@settlers/engine'; // prettier-ignore
@@ -22,6 +23,7 @@ import { Celebration } from './celebrate';
 import { client, getStored, type Status } from './net';
 import {
   Chips, ConfirmTwice, DiscardSheet, GoldSheet, MenuSheet, MonoSheet, PieceSheet, PlentySheet, TradeSheet,
+  TreasureSheet,
   VictimSheet,
 } from './Sheets'; // prettier-ignore
 import { listNames, nameOf, routeName } from './text';
@@ -81,6 +83,7 @@ type SheetState =
   | { k: 'cardParam'; card: Progress; plays: Play[] }
   | { k: 'piece'; options: Action[] }
   | { k: 'gold' }
+  | { k: 'treasure' }
   | { k: 'menu' }
   | { k: 'endGame' }
   | { k: 'claim'; seat: number; nick: string }
@@ -253,6 +256,13 @@ export function Game({
     if (goldOwed) setSheet({ k: 'gold' });
     else setSheet((x) => (x?.k === 'gold' ? null : x));
   }, [goldOwed]);
+  // And the treasure sheet when a treasure you found asks you to choose.
+  const trDue = me != null ? treasureDue(s, me) : null;
+  const trKey = trDue ? `${trDue.k}:${trDue.n}:${v.seq}` : '';
+  useEffect(() => {
+    if (trDue) setSheet({ k: 'treasure' });
+    else setSheet((x) => (x?.k === 'treasure' ? null : x));
+  }, [trKey]);
   // Pop the discard sheet open automatically when you owe a discard.
   const owes = me != null && v.stage === 'discard' && v.discard?.[me] != null;
   useEffect(() => {
@@ -803,6 +813,19 @@ export function Game({
           buttons: [{ label: 'Choose', on: () => setSheet({ k: 'gold' }), primary: true }],
         }
       : { title: 'Gold!', sub: `Waiting for ${listNames(v, waiting)} to pick resources.` };
+  } else if (v.stage === 'treasure') {
+    const waiting = [...new Set((v.tr?.owe ?? []).filter((o) => o.k !== 'roads').map((o) => o.p))];
+    pm = trDue
+      ? {
+          title:
+            trDue.k === 'deck'
+              ? 'Treasure! Pick a progress deck'
+              : `Treasure! Pick ${trDue.n} resource${trDue.n === 1 ? '' : 's'}`,
+          sub: trDue.k === 'deck' ? 'You draw the top card.' : 'Any resource the bank has.',
+          mine: true,
+          buttons: [{ label: 'Choose', on: () => setSheet({ k: 'treasure' }), primary: true }],
+        }
+      : { title: 'Treasure!', sub: `Waiting for ${listNames(v, waiting)} to choose.` };
   } else if (v.stage === 'robber') {
     const sea = v.rules.modules.includes('seafarers');
     pm = mine
@@ -947,6 +970,7 @@ export function Game({
     if (mine && v.stage === 'preroll') needs.push([`turn:${v.turnN}`, 'Your turn']);
     if (owes) needs.push([`discard:${v.turnN}`, 'Discard cards']);
     if (goldOwed) needs.push([`gold:${v.turnN}:${v.seq}`, 'Pick your gold']);
+    if (trDue) needs.push([`treasure:${trKey}`, 'Choose your treasure']);
     if (owe) needs.push([`owe:${oweKey}`, 'A choice is waiting for you']);
     for (const o of v.offers)
       if (o.from !== me && o.resp[me] == null && (o.from === v.turn || v.turn === me))
@@ -1057,6 +1081,7 @@ export function Game({
                     main: 'playing',
                     gold: 'choosing gold',
                     ck: 'choosing',
+                    treasure: 'treasure',
                   }[v.stage]
                 }
               </span>
@@ -1440,6 +1465,9 @@ export function Game({
       ) : null}
       {sheet?.k === 'discard' && owes ? <DiscardSheet v={v} onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'plenty' ? <PlentySheet v={v} onClose={() => setSheet(null)} /> : null}
+      {sheet?.k === 'treasure' && trDue ? (
+        <TreasureSheet v={v} due={trDue} onClose={() => setSheet(null)} />
+      ) : null}
       {sheet?.k === 'gold' && goldOwed ? (
         <GoldSheet v={v} due={goldOwed} onClose={() => setSheet(null)} />
       ) : null}

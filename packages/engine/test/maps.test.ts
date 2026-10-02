@@ -437,6 +437,9 @@ describe('editor actions', () => {
       { k: 'renameRegion', region: 'r1', name: 'Gold coast' },
       { k: 'region', at: [0, 1], region: null },
       { k: 'removeRegion', region: 'r1' },
+      { k: 'treasure', at: [0, 0], side: 0, on: true },
+      { k: 'treasure', at: [1, -1], side: 2, on: true },
+      { k: 'treasure', at: [0, 0], side: 0, on: false },
     ];
     const states = [hist.map];
     for (const op of ops) {
@@ -460,6 +463,43 @@ describe('editor actions', () => {
     hist.undo();
     hist.apply({ k: 'meta', name: 'Other' });
     expect(hist.canRedo).toBe(false);
+  });
+
+  it('treasure spots (SPEC 10.3): on any side, one per edge, kept by Fill the rest, and played in any mode', () => {
+    let m = emptyMap('m-t', 'Treasure');
+    for (const at of [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, -1],
+    ] as At[])
+      m = ok(m, { k: 'addHex', at, t: 'random' });
+    m = ok(m, { k: 'treasure', at: [0, 0], side: 0, on: true });
+    expect(m.treasures).toEqual([{ q: 0, r: 0, side: 0 }]);
+    // The same edge named from the other hex is the same spot.
+    expect(refused(m, { k: 'treasure', at: [1, 0], side: 3, on: true })).toBe(
+      'There’s a treasure there already',
+    );
+    m = ok(m, { k: 'treasure', at: [1, 0], side: 3, on: false });
+    expect(m.treasures).toBeUndefined();
+    expect(refused(m, { k: 'treasure', at: [0, 0], side: 0, on: false })).toBe('There’s no treasure there');
+    expect(refused(m, { k: 'treasure', at: [5, 5], side: 0, on: true })).toBe('There’s no hex there');
+    m = ok(m, { k: 'treasure', at: [0, 1], side: 4, on: true });
+    m = ok(m, { k: 'treasure', at: [1, -1], side: 1, on: true });
+    // Removing a hex takes the treasures named by it.
+    expect(ok(m, { k: 'removeHex', at: [1, -1] }).treasures).toEqual([{ q: 0, r: 1, side: 4 }]);
+    const std = ok(standardBlank(CLASSIC_MAP, 'm-ts', 'Std'), {
+      k: 'treasure',
+      at: [0, 0],
+      side: 1,
+      on: true,
+    });
+    const r = fillRest(std, ANYTHING_GOES, 'tr-fill', 4);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.map.treasures).toEqual([{ q: 0, r: 0, side: 1 }]);
+    const s = newGame('tr-play', seatsFor(4), { map: r.map });
+    expect(s.config.modules).toEqual(['treasures']);
+    expect(s.tr!.spots).toHaveLength(1);
   });
 
   it('an empty map grows from nothing', () => {

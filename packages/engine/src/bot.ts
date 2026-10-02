@@ -6,6 +6,7 @@
 import { TABLE_TALK, legalActions, mustDiscard } from './legal';
 import { ckDiscardDue } from './modules/citiesKnights';
 import { goldDue } from './modules/seafarers';
+import { treasureDue } from './modules/treasures';
 import { COST, cardKinds, geo, has, legalSettlements, rateFor, vertFree, vertexOK } from './queries';
 import { nextFloat, nextInt, type RngState } from './rng';
 import { RES, type Action, type Cards, type GameState, type PartialRes, type Seat } from './types';
@@ -64,6 +65,11 @@ export function botMove(v: PlayerView, rng: RngState): Action | null {
     return { type: 'chooseGold', cards };
   }
   if (v.stage === 'gold') return null;
+  if (v.stage === 'treasure') {
+    if (!treasureDue(s, me)) return null;
+    const opts = legalActions(s, me);
+    return opts[nextInt(rng, opts.length)] ?? null;
+  }
   // Answer trade offers aimed at us: decline (a weak, polite bot).
   for (const o of v.offers) {
     if (o.from !== me && o.from === v.turn && o.resp[me] == null)

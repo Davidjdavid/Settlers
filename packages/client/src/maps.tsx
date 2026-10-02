@@ -35,7 +35,7 @@ import {
 } from '@settlers/engine';
 import type { MapInfo } from '@settlers/server/protocol';
 import { GLYPH, K, RES_LABEL, TILE_COLOR, f1, hexPts } from './art';
-import { DECOR, harborMarkSVG, harborPiersSVG, harborPoint, seaSVG, tokenSVG } from './Board';
+import { DECOR, harborMarkSVG, harborPiersSVG, harborPoint, seaSVG, tokenSVG, treasureSVG } from './Board';
 import { Brand, MapPreview } from './home';
 import { client, useClient } from './net';
 import { ConfirmTwice, Sheet } from './Sheets';
@@ -51,7 +51,9 @@ export type Tool =
   | { k: 'start' }
   | { k: 'pirate' }
   /** Regions (SPEC 10.4): paint hexes into a region, or out of every region (null). */
-  | { k: 'region'; region: string | null };
+  | { k: 'region'; region: string | null }
+  /** Treasures (SPEC 10.3): click a path to put a treasure on it, a treasure to take it off. */
+  | { k: 'treasure' };
 
 export const TERRAIN_NAME: Record<Terrain | 'random', string> = {
   wood: 'Wood',
@@ -75,6 +77,8 @@ type Target =
   | { k: 'token'; at: At }
   | { k: 'harbor'; at: At; side: number }
   | { k: 'side'; at: At; side: number }
+  | { k: 'path'; at: At; side: number }
+  | { k: 'treasure'; at: At; side: number }
   | { k: 'ghost'; at: At };
 
 function targetOf(el: Element | null): Target | null {
@@ -89,6 +93,8 @@ function targetOf(el: Element | null): Target | null {
       return { k: d.kind, at };
     case 'harbor':
     case 'side':
+    case 'path':
+    case 'treasure':
       return { k: d.kind, at, side: Number(d.side) };
   }
   return null;
@@ -192,6 +198,10 @@ export function MapBoard(props: {
       case 'region':
         if (t.k === 'hex' || t.k === 'token') onEdit({ k: 'region', at: t.at, region: tool.region });
         return;
+      case 'treasure':
+        if (t.k === 'path' || t.k === 'treasure')
+          onEdit({ k: 'treasure', at: t.at, side: t.side, on: t.k === 'path' });
+        return;
     }
   };
   const start = Array.isArray(map.start) ? map.start : [];
@@ -235,6 +245,30 @@ export function MapBoard(props: {
     );
     return coastalSides(map).filter((s) => !cornerKeys(s.at, s.side).some((k) => used.has(k)));
   }, [map, showSides, picked]);
+  // Every path (edge) once, named by the first hex that has it, with its middle: treasure targets.
+  const paths = useMemo(() => {
+    if (tool?.k !== 'treasure') return [];
+    const taken = new Set(
+      (map.treasures ?? []).flatMap((t) => {
+        const h = hexAt(map.hexes, t.q, t.r);
+        return h < 0 ? [] : [edgeOfSide(g, h, t.side)];
+      }),
+    );
+    const out: { e: number; at: At; side: number; x: number; y: number }[] = [];
+    const seen = new Set<number>();
+    map.hexes.forEach((h, i) => {
+      for (let side = 0; side < 6; side++) {
+        const e = edgeOfSide(g, i, side);
+        if (seen.has(e) || taken.has(e)) continue;
+        seen.add(e);
+        const E = g.edges[e]!;
+        const a = g.verts[E.a]!;
+        const b = g.verts[E.b]!;
+        out.push({ e, at: [h.q, h.r], side, x: ((a.x + b.x) / 2) * K, y: ((a.y + b.y) / 2) * K });
+      }
+    });
+    return out;
+  }, [map, tool?.k, g]);
   const heat = props.heat ? cornerPips(map, props.pips) : null;
   const isPicked = (t: Target) => !!picked && same(picked, t);
 
@@ -367,6 +401,28 @@ export function MapBoard(props: {
           >
             <circle cx={pt.x} cy={pt.y} r={0.2 * K} className="sidetarget" />
           </g>
+        );
+      })}
+      {/* Treasures (SPEC 10.3): the spots, and with the tool every free path as a target. */}
+      {tool?.k === 'treasure'
+        ? paths.map((x) => (
+            <g key={`p${x.e}`} data-kind="path" data-q={x.at[0]} data-r={x.at[1]} data-side={x.side}>
+              <circle cx={x.x} cy={x.y} r={0.16 * K} className="sidetarget" />
+            </g>
+          ))
+        : null}
+      {(map.treasures ?? []).map((t) => {
+        const h = hexAt(map.hexes, t.q, t.r);
+        if (h < 0) return null;
+        return (
+          <g
+            key={`t${t.q},${t.r},${t.side}`}
+            data-kind="treasure"
+            data-q={t.q}
+            data-r={t.r}
+            data-side={t.side}
+            dangerouslySetInnerHTML={{ __html: treasureSVG(g, edgeOfSide(g, h, t.side)) }}
+          />
         );
       })}
       {map.harbors.map((hb, i) => {
@@ -991,6 +1047,24 @@ export function MapEditorPage({ id }: { id: string }) {
             </div>
           </section>
           <section>
+            <h4>Treasures</h4>
+            <div className="palette">
+              <ToolButton
+                on={tool.k === 'treasure'}
+                onClick={() => setTool({ k: 'treasure' })}
+                testid="tool-treasure"
+                title="Click a path to put a treasure on it; click a treasure to take it off"
+              >
+                Treasure
+              </ToolButton>
+              <span className="hint" data-testid="treasure-count">
+                {(map.treasures ?? []).length
+                  ? `${(map.treasures ?? []).length} on the map. The first road or ship on one finds it.`
+                  : 'None yet. Any mode.'}
+              </span>
+            </div>
+          </section>
+          <section>
             <h4>Arrange</h4>
             <div className="palette">
               <ToolButton
@@ -1449,6 +1523,7 @@ const TOOL_HINT: Record<Tool['k'], string> = {
   terrain: 'Click a hex to place the tile.',
   number: 'Click a tile to place the number.',
   harbor: 'Click a dot on the coast to place a harbor, or a harbor to change it.',
+  treasure: 'Click a dot on a path to put a treasure there, or a treasure to take it off.',
   move: 'Drag a tile, number or harbor onto another to swap them (or tap one, then the other).',
   lock: 'Click a tile, number or harbor to lock or unlock it. Filling keeps locked things.',
   shape: 'Click + to add a hex, or a hex to remove it.',

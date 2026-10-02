@@ -5,7 +5,7 @@
  */
 
 import {
-  COST, DEV_TYPES, RES, RULE_KEYS, keepMinTarget, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
+  COST, DEV_TYPES, RES, RULE_KEYS, TREASURES, keepMinTarget, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
   PROGRESS, GAIN_SOURCES, LOSS_SOURCES, StatsFold, statsFromLog, sumCards, totalVP, type GameStats, piecesLeft, stateFromView, viewFor, vpBreakdown, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
 
@@ -63,7 +63,7 @@ const WEIGHT: Record<Action['type'], number> = {
   discard: 1, offer: 1,
   ship: 6, freeShip: 5, moveShip: 1, pirate: 1, chooseGold: 1,
   improve: 25, wall: 4, knight: 6, promote: 4, activate: 5, moveKnight: 1.5, chase: 3,
-  dropProgress: 1, progress: 4, choose: 1,
+  dropProgress: 1, progress: 4, choose: 1, treasurePick: 1, treasureDeck: 1,
   // Hand-backs and rule changes are made on purpose in chooseMove, not picked at random.
   askBack: 0, handBack: 0, refuseBack: 0, setRule: 0, askUndo: 0, answerUndo: 0, cancelUndo: 0,
   askKeep: 0, answerKeep: 0, cancelKeep: 0,
@@ -234,6 +234,10 @@ function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
     const p = pick(rng, waitingOn(s));
     return [p, randomGold(s, p, rng)];
   }
+  if (s.stage === 'treasure') {
+    const p = pick(rng, waitingOn(s));
+    return [p, pick(rng, legalActions(s, p))];
+  }
   // Sometimes let a non-turn player answer or make an offer.
   if (s.stage === 'main' && chance(rng, 0.15)) {
     const others = s.players.map((_, i) => i).filter((i) => i !== s.turn);
@@ -369,6 +373,8 @@ export function perturbHidden(s: GameState, seat: Seat, rng: RngState, decks = t
       );
     });
   }
+  // The treasure deck's order is secret too.
+  if (t.tr && decks) t.tr.deck = t.tr.deck.map(() => pick(rng, TREASURES));
   const deckSize = Object.values(t.deck).reduce((a, b) => a + b, 0);
   t.deck = { knight: 0, road: 0, plenty: 0, mono: 0, vp: 0 };
   for (let i = 0; i < deckSize; i++) t.deck[pick(rng, DEV_TYPES)]++;

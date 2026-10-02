@@ -94,6 +94,8 @@ export interface MapData {
   robber: 'desert' | [number, number] | null;
   /** Seafarers: a sea hex, or null = off the board. */
   pirate?: [number, number] | null;
+  /** Treasure spots (docs/rules/treasures.md): a side of a hex, where a road or ship can go. */
+  treasures?: { q: number; r: number; side: number }[];
   /** Editor maps: the tile set blanks are filled from (blanks get what's left after what's placed). */
   set?: TileSet;
   /** Editor maps: regions with their own tile sets; hexes outside every region use `set`. */
@@ -203,7 +205,30 @@ export function validateMap(m: MapData): string[] {
     }
     if ((m.fog?.terrain ?? []).includes('fog')) bad.push('fog stack can’t contain fog');
   }
+  if (m.treasures) {
+    const seen = new Set<string>();
+    for (const t of m.treasures) {
+      if (hexAt(coords, t.q, t.r) < 0 || !Number.isInteger(t.side) || t.side < 0 || t.side > 5) {
+        bad.push(`treasure at ${t.q},${t.r} side ${t.side} isn’t on the map`);
+        continue;
+      }
+      const k = treasureKey(t);
+      if (seen.has(k)) bad.push(`two treasures on the same edge (${t.q},${t.r} side ${t.side})`);
+      seen.add(k);
+    }
+  }
   return bad;
+}
+
+/** Side directions, 0-5 clockwise from the east. */
+const SIDE_DIR: [number, number][] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; // prettier-ignore
+
+/** The same key for both hexes' names of one edge (a side and its neighbour's opposite side). */
+export function treasureKey(t: { q: number; r: number; side: number }): string {
+  const [dq, dr] = SIDE_DIR[t.side]!;
+  const a = `${t.q},${t.r},${t.side}`;
+  const b = `${t.q + dq},${t.r + dr},${(t.side + 3) % 6}`;
+  return a < b ? a : b;
 }
 
 /** Build the starting board from map data. Draws from `rng` in a fixed order. */

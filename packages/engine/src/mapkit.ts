@@ -9,7 +9,7 @@
 
 import { cornerPip, DEFAULT_PIPS, modelOf } from './mapcheck';
 import { geometryFor } from './geometry';
-import { validateMap, type MapData, type MapHex, type TileSet } from './map';
+import { treasureKey, validateMap, type MapData, type MapHex, type TileSet } from './map';
 import { isLand, type PortType, type Terrain } from './types';
 
 /** The standard board's set: 19 tiles, 18 number tokens, 9 harbors. */
@@ -312,6 +312,8 @@ export type EditOp =
   | { k: 'start'; at: At; on: boolean }
   /** Seafarers: points for settling a new island, 0–3. */
   | { k: 'islandVP'; n: number }
+  /** Treasures (SPEC 10.3): put a treasure spot on a side of a hex, or take it away. Any mode. */
+  | { k: 'treasure'; at: At; side: number; on: boolean }
   /** Seafarers: where the pirate starts, a sea hex or off the board (null). */
   | { k: 'pirate'; at: At | null }
   /** Seafarers (10.2): what can turn up under the fog, or the standard stack. */
@@ -340,6 +342,8 @@ const SIDES = [0, 1, 2, 3, 4, 5];
 const SEAFARERS_ONLY: readonly string[] = ['sea', 'gold', 'fog'];
 export const MAX_HEXES = 120;
 export const MAX_REGIONS = 12;
+/** Most treasure spots on a map (the server's schema allows the same). */
+export const MAX_TREASURES = 40;
 
 const sameAt = (h: { q: number; r: number }, at: At) => h.q === at[0] && h.r === at[1];
 export const across = (at: At, side: number): At => [at[0] + SIDE_DIR[side]![0], at[1] + SIDE_DIR[side]![1]];
@@ -535,6 +539,11 @@ export function applyEdit(m0: MapData, op: EditOp): EditResult {
       if (m.hexes[i]!.lock) return fail('That tile is locked');
       m.hexes.splice(i, 1);
       m.harbors = m.harbors.filter((x) => !sameAt(x, op.at));
+      // A treasure named by the removed hex goes with it.
+      if (m.treasures) {
+        m.treasures = m.treasures.filter((x) => !sameAt(x, op.at));
+        if (!m.treasures.length) delete m.treasures;
+      }
       dropStrandedHarbors();
       break;
     }
@@ -581,6 +590,20 @@ export function applyEdit(m0: MapData, op: EditOp): EditResult {
       if (!(Number.isInteger(op.n) && op.n >= 0 && op.n <= 3)) return fail('Island points go from 0 to 3');
       if (op.n) m.specialVP = { ...m.specialVP, newIsland: op.n };
       else delete m.specialVP;
+      break;
+    }
+    case 'treasure': {
+      if (!hex(op.at) || !(op.side >= 0 && op.side <= 5)) return fail('There’s no hex there');
+      const key = treasureKey({ q: op.at[0], r: op.at[1], side: op.side });
+      const list = (m.treasures ?? []).filter((t) => treasureKey(t) !== key);
+      const had = list.length !== (m.treasures ?? []).length;
+      if (op.on) {
+        if (had) return fail('There’s a treasure there already');
+        if (list.length >= MAX_TREASURES) return fail(`At most ${MAX_TREASURES} treasures`);
+        list.push({ q: op.at[0], r: op.at[1], side: op.side });
+      } else if (!had) return fail('There’s no treasure there');
+      if (list.length) m.treasures = list;
+      else delete m.treasures;
       break;
     }
     case 'pirate': {

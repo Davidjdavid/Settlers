@@ -54,7 +54,7 @@ export type PortType = Resource | 'any';
 export type Seat = number;
 export type PieceKind = 'road' | 'settlement' | 'city';
 export type EdgePiece = 'road' | 'ship';
-export const MODULES = ['seafarers', 'citiesKnights'] as const;
+export const MODULES = ['seafarers', 'citiesKnights', 'treasures'] as const;
 export type ModuleId = (typeof MODULES)[number];
 
 export const COLORS = [
@@ -123,7 +123,21 @@ export interface Player {
  * `gold`: players owed gold-field resources are choosing them (Seafarers).
  * `ck`: players owe Cities & Knights choices (see CKState.owe).
  */
-export type Stage = 'setup' | 'preroll' | 'discard' | 'robber' | 'main' | 'roads' | 'gold' | 'ck';
+export type Stage =
+  'setup' | 'preroll' | 'discard' | 'robber' | 'main' | 'roads' | 'gold' | 'ck' | 'treasure';
+
+/**
+ * Treasures (docs/rules/treasures.md): free roads and ships, 2 resources of your choice, sheep +
+ * brick + wheat, a free development card (a progress card in Knights).
+ */
+export const TREASURES = ['roads', 'pick', 'trio', 'dev'] as const;
+export type TreasureKind = (typeof TREASURES)[number];
+/** A treasure's finder still owes: resources to pick, a progress deck to pick, free pieces to place. */
+export interface TreasureOwe {
+  p: Seat;
+  k: 'pick' | 'deck' | 'roads';
+  n: number;
+}
 
 export interface Offer {
   id: number;
@@ -271,6 +285,20 @@ export type Owe =
   /** Diplomat: you may rebuild your removed road for free. */
   | { k: 'rebuild'; p: Seat };
 
+/** Treasures state. Only present when the treasures module is on (the map has spots). */
+export interface TreasureState {
+  /** Edges with a treasure still face down. Public. */
+  spots: number[];
+  /** The treasure deck, top first: one card per spot left. Order is server-only. */
+  deck: TreasureKind[];
+  /** Spots found, in order: where, by whom, and what it was. Public. */
+  found: { e: number; p: Seat; k: TreasureKind }[];
+  /** Choices and free pieces still owed, oldest first. Public. */
+  owe: TreasureOwe[];
+  /** The stage to return to after the treasure stage. */
+  back: Stage | null;
+}
+
 /** Cities & Knights state. Only present when the citiesKnights module is on. */
 export interface CKState {
   /** Improvement levels per player. */
@@ -358,6 +386,8 @@ export interface GameState {
   sea?: SeaState;
   /** Cities & Knights state; absent without it. */
   ck?: CKState;
+  /** Treasures state; absent without it. */
+  tr?: TreasureState;
   /** A turn that can still be handed back; absent otherwise. */
   back?: HandBack;
   /** The last move, while it can still be undone; absent otherwise. */
@@ -429,6 +459,9 @@ export type Action =
   | { type: 'moveShip'; from: number; to: number }
   | { type: 'pirate'; hex: number; victim?: Seat | null }
   | { type: 'chooseGold'; cards: PartialRes }
+  /* Treasures: pick resources, or (Knights) a progress deck */
+  | { type: 'treasurePick'; cards: PartialRes }
+  | { type: 'treasureDeck'; track: Track }
   /* Handing the dice back (SPEC 4.4) */
   | { type: 'askBack' }
   | { type: 'handBack' }
@@ -519,6 +552,14 @@ export type GameEvent =
   /** A fog hex was discovered. `got` is the discoverer's reward (gold is chosen separately). */
   | { k: 'discover'; p: Seat; h: number; t: Terrain; n: number; got: PartialRes | null }
   | { k: 'islandBonus'; p: Seat; vp: number }
+  /** A treasure found on edge e. `from`: it was a development card with none left to give. */
+  | { k: 'treasure'; p: Seat; e: number; kind: TreasureKind; from?: 'dev' }
+  /** Cards a treasure gave (sheep, brick and wheat; or the ones picked). */
+  | { k: 'treasureGot'; p: Seat; got: PartialRes }
+  /** A development card from a treasure. `card` is null for everyone but the finder. */
+  | { k: 'treasureDev'; p: Seat; card: DevType | null }
+  /** Free roads and ships from a treasure: `n` to place (0 when none can be). */
+  | { k: 'treasureRoads'; p: Seat; n: number }
   | { k: 'askBack'; p: Seat }
   | { k: 'handBack'; p: Seat; to: Seat }
   | { k: 'refuseBack'; p: Seat }

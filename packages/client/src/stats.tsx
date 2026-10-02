@@ -252,6 +252,7 @@ const GAIN_LABEL: Record<string, string> = {
   steal: 'Steals',
   cards: 'Cards & bonuses',
   start: 'Start',
+  treasure: 'Treasures',
 };
 const LOSS_LABEL: Record<string, string> = {
   robbed: 'Robbed',

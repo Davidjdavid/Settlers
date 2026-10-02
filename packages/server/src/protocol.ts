@@ -66,6 +66,8 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('moveShip'), from: idx, to: idx }),
   z.strictObject({ type: z.literal('pirate'), hex: idx, victim: idx.nullable().optional() }),
   z.strictObject({ type: z.literal('chooseGold'), cards }),
+  z.strictObject({ type: z.literal('treasurePick'), cards }),
+  z.strictObject({ type: z.literal('treasureDeck'), track: TRACK }),
   z.strictObject({ type: z.literal('askBack') }),
   z.strictObject({ type: z.literal('handBack') }),
   z.strictObject({ type: z.literal('refuseBack') }),
@@ -256,6 +258,11 @@ export const MapSchema = z.strictObject({
   start: z.union([z.literal('all'), z.array(at).max(120)]).optional(),
   robber: z.union([z.literal('desert'), at, z.null()]),
   pirate: z.union([at, z.null()]).optional(),
+  /** Treasure spots (docs/rules/treasures.md): a hex side each. */
+  treasures: z
+    .array(z.strictObject({ q: coord, r: coord, side: z.number().int().min(0).max(5) }))
+    .max(40)
+    .optional(),
   set: TileSetSchema.optional(),
   /** SPEC 10.4: regions, each with its own tile set. */
   regions: z

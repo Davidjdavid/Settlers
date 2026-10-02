@@ -8,6 +8,7 @@
 import { TABLE_TALK, legalActions, mustDiscard } from './legal';
 import { ckDiscardDue, firstOwe } from './modules/citiesKnights';
 import { goldDue } from './modules/seafarers';
+import { treasureDue } from './modules/treasures';
 import { COST, cardKinds, geo, handLimit, rateFor, robberHexOK, total, vertFree, vertexOK } from './queries';
 import { nextFloat, nextInt, type RngState } from './rng';
 import {
@@ -275,6 +276,25 @@ function easyMove(v: PlayerView, rng: RngState, memo: CpuMemo): Action | null {
   }
   if (s.stage === 'ck') return cpuOwedChoice(s, me, rng);
   if (s.stage === 'gold') return null;
+  if (s.stage === 'treasure') {
+    const due = treasureDue(s, me);
+    if (!due) return null;
+    if (due.k === 'deck') {
+      const decks = legalActions(s, me);
+      return decks[nextInt(rng, decks.length)] ?? null;
+    }
+    // Like gold: what it has least of.
+    const cards: Cards = {};
+    const bank = { ...s.bank };
+    for (let i = 0; i < due.n; i++) {
+      const r = RES.filter((x) => bank[x] > 0).sort(
+        (a, b) => pl.res[a] + (cards[a] ?? 0) - (pl.res[b] + (cards[b] ?? 0)),
+      )[0]!;
+      bank[r]--;
+      cards[r] = (cards[r] ?? 0) + 1;
+    }
+    return { type: 'treasurePick', cards: cards as Partial<Record<(typeof RES)[number], number>> };
+  }
 
   // Decline every trade offer it is asked to answer.
   for (const o of s.offers) {

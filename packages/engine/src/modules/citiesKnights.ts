@@ -546,7 +546,10 @@ export const citiesKnights: RuleModule = {
     for (let p = 0; p < n; p++) {
       const h = c.hands[p]!.length;
       const overflowing = c.owe.some((o) => o.k === 'overflow' && o.p === p);
-      if (h > PROGRESS_LIMIT + 1) bad.push(`player ${p} holds ${h} progress cards`);
+      // On your own turn you may hold one over the limit until you put one back; each treasure
+      // that gave a progress card can add one more (docs/rules/treasures.md 4.4).
+      const extra = s.tr ? s.tr.found.filter((f) => f.k === 'dev').length : 0;
+      if (h > PROGRESS_LIMIT + 1 + extra) bad.push(`player ${p} holds ${h} progress cards`);
       if (h > PROGRESS_LIMIT && p !== s.turn && !overflowing)
         bad.push(`player ${p} holds ${h} progress cards off-turn`);
       if (c.hands[p]!.some((x) => PROGRESS_VP.includes(x))) bad.push(`player ${p} holds a VP progress card`);

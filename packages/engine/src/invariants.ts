@@ -159,8 +159,11 @@ export function checkInvariants(s: GameState, prev?: GameState): string[] {
   // Stage bookkeeping.
   if ((s.stage === 'discard') !== (s.discard != null))
     bad.push(`stage ${s.stage} with discard ${JSON.stringify(s.discard)}`);
-  // Free pieces are pending only in the roads stage (or while gold is chosen in the middle of it).
-  if (s.stage === 'roads' ? !(s.freeRoads > 0) : s.freeRoads > 0 && s.stage !== 'gold') {
+  // Free pieces are pending only in the roads stage (or while gold or a treasure is chosen in the
+  // middle of it, or a choice that treasure brought is owed).
+  const paused =
+    s.stage === 'gold' || s.stage === 'treasure' || (s.stage === 'ck' && s.ck?.back === 'treasure');
+  if (s.stage === 'roads' ? !(s.freeRoads > 0) : s.freeRoads > 0 && !paused) {
     bad.push(`stage ${s.stage} with ${s.freeRoads} free roads`);
   }
   if ((s.stage === 'robber' || s.stage === 'discard') !== (s.robberReturn != null)) {

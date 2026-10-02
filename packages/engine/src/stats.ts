@@ -26,7 +26,7 @@ import {
 } from './types';
 
 /** Where cards came from. */
-export const GAIN_SOURCES = ['production', 'trade', 'bank', 'steal', 'cards', 'start'] as const;
+export const GAIN_SOURCES = ['production', 'trade', 'bank', 'steal', 'cards', 'start', 'treasure'] as const;
 export type GainSource = (typeof GAIN_SOURCES)[number];
 /** Where cards went. */
 export const LOSS_SOURCES = ['robbed', 'discard', 'taken', 'trade', 'bank', 'build'] as const;
@@ -306,6 +306,12 @@ export class StatsFold {
           break;
         case 'plenty':
           gain(e.p, 'cards', e.got);
+          break;
+        case 'treasureGot':
+          gain(e.p, 'treasure', e.got);
+          break;
+        case 'treasureDev':
+          bump(P[e.p]!.bought, e.card ?? 'unknown');
           break;
         case 'mono':
           for (const [q, k] of Object.entries(e.from)) {

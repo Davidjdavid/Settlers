@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   COMS,
   RES,
+  TRACKS,
   rateFor,
   stateFromView,
   total,
@@ -15,7 +16,7 @@ import {
   type Resource,
   type Seat,
 } from '@settlers/engine';
-import { CARD_COLOR, CARD_LABEL, RES_LABEL, TILE_COLOR, cardIcon } from './art';
+import { CARD_COLOR, CARD_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR, TRACK_LABEL, cardIcon } from './art';
 import { client } from './net';
 import { cardsText, nameOf } from './text';
 
@@ -630,6 +631,87 @@ export function GoldSheet({ v, due, onClose }: { v: PlayerView; due: number; onC
               label={r}
               value={pick[r] ?? 0}
               max={Math.min(v.bank[r], (pick[r] ?? 0) + due - n)}
+              onChange={(x) => setPick({ ...pick, [r]: x })}
+            />
+          </div>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
+/** A treasure's choice (docs/rules/treasures.md): resources from the bank, or a progress deck. */
+export function TreasureSheet({
+  v,
+  due,
+  onClose,
+}: {
+  v: PlayerView;
+  due: { k: 'pick' | 'deck'; n: number };
+  onClose: () => void;
+}) {
+  const [pick, setPick] = useState<PartialRes>({});
+  const n = total(pick);
+  if (due.k === 'deck')
+    return (
+      <Sheet
+        title="Treasure! Pick a progress deck"
+        sub="You draw the top card of the deck you pick."
+        onClose={onClose}
+      >
+        <div className="row" data-testid="treasure-decks">
+          {TRACKS.map((t) => {
+            const left = v.ck?.decks[t] ?? 0;
+            return (
+              <button
+                key={t}
+                className="btn"
+                disabled={!left}
+                data-testid={`treasure-deck-${t}`}
+                style={{ borderColor: TRACK_COLOR[t] }}
+                onClick={() => {
+                  void client.act({ type: 'treasureDeck', track: t });
+                  onClose();
+                }}
+              >
+                {TRACK_LABEL[t]} ({left} left)
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
+    );
+  return (
+    <Sheet
+      title={`Treasure! Pick ${due.n} resource${due.n === 1 ? '' : 's'}`}
+      sub={`Any resource the bank has. Picked ${n} of ${due.n}.`}
+      onClose={onClose}
+      foot={
+        <button
+          className="btn primary"
+          disabled={n !== due.n}
+          data-testid="treasure-take"
+          onClick={() => {
+            void client.act({ type: 'treasurePick', cards: pick });
+            onClose();
+          }}
+        >
+          Take {cardsText(pick)}
+        </button>
+      }
+    >
+      <div className="steppers" data-testid="treasure-pick">
+        {RES.map((r) => (
+          <div className="stepper" key={r} style={{ ['--c' as string]: TILE_COLOR[r] }}>
+            <Icon r={r} />
+            <span className="lbl">
+              {RES_LABEL[r]}
+              <small>bank {v.bank[r]}</small>
+            </span>
+            <Ctl
+              label={r}
+              value={pick[r] ?? 0}
+              max={Math.min(v.bank[r], (pick[r] ?? 0) + due.n - n)}
               onChange={(x) => setPick({ ...pick, [r]: x })}
             />
           </div>

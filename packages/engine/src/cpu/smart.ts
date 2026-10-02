@@ -14,6 +14,7 @@ import {
   plainCities,
 } from '../modules/citiesKnights'; // prettier-ignore
 import { SHIP_COST, goldDue, islandOf, shipKindOK, shipOK } from '../modules/seafarers';
+import { treasureDue } from '../modules/treasures';
 import {
   COST, blockedAt, cardKinds, devCardsOn, geo, handLimit, has, legalCities, legalSettlements, rateFor,
   roadEdgeOK, roadOK, routeLen, total, vertFree, vertexOK,
@@ -1071,6 +1072,17 @@ export function smartMove(
     return cpuOwedChoice(s, me, rng);
   }
   if (s.stage === 'gold') return null;
+  if (s.stage === 'treasure') {
+    const due = treasureDue(s, me);
+    if (!due) return null;
+    if (due.k === 'pick')
+      return {
+        type: 'treasurePick',
+        cards: goldPick(c, due.n, goal0()) as Partial<Record<(typeof RES)[number], number>>,
+      };
+    const decks = legalActions(s, me);
+    return decks[nextInt(rng, decks.length)] ?? null;
+  }
 
   const answer = answerOffers(c);
   if (answer) return answer;

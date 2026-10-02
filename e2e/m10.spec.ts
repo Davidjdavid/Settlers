@@ -1,5 +1,5 @@
 /*
- * Milestone 10 so far (10.1, 10.2, 10.4) in browsers against the real server build:
+ * Milestone 10 (10.1–10.4) in browsers against the real server build:
  * - The map editor's Seafarers pieces: sea and fog painted, the start area painted, points for a
  *   new island, the pirate's start, the fog stack (gold added under the fog); and a region with
  *   its own tile set (a gold tile swapped in), then "Fill the rest" and save.
@@ -7,7 +7,10 @@
  *   the game starts on exactly the table's board, with the pirate, the fog and the region's gold
  *   where the map put them.
  * - The Fog Islands, picked in the lobby, played to the end.
- * Treasures (10.3) come once their rules are agreed. SHOTS=<dir> saves screenshots.
+ * - Treasures (10.3): three put on paths in the editor (one taken off again), face down on the
+ *   board in every browser, never a hint of the deck in any frame; the treasure sheet answered by
+ *   clicking on a made-up view (a random game may find none that asks). SHOTS=<dir> saves
+ *   screenshots.
  */
 
 import { join } from 'node:path';
@@ -121,6 +124,17 @@ test('a Seafarers map from the editor, played to the end; then the Fog Islands',
   await expect(maker.getByTestId('region-r1-name')).toHaveValue('Region A');
   await maker.getByTestId('redo-edit').click();
   await expect(maker.getByTestId('region-r1-name')).toHaveValue('Gold coast');
+  // Treasures (10.3): two on paths by the start, one out across the water.
+  await maker.getByTestId('tool-treasure').click();
+  await maker.locator('[data-kind=path][data-q="0"][data-r="0"]').first().click();
+  await maker.locator('[data-kind=path][data-q="-1"][data-r="0"]').first().click();
+  await maker.locator('[data-kind=path][data-q="2"][data-r="-1"]').first().click();
+  await expect(maker.locator('[data-kind=treasure]')).toHaveCount(3);
+  // A click on one takes it off; another puts one back.
+  await maker.locator('[data-kind=treasure]').last().click();
+  await expect(maker.locator('[data-kind=treasure]')).toHaveCount(2);
+  await maker.locator('[data-kind=path][data-q="1"][data-r="-2"]').first().click();
+  await expect(maker.getByTestId('treasure-count')).toContainText('3 on the map');
   await maker.getByTestId('fill-rest').click();
   await expect(maker.locator('[data-kind=hex][data-t=random]')).toHaveCount(0);
   await maker.getByTestId('map-name').fill('Gold coast');
@@ -153,11 +167,53 @@ test('a Seafarers map from the editor, played to the end; then the Fog Islands',
   expect(v.board.pirate).toBe(at(2, -1));
   expect(v.rules.newIslandVP).toBe(2);
   expect(v.board.hexes.filter((h: { t: string }) => h.t === 'fog')).toHaveLength(2);
+  // The treasures are on the board, face down, in every browser.
+  expect(v.rules.modules).toContain('treasures');
+  expect(v.tr.spots).toHaveLength(3);
+  for (const p of t.pages) await expect(p.locator('#board [data-treasure]')).toHaveCount(3);
   await shot(ann, 'game');
   const seats = await Promise.all(t.pages.map(async (p) => (await view(p)).me));
   await playToEnd(t);
   checkFrames(t, seats, 50);
+  // The treasure deck's order never reaches a browser.
+  for (const fs of t.frames)
+    for (const f of fs) expect(JSON.stringify(f)).not.toMatch(/"deck":\["(roads|pick|trio|dev)/);
+  const found = (await view(ann)).tr.found;
+  console.log(
+    `Gold coast: ${found.length} of 3 treasures found: ${found.map((f: { k: string }) => f.k).join(', ')}`,
+  );
+  for (const p of t.pages) await expect(p.locator('#board [data-treasure]')).toHaveCount(3 - found.length);
   expect(t.errors).toEqual([]);
+
+  /* ---------- The treasure sheet, on a made-up view ---------- */
+  // (A random game may find no treasure that asks for a choice, so the sheet is checked here.)
+  await ann.reload();
+  await expect(ann.locator('#board')).toBeVisible();
+  const stage = (owe: { k: string; n: number }) =>
+    ann.evaluate((owe) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test hook returns plain JSON
+      const s = (window as any).__settlers;
+      const v = structuredClone(s.state().game);
+      v.phase = 'play';
+      v.winner = null;
+      delete v.keep;
+      v.turn = v.me;
+      v.stage = 'treasure';
+      v.tr.owe = [{ p: v.me, ...owe }];
+      v.tr.back = 'main';
+      s.stage(v);
+    }, owe);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test hook returns plain JSON
+  const moves = (): Promise<any[]> => ann.evaluate(() => (window as any).__settlers.staged());
+  await stage({ k: 'pick', n: 2 });
+  await expect(ann.getByTestId('treasure-pick')).toBeVisible();
+  await expect(ann.getByTestId('treasure-take')).toBeDisabled();
+  await ann.getByRole('button', { name: 'More ore' }).click();
+  await ann.getByRole('button', { name: 'More wheat' }).click();
+  await shot(ann, 'treasure-sheet');
+  await ann.getByTestId('treasure-take').click();
+  await expect.poll(moves).toContainEqual({ type: 'treasurePick', cards: { ore: 1, wheat: 1 } });
+  await ann.reload();
 
   /* ---------- The Fog Islands from the lobby ---------- */
   const f = await seatedTable(browser, server, ['Dee', 'Eve', 'Fay']);
