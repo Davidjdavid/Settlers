@@ -53,7 +53,7 @@ export function MapPreview({
         <polygon
           key={i}
           points={hexPts(g.hexes[i]!.x * K, g.hexes[i]!.y * K, 0.96 * K)}
-          fill={TILE_COLOR[h.t as Terrain] ?? '#1f5f73'}
+          fill={h.t === 'random' ? '#3a4a52' : (TILE_COLOR[h.t as Terrain] ?? '#1f5f73')}
         />
       ))}
     </svg>
@@ -80,6 +80,9 @@ export function Home({ error }: { error: string | null }) {
           </button>
           <button className="btn" onClick={() => client.go('/stats')} data-testid="open-stats">
             Stats
+          </button>
+          <button className="btn" onClick={() => client.go('/maps')} data-testid="open-maps">
+            Maps
           </button>
         </div>
         <form

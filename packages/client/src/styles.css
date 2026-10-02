@@ -2168,3 +2168,302 @@ button.vp {
   max-height: none;
   margin: 12px auto;
 }
+
+/* Maps (docs/maps.md 4): the map list and the editor. */
+.maplist {
+  display: grid;
+  gap: 8px;
+}
+.mapitem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.mapitem .info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.mapitem .sub {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.mapitem .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  max-width: 260px;
+}
+@container app (max-width: 560px) {
+  .mapitem {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .mapitem .acts {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    max-width: none;
+  }
+}
+.mapeditor {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--abyss);
+}
+.edhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--deep);
+  flex-wrap: wrap;
+}
+.edhead .mapname {
+  flex: 1 1 180px;
+  min-width: 0;
+  font-family: var(--display);
+  font-size: 18px;
+}
+.row.tight {
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.edbody {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.edboard {
+  min-height: 0;
+  display: flex;
+  padding: 8px;
+}
+.mapboard {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+}
+.edside {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px 24px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
+}
+.edside > section {
+  min-width: 0;
+}
+.edside h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.edside select {
+  max-width: 150px;
+}
+@container app (max-width: 760px) {
+  .mapeditor {
+    height: auto;
+    min-height: 100vh;
+  }
+  .edbody {
+    grid-template-columns: 1fr;
+  }
+  .edboard {
+    height: 62vh;
+  }
+  .edside {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.palette .tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.palette.nums .tool {
+  min-width: 38px;
+  justify-content: center;
+  font-weight: 700;
+}
+.palette .red {
+  color: #ff7a6b;
+}
+.palette .sw {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.text.num {
+  width: 56px;
+  padding: 4px 6px;
+}
+.hint.small {
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+.hint.ok {
+  color: var(--go);
+}
+.mapboard .blankmark {
+  font: 700 26px var(--ui);
+  fill: rgba(240, 246, 248, 0.75);
+  pointer-events: none;
+}
+.mapboard .blankmark.small {
+  font-size: 18px;
+  fill: #1b2a30;
+}
+.mapboard.tool-terrain [data-kind='hex'],
+.mapboard.tool-number [data-kind='hex'],
+.mapboard.tool-number [data-kind='token'],
+.mapboard.tool-lock [data-kind],
+.mapboard.tool-move [data-kind],
+.mapboard.tool-shape [data-kind='hex'],
+.mapboard.tool-harbor [data-kind='harbor'] {
+  cursor: pointer;
+}
+.mapboard .picked > polygon:nth-of-type(2),
+.mapboard .picked circle {
+  stroke: var(--lantern-2);
+  stroke-width: 6;
+}
+.mapboard .harbor.hl circle {
+  stroke: #ffd166;
+  stroke-width: 5;
+}
+.mapboard .sidetarget {
+  fill: rgba(244, 236, 214, 0.18);
+  stroke: var(--ivory);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+  cursor: pointer;
+}
+.mapboard .sidetarget:hover {
+  fill: rgba(244, 183, 64, 0.5);
+}
+.mapboard .ghosthex polygon {
+  fill: rgba(244, 236, 214, 0.05);
+  stroke: rgba(244, 236, 214, 0.35);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  cursor: pointer;
+}
+.mapboard .ghosthex:hover polygon {
+  fill: rgba(244, 183, 64, 0.18);
+}
+.mapboard .ghosthex text {
+  font: 700 30px var(--ui);
+  fill: rgba(244, 236, 214, 0.55);
+  pointer-events: none;
+}
+.mapboard .heat {
+  pointer-events: none;
+}
+.mapboard .heat circle {
+  stroke: rgba(10, 27, 35, 0.8);
+  stroke-width: 1.5;
+}
+.mapboard .heat text {
+  font: 700 12px var(--ui);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.mapboard .heat.hl circle,
+.mapboard .cornerhl {
+  stroke: #ffd166;
+  stroke-width: 4;
+  fill: none;
+  pointer-events: none;
+}
+.mapboard .lockmark {
+  pointer-events: none;
+}
+.warnings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.warnings li {
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(255, 138, 117, 0.1);
+  border: 1px solid rgba(255, 138, 117, 0.25);
+  cursor: default;
+}
+.warnings li b {
+  color: var(--alarm);
+  margin-right: 4px;
+}
+.fairness,
+.counts {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.fairrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.fairness .res i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+.fairness b,
+.counts b {
+  color: var(--ink);
+}
+.counts > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.counts span {
+  white-space: nowrap;
+}
+.counts .over {
+  color: var(--alarm);
+}
+.mapboard text,
+.mapboard use {
+  pointer-events: none;
+}

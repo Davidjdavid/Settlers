@@ -47,7 +47,7 @@ export function hexScreenPoint(h: number): { x: number; y: number } | null {
   return { x: s.x, y: s.y };
 }
 
-function viewBox(g: Geometry): number[] {
+export function viewBox(g: Geometry): number[] {
   const xs = g.verts.map((v) => v.x);
   const ys = g.verts.map((v) => v.y);
   const m = 1.25;
@@ -56,21 +56,61 @@ function viewBox(g: Geometry): number[] {
   return [x0 * K, y0 * K, (Math.max(...xs) + m - x0) * K, (Math.max(...ys) + m - y0) * K];
 }
 
-const DECOR = [[-90, 0.6], [-30, 0.6], [30, 0.6], [90, 0.62], [150, 0.6], [210, 0.6]] as const; // prettier-ignore
-
-function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
-  const out: string[] = [];
-  out.push(`<defs>
+/** Shared SVG definitions (wave pattern, tile glyphs, token shading) and the sea behind the board. */
+export function seaSVG(vb: number[]): string {
+  const sea = `x="${vb[0]! + 2}" y="${vb[1]! + 2}" width="${vb[2]! - 4}" height="${vb[3]! - 4}" rx="${0.45 * K}"`;
+  return `<defs>
     <pattern id="waves" width="54" height="26" patternUnits="userSpaceOnUse"><path d="M2 15q12.5-9 25 0t25 0" fill="none" stroke="#2a7183" stroke-width="2" stroke-linecap="round" opacity=".55"/></pattern>
     ${Object.entries(GLYPH)
       .map(([k, v]) => `<symbol id="g-${k}" viewBox="-12 -12 24 24">${v}</symbol>`)
       .join('')}
     <radialGradient id="tokshade" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#eadfc2"/></radialGradient>
-  </defs>`);
-  const sea = `x="${vb[0]! + 2}" y="${vb[1]! + 2}" width="${vb[2]! - 4}" height="${vb[3]! - 4}" rx="${0.45 * K}"`;
-  out.push(
-    `<rect ${sea} fill="#12404f"/><rect ${sea} fill="url(#waves)"/><rect ${sea} fill="none" stroke="#1d5767" stroke-width="2"/>`,
-  );
+  </defs><rect ${sea} fill="#12404f"/><rect ${sea} fill="url(#waves)"/><rect ${sea} fill="none" stroke="#1d5767" stroke-width="2"/>`;
+}
+
+/** Where a harbor's marker sits: off the middle of its side, away from its land hex. */
+export function harborPoint(g: Geometry, e: number, land: number): { x: number; y: number } {
+  const E = g.edges[e]!;
+  const a = g.verts[E.a]!;
+  const b = g.verts[E.b]!;
+  const h = g.hexes[land]!;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const L = Math.hypot(mx - h.x, my - h.y);
+  return { x: (mx + ((mx - h.x) / L) * 0.66) * K, y: (my + ((my - h.y) / L) * 0.66) * K };
+}
+
+/** The two piers from a harbor's corners to its marker. */
+export function harborPiersSVG(g: Geometry, e: number, p: { x: number; y: number }): string {
+  const E = g.edges[e]!;
+  return [g.verts[E.a]!, g.verts[E.b]!]
+    .map((v) => {
+      const x1 = v.x * K;
+      const y1 = v.y * K;
+      const x2 = f1(x1 + (p.x - x1) * 0.62);
+      const y2 = f1(y1 + (p.y - y1) * 0.62);
+      return (
+        `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${x2}" y2="${y2}" stroke="#7a5a37" stroke-width="7" stroke-linecap="round"/>` +
+        `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${x2}" y2="${y2}" stroke="#a9845a" stroke-width="3" stroke-linecap="round" stroke-dasharray="3 4"/>`
+      );
+    })
+    .join('');
+}
+
+/** A harbor's marker: 3:1, or 2:1 with its resource. */
+export function harborMarkSVG(t: string, p: { x: number; y: number }): string {
+  const { x: px, y: py } = p;
+  if (t === 'any')
+    return `<g><title>3:1 port, any resource</title><circle cx="${f1(px)}" cy="${f1(py)}" r="${0.3 * K}" fill="#f4ecd6" stroke="#0a1b23" stroke-width="2.5"/><text x="${f1(px)}" y="${f1(py)}" text-anchor="middle" dominant-baseline="central" font-size="${0.2 * K}" fill="#1b2a30">3:1</text></g>`;
+  const r = t as keyof typeof RES_LABEL;
+  return `<g><title>2:1 ${RES_LABEL[r].toLowerCase()} port</title><circle cx="${f1(px)}" cy="${f1(py)}" r="${0.32 * K}" fill="${TILE_COLOR[r]}" stroke="#0a1b23" stroke-width="2.5"/><use href="#g-${r}" x="${f1(px - 0.2 * K)}" y="${f1(py - 0.27 * K)}" width="${0.4 * K}" height="${0.4 * K}"/><text x="${f1(px)}" y="${f1(py + 0.19 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.15 * K}" fill="#10181c" font-weight="700">2:1</text></g>`;
+}
+
+export const DECOR = [[-90, 0.6], [-30, 0.6], [30, 0.6], [90, 0.62], [150, 0.6], [210, 0.6]] as const; // prettier-ignore
+
+function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
+  const out: string[] = [];
+  out.push(seaSVG(vb));
   // Beaches under land only; sea hexes are open water.
   const landHexes = g.hexes.filter((_, i) => board.hexes[i]!.t !== 'sea');
   for (const h of landHexes)
@@ -79,36 +119,11 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.035 * K)}" fill="#c9b382"/>`);
   for (const pt of board.ports) {
     const e = g.edges[pt.e]!;
-    const a = g.verts[e.a]!;
-    const b = g.verts[e.b]!;
     // Point the harbor away from its land hex, towards the water.
-    const h = g.hexes[e.hexes.find((x) => board.hexes[x]!.t !== 'sea') ?? e.hexes[0]!]!;
-    const mx = (a.x + b.x) / 2;
-    const my = (a.y + b.y) / 2;
-    const L = Math.hypot(mx - h.x, my - h.y);
-    const px = (mx + ((mx - h.x) / L) * 0.66) * K;
-    const py = (my + ((my - h.y) / L) * 0.66) * K;
-    for (const v of [a, b]) {
-      const x1 = v.x * K;
-      const y1 = v.y * K;
-      const x2 = f1(x1 + (px - x1) * 0.62);
-      const y2 = f1(y1 + (py - y1) * 0.62);
-      out.push(
-        `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${x2}" y2="${y2}" stroke="#7a5a37" stroke-width="7" stroke-linecap="round"/>`,
-      );
-      out.push(
-        `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${x2}" y2="${y2}" stroke="#a9845a" stroke-width="3" stroke-linecap="round" stroke-dasharray="3 4"/>`,
-      );
-    }
-    if (pt.t === 'any') {
-      out.push(
-        `<g><title>3:1 port, any resource</title><circle cx="${f1(px)}" cy="${f1(py)}" r="${0.3 * K}" fill="#f4ecd6" stroke="#0a1b23" stroke-width="2.5"/><text x="${f1(px)}" y="${f1(py)}" text-anchor="middle" dominant-baseline="central" font-size="${0.2 * K}" fill="#1b2a30">3:1</text></g>`,
-      );
-    } else {
-      out.push(
-        `<g><title>2:1 ${RES_LABEL[pt.t].toLowerCase()} port</title><circle cx="${f1(px)}" cy="${f1(py)}" r="${0.32 * K}" fill="${TILE_COLOR[pt.t]}" stroke="#0a1b23" stroke-width="2.5"/><use href="#g-${pt.t}" x="${f1(px - 0.2 * K)}" y="${f1(py - 0.27 * K)}" width="${0.4 * K}" height="${0.4 * K}"/><text x="${f1(px)}" y="${f1(py + 0.19 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.15 * K}" fill="#10181c" font-weight="700">2:1</text></g>`,
-      );
-    }
+    const land = e.hexes.find((x) => board.hexes[x]!.t !== 'sea') ?? e.hexes[0]!;
+    const p = harborPoint(g, pt.e, land);
+    out.push(harborPiersSVG(g, pt.e, p));
+    out.push(harborMarkSVG(pt.t, p));
   }
   board.hexes.forEach((hx, i) => {
     const h = g.hexes[i]!;
@@ -153,7 +168,7 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
   return out.join('');
 }
 
-function tokenSVG(g: Geometry, i: number, n: number, hot: boolean, blocked: boolean): string {
+export function tokenSVG(g: Geometry, i: number, n: number, hot: boolean, blocked: boolean): string {
   if (!n) return '';
   const h = g.hexes[i]!;
   const cx = h.x * K;

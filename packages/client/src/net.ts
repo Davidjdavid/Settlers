@@ -7,8 +7,10 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import type { Action, Color, GameStats, PlayerView } from '@settlers/engine';
+import type { Action, Color, GameStats, GenRules, MapData, PlayerView } from '@settlers/engine';
 import type {
+  MapInfo,
+  PresetInfo,
   ClientMsg,
   DiceInfo,
   GameStatsInfo,
@@ -49,8 +51,13 @@ export interface ClientState {
   /** This game's dice so far, and its full stats once it's over. */
   dice: DiceInfo | null;
   stats: GameStats | null;
-  /** The page outside rooms: the start screen or the Stats page. */
+  /** The page outside rooms: the start screen, the Stats page, or maps. */
   path: string;
+  /** Saved maps and generator presets (docs/maps.md 4.4, 5.18), loaded on request. */
+  maps: MapInfo[] | null;
+  /** The map last opened or saved, for the editor. */
+  openMap: { map: MapData; info: MapInfo; saved?: boolean } | null;
+  presets: PresetInfo[] | null;
 }
 
 export interface Fresh {
@@ -85,6 +92,9 @@ export function setStored(key: string, value: string) {
   }
 }
 
+/** A map as the protocol carries it (editor maps only ever use the Seafarers module). */
+type MapMsg = Extract<ClientMsg, { t: 'saveMap' }>['map'];
+
 let nextToast = 1;
 
 export class Client {
@@ -105,6 +115,9 @@ export class Client {
     dice: null,
     stats: null,
     path: typeof location === 'undefined' ? '/' : location.pathname,
+    maps: null,
+    openMap: null,
+    presets: null,
   };
   private listeners = new Set<() => void>();
   private freshListeners = new Set<(f: Fresh) => void>();
@@ -306,7 +319,7 @@ export class Client {
         return;
       }
       case 'error':
-        if (!this.state.room) this.set({ roomError: m.text });
+        if (!this.state.room && !this.state.path.startsWith('/maps')) this.set({ roomError: m.text });
         else this.toast(m.text, 'err');
         return;
       case 'notice':
@@ -328,6 +341,16 @@ export class Client {
         return;
       case 'gameStats':
         this.set({ gameStats: m.game });
+        return;
+      case 'maps':
+        this.set({ maps: m.list });
+        return;
+      case 'map':
+        this.set({ openMap: { map: m.map, info: m.info, ...(m.saved ? { saved: true } : {}) } });
+        if (m.saved) this.toast(`Saved “${m.info.name}”`);
+        return;
+      case 'presets':
+        this.set({ presets: m.list });
         return;
       case 'closed':
         // "Save and quit" (or a deleted game): back to the start screen.
@@ -403,6 +426,43 @@ export class Client {
   }
   deleteSaved(game: string) {
     this.send({ t: 'deleteSaved', game });
+  }
+  loadMaps() {
+    this.send({ t: 'maps' });
+  }
+  openSavedMap(id: string) {
+    this.set({ openMap: null });
+    this.send({ t: 'getMap', id });
+  }
+  /** Who's making maps on this browser: its last profile's name. */
+  private by(): { by?: string } {
+    const id = getStored('settlers.profile');
+    const name = this.state.profiles?.find((p) => p.id === id)?.name;
+    return name ? { by: name } : {};
+  }
+  saveMap(map: MapData) {
+    this.send({ t: 'saveMap', map: map as MapMsg, ...this.by() });
+  }
+  importMap(map: MapData) {
+    this.send({ t: 'importMap', map: map as MapMsg, ...this.by() });
+  }
+  renameMap(id: string, name: string) {
+    this.send({ t: 'renameMap', id, name });
+  }
+  duplicateMap(id: string) {
+    this.send({ t: 'duplicateMap', id, ...this.by() });
+  }
+  deleteMap(id: string) {
+    this.send({ t: 'deleteMap', id });
+  }
+  loadPresets() {
+    this.send({ t: 'presets' });
+  }
+  savePreset(id: string | undefined, name: string, rules: GenRules) {
+    this.send({ t: 'savePreset', ...(id ? { id } : {}), name, rules, ...this.by() });
+  }
+  deletePreset(id: string) {
+    this.send({ t: 'deletePreset', id });
   }
   loadStats(who: string) {
     this.send({ t: 'stats', who });
