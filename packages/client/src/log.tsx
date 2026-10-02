@@ -7,7 +7,7 @@
  *
  * It's drawn on every update in every browser, so it's kept cheap: each entry's lines are worked
  * out once, rows that haven't changed aren't drawn again, and only the newest rows are on the
- * page until you ask for earlier ones.
+ * page until you ask for earlier ones. While you're scrolled up, rows stop leaving the top.
  */
 
 import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -218,7 +218,17 @@ export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
   const known = useRef<Set<string> | null>(null);
   const fresh = new Set<string>();
   if (known.current) for (const r of rows) if (!known.current.has(r.key)) fresh.add(r.key);
-  const lastHeight = useRef(0);
+  // The newest row on the page after the last update, and (while the reader is scrolled up) the
+  // first: the window then keeps its start, so nothing moves under someone reading.
+  const lastRow = useRef<Element | null>(null);
+  const firstKey = useRef<string | null>(null);
+
+  let start = Math.max(0, rows.length - show);
+  if (firstKey.current) {
+    const i = rows.findIndex((r) => r.key === firstKey.current);
+    if (i >= 0) start = Math.min(start, i);
+  }
+  const shown = rows.slice(start);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -227,46 +237,60 @@ export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
     // Counted by key: the log keeps its newest 800 items, so its length can stay the same.
     const added = prev ? rows.filter((r) => !prev.has(r.key)).length : 0;
     if (!el) return;
-    // Following means the reader was at the bottom before these rows came in. Read from the
-    // page itself: a scroll the browser hasn't reported yet still counts.
-    const wasAtBottom = !prev || el.scrollTop + el.clientHeight >= lastHeight.current - 24;
+    // Following means the reader could see the newest row before these came in. Read from the
+    // page itself (a scroll the browser hasn't reported yet still counts), and from that row,
+    // not the log's height: rows leaving the top move everything up.
+    const was = lastRow.current;
+    const wasAtBottom =
+      !prev ||
+      !was?.isConnected ||
+      was.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + 24;
     if (wasAtBottom) {
       el.scrollTop = el.scrollHeight;
+      firstKey.current = null;
       if (!follow) setFollow(true);
       if (unseen) setUnseen(0);
     } else {
+      firstKey.current ??= shown[0]?.key ?? null;
       if (follow) setFollow(false);
       if (added) setUnseen((n) => n + added);
     }
-    lastHeight.current = el.scrollHeight;
+    lastRow.current = el.lastElementChild;
   }, [rows]);
 
   const atBottom = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 24;
   const onScroll = () => {
     const el = box.current;
     if (!el) return;
-    lastHeight.current = el.scrollHeight;
     const bottom = atBottom(el);
+    if (bottom) firstKey.current = null;
+    else firstKey.current ??= shown[0]?.key ?? null;
     if (bottom !== follow) setFollow(bottom);
     if (bottom && unseen) setUnseen(0);
   };
   const jump = () => {
     const el = box.current;
     if (el) el.scrollTop = el.scrollHeight;
+    firstKey.current = null;
     setFollow(true);
     setUnseen(0);
   };
+  const earlier = () => {
+    // Earlier rows go above; the reader stays where they are, so the window keeps this start.
+    const from = Math.max(0, start - LOG_PAGE);
+    firstKey.current = rows[from]?.key ?? null;
+    setShow(rows.length - from);
+  };
 
-  const shown = rows.length > show ? rows.slice(-show) : rows;
   return (
     <div className="logwrap">
       <div className="log" ref={box} data-testid="log" onScroll={onScroll} role="log" aria-live="polite">
-        {rows.length > show ? (
+        {start > 0 ? (
           <button
             type="button"
             className="btn small ghost logmore"
             data-testid="log-earlier"
-            onClick={() => setShow((n) => n + LOG_PAGE)}
+            onClick={earlier}
           >
             Show earlier entries
           </button>

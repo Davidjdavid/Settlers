@@ -160,8 +160,15 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     expect(lb.y + lb.height, 'the log fits on a 1366×768 screen').toBeLessThanOrEqual(768);
     expect(lb.height).toBeGreaterThan(120);
 
-    const checks = { trade: false, scrolled: false, newShown: false, followed: 0 };
+    const checks = { trade: false, scrolled: false, newShown: false, followed: 0, held: false };
     let pageMoved = 0;
+    // Later, with more rows than the log shows at once: scrolled up, nothing moves under the reader.
+    let reading: { top: number; steps: number; drift: number } | null = null;
+    const heldTop = () =>
+      a.getByTestId('log').evaluate((el) => {
+        const row = el.querySelector('[data-held]');
+        return row ? row.getBoundingClientRect().top - el.getBoundingClientRect().top : null;
+      });
     const beforeStep = async (p: Page): Promise<boolean> => {
       if (p !== a) return false;
       const v = await view(a);
@@ -200,6 +207,33 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
         }
         return false;
       }
+      if (!checks.held && (await a.getByTestId('log-earlier').count())) {
+        if (!reading) {
+          // Without the browser's own scroll anchoring (not every browser has it), so this checks
+          // the log's rule: while someone reads, rows stop leaving the top.
+          await a.addStyleTag({ content: '.log { overflow-anchor: none }' });
+          const top = await a.getByTestId('log').evaluate((el) => {
+            el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
+            const box = el.getBoundingClientRect();
+            const row = [...el.children].find((c) => c.getBoundingClientRect().top >= box.top)!;
+            row.setAttribute('data-held', '1');
+            return row.getBoundingClientRect().top - box.top;
+          });
+          reading = { top, steps: 0, drift: 0 };
+          return false;
+        }
+        const now = await heldTop();
+        expect(now, 'the row being read is still on the page').not.toBeNull();
+        reading.drift = Math.max(reading.drift, Math.abs(now! - reading.top));
+        const btn = a.getByTestId('log-new');
+        if (++reading.steps < 4 || !(await btn.isVisible())) return false;
+        expect(reading.drift, 'new rows moved the rows being read').toBeLessThan(2);
+        await shot(a, 'log-held');
+        await btn.click();
+        await expect.poll(async () => (await logState(a)).gap).toBeLessThan(24);
+        checks.held = true;
+        return false;
+      }
       // Following again: the newest entry stays in view.
       if (checks.followed < 20 && (await logState(a)).gap < 24) checks.followed++;
       if ((await scrollY(a)) !== 0) pageMoved++;
@@ -208,15 +242,20 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     // Ann's page stays scrolled to the top; new entries must not move it.
     await a.evaluate(() => window.scrollTo(0, 0));
     await playUntil(t, async () => (await view(a)).phase === 'over', { beforeStep, maxSteps: 20000 });
-    expect(checks).toMatchObject({ trade: true, scrolled: true, newShown: true });
+    expect(checks).toMatchObject({ trade: true, scrolled: true, newShown: true, held: true });
     expect(checks.followed).toBeGreaterThan(5);
     expect(pageMoved, 'new log entries moved the page').toBe(0);
     // Each turn starts with a divider showing the roll; names and cards are coloured.
     await expect(a.locator('.log .sep[data-turn]').filter({ hasText: 'rolled' }).first()).toBeVisible();
     expect(await a.locator('.log .nm[data-p]').count()).toBeGreaterThan(20);
     expect(await a.locator('.log .cd[data-card]').count()).toBeGreaterThan(20);
-    // The phone's log follows too.
+    // Past a page of rows, both logs still follow (the phone's too).
+    expect((await logState(a)).gap).toBeLessThan(24);
     expect((await logState(c)).gap).toBeLessThan(24);
+    // Earlier entries on request.
+    const before = (await logState(a)).rows;
+    await a.getByTestId('log-earlier').click();
+    await expect.poll(async () => (await logState(a)).rows).toBeGreaterThan(before);
     await shot(a, 'laptop-end');
 
     /* ---------- Keep playing ---------- */
@@ -372,7 +411,7 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
 
     // Back to the real game, untouched by any of it.
     await c.reload();
-    await expect.poll(async () => (await view(c)).seq).toBe(end.seq);
+    await expect.poll(async () => (await view(c))?.seq).toBe(end.seq);
 
     expect(errors).toEqual([]);
   } finally {

@@ -174,9 +174,22 @@ test('a Seafarers map from the editor, played to the end; then the Fog Islands',
   expect(fv.board.hexes.filter((h: { t: string }) => h.t === 'fog')).toHaveLength(15);
   await shot(dee, 'fog-islands');
   await playToEnd(f);
-  const end = await view(dee);
-  // Some fog was discovered on the way.
-  expect(end.board.hexes.filter((h: { t: string }) => h.t === 'fog').length).toBeLessThan(15);
+  // Fog found on the way (a random game may find none) shows the same in every browser, and only
+  // where fog was; the rest is as it started.
+  const fogAt = new Set(fv.board.hexes.flatMap((h: { t: string }, i: number) => (h.t === 'fog' ? [i] : [])));
+  const ends = await Promise.all(
+    f.pages.map(async (p) =>
+      (await view(p)).board.hexes.map((h: { t: string; n?: number }) => `${h.t}${h.n ?? 0}`),
+    ),
+  );
+  for (const e of ends.slice(1)) expect(e).toEqual(ends[0]);
+  const start = fv.board.hexes.map((h: { t: string; n?: number }) => `${h.t}${h.n ?? 0}`);
+  ends[0]!.forEach((x: string, i: number) => {
+    if (!fogAt.has(i)) expect(x).toBe(start[i]);
+  });
+  console.log(
+    `Fog Islands: ${ends[0]!.filter((x: string) => x.startsWith('fog')).length} of 15 fog hexes left`,
+  );
   expect(f.errors).toEqual([]);
   expect(errors).toEqual([]);
 });
