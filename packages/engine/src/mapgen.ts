@@ -59,7 +59,7 @@ export type GenResult =
   | { ok: true; map: MapData; steps: number; attempts: number; late: number; eased: boolean }
   | { ok: false; error: string; rules: RuleId[]; steps: number };
 
-export const DEFAULT_BUDGET = 400_000;
+export const DEFAULT_BUDGET = 300_000;
 const DIAG_BUDGET = 25_000;
 const TERRAIN_NODES = 4_000;
 const NUMBER_NODES = 3_000;
@@ -145,8 +145,8 @@ export function generate(shape: MapData, rules: GenRules, o: GenOptions): GenRes
   const phases: [GenRules, number][] =
     o.ease !== false && JSON.stringify(soft) !== JSON.stringify(rules)
       ? [
-          [rules, budget / 2],
-          [soft, budget / 2],
+          [rules, budget * 0.75],
+          [soft, budget * 0.25],
         ]
       : [[rules, budget]];
   const t0 = o.now?.() ?? 0;

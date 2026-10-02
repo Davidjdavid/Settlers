@@ -565,9 +565,11 @@ describe('settings that can’t work fail fast, naming the rule', () => {
   ];
   for (const [name, rules, m, msg] of cases) {
     it(name, () => {
-      const t0 = performance.now();
+      // CPU time spent on it, so other tests running at the same time can't make this flaky.
+      const c0 = process.cpuUsage();
       const r = generate(m, rules, { seed: 'impossible', players: 4 });
-      const ms = performance.now() - t0;
+      const used = process.cpuUsage(c0);
+      const ms = (used.user + used.system) / 1000;
       if (r.ok) throw new Error('expected no board');
       expect(r.error).toMatch(msg);
       expect(ms).toBeLessThan(2000);

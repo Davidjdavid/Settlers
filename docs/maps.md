@@ -274,8 +274,8 @@ This "greedy draft" is a deliberately simple model of real picks. It catches boa
 **Easing the spot rules (D7):**
 
 - The spot rules are the best-spot limit (5.5), the bad-spot limit (5.6) and no clusters of 2, 3, 11, 12 (5.8).
-- The search first uses half its step budget with every rule as set. Nearly every board is found this way.
-- If that runs out, the second half eases only the spot rules by one step: the best-spot limit +1, the bad-spot limit −1, and at most one pair of 2/3/11/12 touching.
+- The search first uses three quarters of its step budget with every rule as set. Nearly every board is found this way.
+- If that runs out, the last quarter eases only the spot rules by one step: the best-spot limit +1, the bad-spot limit −1, and at most one pair of 2/3/11/12 touching.
 - An eased board shows its warning like any other, so it's never hidden.
 - Every other rule is never eased.
 - If the eased search fails too, the generator says why, as below, using the rules as set.

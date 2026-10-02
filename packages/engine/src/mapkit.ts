@@ -533,7 +533,9 @@ export function withLocks(source: MapData, current: MapData): MapData {
     } else {
       // A harbor moved on the table: it replaces a blank harbor sharing a corner, or the last blank.
       const keys = new Set(cornerKeys([c.q, c.r], c.side));
-      let j = out.harbors.findIndex((h) => h.t === 'random' && cornerKeys([h.q, h.r], h.side).some((k) => keys.has(k)));
+      let j = out.harbors.findIndex(
+        (h) => h.t === 'random' && cornerKeys([h.q, h.r], h.side).some((k) => keys.has(k)),
+      );
       if (j < 0) j = out.harbors.map((h) => h.t).lastIndexOf('random');
       if (j < 0) continue;
       out.harbors.splice(j, 1);
