@@ -493,6 +493,69 @@ export function applyEdit(m0: MapData, op: EditOp): EditResult {
   return { ok: true, map: normalize(m) };
 }
 
+/* ---------- Rerolling around locks ---------- */
+
+/**
+ * The source map with `current`'s locked pieces put in (docs/pregame.md 1.2): rerolling fills
+ * this, so locks survive and everything else is drawn again. The hexes are the same as the
+ * source's (the table can't reshape). Each locked piece leaves its pool, so counts stay right.
+ */
+export function withLocks(source: MapData, current: MapData): MapData {
+  const out = structuredClone(source);
+  const take = <T>(list: T[] | undefined, x: T) => {
+    if (!list?.length) return;
+    const i = list.indexOf(x);
+    list.splice(i >= 0 ? i : list.length - 1, 1);
+  };
+  current.hexes.forEach((c, i) => {
+    const h = out.hexes[i];
+    if (!h || h.q !== c.q || h.r !== c.r || !c.lock) return;
+    const pool = h.pool ? out.pools?.[h.pool] : undefined;
+    if (c.lock.t && c.t !== 'random' && h.t === 'random') {
+      take(pool?.terrain, c.t);
+      h.t = c.t;
+      // A locked desert takes no number (fixPoolNumbers evens out the pool).
+      if (!producing(c.t)) delete h.n;
+    }
+    if (c.lock.n && typeof c.n === 'number' && h.n === 'random') {
+      take(pool?.numbers, c.n);
+      h.n = c.n;
+    }
+    h.lock = { ...c.lock };
+    if (h.t !== 'random' && h.n !== 'random') delete h.pool;
+  });
+  for (const c of current.harbors) {
+    if (!c.lock || c.t === 'random') continue;
+    const i = out.harbors.findIndex((h) => h.q === c.q && h.r === c.r && h.side === c.side);
+    if (i >= 0) {
+      if (out.harbors[i]!.t === 'random') take(out.harborPool, c.t);
+      out.harbors[i] = { ...c };
+    } else {
+      // A harbor moved on the table: it replaces a blank harbor sharing a corner, or the last blank.
+      const keys = new Set(cornerKeys([c.q, c.r], c.side));
+      let j = out.harbors.findIndex((h) => h.t === 'random' && cornerKeys([h.q, h.r], h.side).some((k) => keys.has(k)));
+      if (j < 0) j = out.harbors.map((h) => h.t).lastIndexOf('random');
+      if (j < 0) continue;
+      out.harbors.splice(j, 1);
+      take(out.harborPool, c.t);
+      out.harbors.push({ ...c });
+    }
+  }
+  if (out.harborPool && !out.harborPool.length) delete out.harborPool;
+  return fixPoolNumbers(out);
+}
+
+/** Make each pool's number count match its hexes again (a locked desert or number can change it). */
+function fixPoolNumbers(m: MapData): MapData {
+  for (const [name, pool] of Object.entries(m.pools ?? {})) {
+    const numbered = m.hexes.filter((h) => h.pool === name && h.n === 'random').length;
+    const want = Math.max(0, numbered - pool.terrain.filter((t) => !producing(t)).length);
+    while (pool.numbers.length > want) pool.numbers.pop();
+    while (pool.numbers.length < want) pool.numbers.push(5);
+  }
+  return m;
+}
+
 /* ---------- Reading a board ---------- */
 
 /** Pip total at every corner (the heat map), by corner id; unknown numbers count 0. */

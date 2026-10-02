@@ -179,6 +179,8 @@ describe('rooms', () => {
     const rng = seedRng('leak');
     for (let i = 0; i < 400 && randomMove(code, conns, rng); i++);
     const s = state(code);
+    // The game's own seed never leaves the server (the table's board seed is public by design).
+    const gameSeed = rooms.getRoom(code)!.game!.row.seed;
     for (const c of conns) {
       const seat = s.players.findIndex((p) => p.pid === c.pid);
       for (const m of c.msgs) {
@@ -186,7 +188,8 @@ describe('rooms', () => {
         const json = JSON.stringify(m);
         expect(json).not.toContain('"rng"');
         expect(json).not.toContain('"deck"');
-        expect(json).not.toContain('"seed"');
+        expect(json).not.toContain(gameSeed);
+        if (m.game) expect(json).not.toContain('"seed"');
         if (m.game) {
           // Only your own hand, and other players appear as counts.
           expect(m.game.me).toBe(seat);

@@ -4,7 +4,7 @@
  * its own seat and events redacted for that seat.
  */
 
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import {
   ENGINE_VERSION,
   NEED_DICE,
@@ -13,10 +13,27 @@ import {
   type HouseRules, applyAction, checkInvariants, cpuMove, eventsFor, newCpuMemo, newGame, seedRng, viewFor,
   COLORS, type CpuMemo, StatsFold, cpuChat, type CpuLevel, type GameStats,
   type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView, type MapData,
-  type GenRules,
+  type GenRules, type EditOp, OUR_RULES,
 } from '@settlers/engine'; // prettier-ignore
 import { History, modeOf } from './history';
 import { MapLibrary } from './maps';
+import {
+  HISTORY,
+  STANDARD_FILL,
+  describeEdit,
+  editBoard,
+  fillBoard,
+  newSeed,
+  newTable,
+  resetFirst,
+  rollFor,
+  syncCircle,
+  turnOrder,
+  type BoardSource,
+  type TableBoard,
+  type Luck,
+  type TableState,
+} from './table';
 import {
   DEFAULT_OPTIONS,
   OptionsSchema,
@@ -30,6 +47,8 @@ import {
   type RoomInfo,
   type RoomOptions,
   type ServerMsg,
+  type TableInfo,
+  type TableOp,
 } from './protocol';
 import { diceForRoll } from './dice';
 import { nickKey, type ActionRow, type ChatRow, type GameRow, type SeatRow, type Store } from './store';
@@ -65,6 +84,10 @@ export interface Room {
   cpuMemo?: Map<string, CpuMemo>;
   /** CPU chatter: the turn each CPU last spoke, and how often it's been robbed (by pid). */
   chatter?: Map<string, { turn: number; robbed: number }>;
+  /** The pre-game table and the board showing on it (docs/pregame.md). */
+  table?: { state: TableState; board: TableBoard };
+  /** The table as saved, until it's first needed. */
+  savedTable?: unknown;
 }
 
 export interface RoomsOptions {
@@ -81,6 +104,8 @@ export interface RoomsOptions {
   clearTimer?: (t: unknown) => void;
   /** Random numbers for CPU chatter (tests make it predictable). */
   chatRandom?: () => number;
+  /** Dice and picks for who goes first at the table (tests rig them). */
+  luck?: Luck;
 }
 
 const CODE_ALPHABET = 'ACDEFGHJKMNPQRTUVWXY34679';
@@ -206,6 +231,7 @@ export class Rooms {
         game: null,
         pendingReset: null,
         conns: new Set(),
+        ...(r.table ? { savedTable: r.table } : {}),
       };
       if (r.gameId) {
         const row = this.store.loadGame(r.gameId);
@@ -304,6 +330,8 @@ export class Rooms {
         return this.join(conn, room, msg.profile, msg.color);
       case 'setCpuChat':
         return this.setCpuChat(conn, room, msg.on);
+      case 'table':
+        return this.tableOp(conn, room, msg.op);
       case 'setColor':
         return this.setColor(conn, room, msg.color);
       case 'leave':
@@ -419,6 +447,7 @@ export class Rooms {
     this.store.tx(() => {
       this.store.saveRoom(room.code, room.seats, null);
       this.sys(room, `${nick} sat down`);
+      this.seatsChanged(room);
     });
     conn.pid = pid;
     conn.send({ t: 'seat', room: room.code, pid, token });
@@ -655,6 +684,7 @@ export class Rooms {
     this.store.tx(() => {
       this.store.saveRoom(room.code, room.seats, null);
       this.sys(room, `${seat.nick} stood up`);
+      this.seatsChanged(room);
     });
     for (const c of room.conns) if (c.pid === seat.pid) c.pid = null;
     this.broadcast(room, this.takeSys(room));
@@ -683,6 +713,7 @@ export class Rooms {
     this.store.tx(() => {
       this.store.saveRoom(room.code, room.seats, null);
       this.sys(room, `${seat.nick} (CPU) sat down`);
+      this.seatsChanged(room);
     });
     this.broadcast(room, this.takeSys(room));
   }
@@ -722,6 +753,7 @@ export class Rooms {
     this.store.tx(() => {
       this.store.saveRoom(room.code, room.seats, null);
       this.sys(room, `${seat.nick} (CPU) left`);
+      this.seatsChanged(room);
     });
     this.broadcast(room, this.takeSys(room));
   }
@@ -800,8 +832,22 @@ export class Rooms {
     const seat = room.seats.find((s) => s.pid === conn.pid);
     if (!seat) return conn.send({ t: 'error', text: 'Take a seat first' });
     if (room.game) return conn.send({ t: 'error', text: 'Options can be changed before the game starts' });
+    const before = room.options;
     room.options = structuredClone(options);
-    this.store.saveOptions(room.code, room.options);
+    const tb = this.table(room);
+    const modeChanged = before.scenario !== options.scenario;
+    this.store.tx(() => {
+      this.store.saveOptions(room.code, room.options);
+      // A new mode needs a board of its shape; a saved map that no longer fits gives way to the standard one.
+      if (modeChanged) {
+        const src = tb.board.source.kind === 'saved' ? ({ kind: 'default' } as const) : tb.board.source;
+        const r = this.makeBoard(room, src, newSeed());
+        const board = r.ok ? r.board : this.emergencyBoard(room);
+        this.pushBoard(room, board);
+      }
+      this.changed(room, seat.nick, modeChanged ? 'changed the mode' : 'changed the options');
+      this.store.saveTable(room.code, tb.state);
+    });
     this.broadcast(room, []);
   }
 
@@ -818,19 +864,23 @@ export class Rooms {
       const name = room.options.ck ? `${map.name} with Cities & Knights` : map.name;
       return conn.send({ t: 'error', text: `${name} needs ${allowed.join(' or ')} players` });
     }
-    const players: NewPlayer[] = room.seats.map((s) => ({
-      pid: s.pid,
-      color: s.color,
-      nick: s.nick,
-      ...(s.cpu ? { cpu: true } : {}),
-    }));
+    // The table's board and turn order (docs/pregame.md 1.4, 2.3).
+    const tb = this.table(room);
+    const info = this.tableInfo(room);
+    if (info.problem) return conn.send({ t: 'error', text: info.problem });
+    if (!tb.state.first.pid) return conn.send({ t: 'error', text: 'Finish the roll for who goes first' });
+    const bySeat = new Map(room.seats.map((s) => [s.pid, s]));
+    const players: NewPlayer[] = turnOrder(tb.state.circle, tb.state.first.pid).map((pid) => {
+      const s = bySeat.get(pid)!;
+      return { pid: s.pid, color: s.color, nick: s.nick, ...(s.cpu ? { cpu: true } : {}) };
+    });
     const row: GameRow = {
       id: randomUUID(),
       roomCode: room.code,
       seed: randomBytes(16).toString('hex'),
       engineVersion: ENGINE_VERSION,
       players,
-      config: { ...gameConfigFor(room.options), ...this.opts.gameConfig },
+      config: { ...gameConfigFor(room.options, tb.board.map), ...this.opts.gameConfig },
       createdAt: this.now(),
       endedAt: null,
       endReason: null,
@@ -1035,6 +1085,13 @@ export class Rooms {
     });
     room.game = null;
     room.pendingReset = null;
+    // Back at the table: nobody is ready yet, and a roll for first is rolled again.
+    const tb = this.table(room);
+    tb.state.ready = [];
+    if (tb.state.first.mode === 'roll')
+      for (const line of resetFirst(tb.state, 'roll', this.cpus(room), this.names(room), this.opts.luck))
+        this.sys(room, line);
+    this.store.saveTable(room.code, tb.state);
     this.log(`room ${room.code} game ${g.row.id} ended: ${reason}`);
     for (const c of room.conns) {
       c.send({ t: 'sync', room: this.roomInfo(room, c), game: null, log: this.fullLog(room, c) });
@@ -1070,6 +1127,307 @@ export class Rooms {
     }
     this.log(`room ${room.code}: seat ${seat.nick} claimed`);
     this.broadcast(room, this.takeSys(room));
+  }
+
+  /* ---------- The pre-game table (docs/pregame.md) ---------- */
+
+  private names(room: Room): Map<string, string> {
+    return new Map(room.seats.map((st) => [st.pid, st.nick]));
+  }
+  private cpus(room: Room): Set<string> {
+    return new Set(room.seats.filter((st) => st.cpu).map((st) => st.pid));
+  }
+
+  /** The room's table, loading or making it the first time it's needed. */
+  private table(room: Room): { state: TableState; board: TableBoard } {
+    if (room.table) return room.table;
+    const saved = room.savedTable as TableState | undefined;
+    delete room.savedTable;
+    if (saved?.seqs?.length) {
+      const board = this.store.tableBoard(room.code, saved.seqs[saved.at]!) as TableBoard | null;
+      if (board) {
+        room.table = { state: saved, board };
+        syncCircle(
+          saved,
+          room.seats.map((st) => st.pid),
+        );
+        return room.table;
+      }
+    }
+    const state = newTable(room.seats.map((st) => st.pid));
+    const made = this.makeBoard(room, { kind: 'default' }, newSeed());
+    const board = made.ok ? made.board : this.emergencyBoard(room);
+    room.table = { state, board };
+    this.store.tx(() => this.pushBoard(room, board));
+    if (room.seats.length)
+      resetFirst(state, state.first.mode, this.cpus(room), this.names(room), this.opts.luck);
+    this.store.saveTable(room.code, state);
+    return room.table;
+  }
+
+  /** The mode's board, filled the standard way; used only if nothing else can be made. */
+  private emergencyBoard(room: Room): TableBoard {
+    const map = SCENARIOS[room.options.scenario]!;
+    for (let i = 0; ; i++) {
+      const seed = `fallback-${i}`;
+      const r = fillBoard(map, STANDARD_FILL, seed, 4);
+      if (r.ok) return { map: r.map, source: { kind: 'default' }, seed, edited: [] };
+    }
+  }
+
+  /** The map a source draws from, and the rules for its blanks. */
+  private sourceOf(
+    room: Room,
+    src: BoardSource,
+  ): { map: MapData; rules: GenRules; presetName?: string } | string {
+    const mode = SCENARIOS[room.options.scenario]!;
+    if (src.kind === 'default') return { map: mode, rules: STANDARD_FILL };
+    if (src.kind === 'generated') {
+      const p = this.maps.rulesOf(src.preset);
+      return { map: mode, rules: p.rules, presetName: p.name };
+    }
+    const row = this.store.mapById(src.id);
+    if (!row) return 'That map isn’t there any more';
+    const m = row.map as MapData;
+    if (m.modules.includes('seafarers') !== mode.modules.includes('seafarers'))
+      return mode.modules.includes('seafarers')
+        ? `“${row.name}” isn’t a Seafarers map; pick Base or Knights for it`
+        : `“${row.name}” is a Seafarers map; pick Seafarers or Full game for it`;
+    return { map: m, rules: OUR_RULES };
+  }
+
+  /** A complete board from a source and seed, keeping `current`'s locks if given. */
+  private makeBoard(
+    room: Room,
+    src: BoardSource,
+    seed: string,
+    current?: MapData,
+  ): { ok: true; board: TableBoard } | { ok: false; error: string } {
+    const from = this.sourceOf(room, src);
+    if (typeof from === 'string') return { ok: false, error: from };
+    const players = Math.max(2, Math.min(4, room.seats.length || 4));
+    let r = fillBoard(from.map, from.rules, seed, players, current);
+    // A saved map whose blanks can't meet "Our rules" is filled the standard way instead.
+    if (!r.ok && src.kind === 'saved') r = fillBoard(from.map, STANDARD_FILL, seed, players, current);
+    if (!r.ok) return r;
+    const map = r.map;
+    const source: BoardSource =
+      src.kind === 'generated' ? { ...src, presetName: from.presetName ?? src.presetName } : src;
+    if (source.kind === 'generated')
+      map.made = { generator: { preset: source.presetName, seed, rules: from.rules } };
+    else if (source.kind === 'saved')
+      map.made = { ...(map.made ?? {}), generator: { preset: 'Saved map', seed } };
+    return { ok: true, board: { map, source, seed, edited: [] } };
+  }
+
+  /** Add a board to the history (dropping anything after the current one) and show it. */
+  private pushBoard(room: Room, board: TableBoard) {
+    const t = room.table!.state;
+    const dropped = t.seqs.splice(t.at + 1);
+    const seq = t.nextSeq++;
+    t.seqs.push(seq);
+    while (t.seqs.length > HISTORY) dropped.push(t.seqs.shift()!);
+    t.at = t.seqs.length - 1;
+    room.table!.board = board;
+    this.store.deleteTableBoards(room.code, dropped);
+    this.store.putTableBoard(room.code, seq, board);
+  }
+
+  /** Something on the table changed: nobody is ready any more (1.4). */
+  private changed(room: Room, who: string, what: string) {
+    const t = room.table!.state;
+    t.ready = [];
+    t.last = { who, what, at: this.now() };
+  }
+
+  /** Seats came or went: the circle follows and who goes first is settled again. */
+  private seatsChanged(room: Room) {
+    if (room.game) return;
+    const tb = this.table(room);
+    if (
+      !syncCircle(
+        tb.state,
+        room.seats.map((st) => st.pid),
+      )
+    )
+      return;
+    tb.state.ready = [];
+    const first = tb.state.first;
+    if (first.mode === 'pick' && first.pid && tb.state.circle.includes(first.pid)) return;
+    for (const line of resetFirst(tb.state, first.mode, this.cpus(room), this.names(room), this.opts.luck))
+      this.sys(room, line);
+    this.store.saveTable(room.code, tb.state);
+  }
+
+  private tableOp(conn: Conn, room: Room, op: TableOp) {
+    const seat = room.seats.find((st) => st.pid === conn.pid);
+    if (!seat) return conn.send({ t: 'error', text: 'Take a seat first' });
+    if (room.game) return conn.send({ t: 'error', text: 'The game has already started' });
+    const tb = this.table(room);
+    const t = tb.state;
+    const who = seat.nick;
+    const fail = (text: string) => conn.send({ t: 'error', text });
+    const names = this.names(room);
+    const cpus = this.cpus(room);
+    const lines: string[] = [];
+    switch (op.k) {
+      case 'source':
+      case 'reroll':
+      case 'seed': {
+        const src: BoardSource =
+          op.k !== 'source'
+            ? tb.board.source
+            : op.source === 'default'
+              ? { kind: 'default' }
+              : op.source === 'saved'
+                ? { kind: 'saved', id: op.id ?? '', name: this.store.mapById(op.id ?? '')?.name ?? '' }
+                : { kind: 'generated', preset: op.preset ?? 'builtin:our rules', presetName: '' };
+        const seed = op.k === 'seed' ? op.seed : newSeed();
+        // Rerolling keeps the locks; a new source starts fresh.
+        const r = this.makeBoard(room, src, seed, op.k === 'source' ? undefined : tb.board.map);
+        if (!r.ok) return fail(r.error);
+        if (src.kind === 'saved' && op.k === 'source') {
+          const m = this.store.mapById(src.id)!.map as MapData;
+          room.options = { ...room.options, winVP: Math.max(5, Math.min(30, m.winVP)) };
+          this.store.saveOptions(room.code, room.options);
+        }
+        this.store.tx(() => {
+          this.pushBoard(room, r.board);
+          this.changed(
+            room,
+            who,
+            op.k === 'reroll'
+              ? 'rerolled'
+              : op.k === 'seed'
+                ? `typed in seed ${seed}`
+                : src.kind === 'default'
+                  ? 'picked the standard board'
+                  : src.kind === 'saved'
+                    ? `picked “${src.name}”`
+                    : `generated a board with “${r.board.source.kind === 'generated' ? r.board.source.presetName : ''}”`,
+          );
+          this.store.saveTable(room.code, t);
+        });
+        break;
+      }
+      case 'back':
+      case 'forward': {
+        const at = t.at + (op.k === 'back' ? -1 : 1);
+        if (at < 0 || at >= t.seqs.length)
+          return fail(op.k === 'back' ? 'That’s the first board' : 'That’s the latest board');
+        const board = this.store.tableBoard(room.code, t.seqs[at]!) as TableBoard | null;
+        if (!board) return fail('That board isn’t there any more');
+        t.at = at;
+        tb.board = board;
+        this.changed(room, who, op.k === 'back' ? 'went back a board' : 'went forward a board');
+        this.store.saveTable(room.code, t);
+        break;
+      }
+      case 'edit': {
+        const r = editBoard(tb.board, op.op as EditOp, who);
+        if (!r.ok) return fail(r.error);
+        const what = describeEdit(op.op as EditOp, tb.board.map);
+        this.store.tx(() => {
+          this.pushBoard(room, r.board);
+          this.changed(room, who, what);
+          this.store.saveTable(room.code, t);
+        });
+        break;
+      }
+      case 'ready': {
+        t.ready = op.on ? [...new Set([...t.ready, seat.pid])] : t.ready.filter((p) => p !== seat.pid);
+        this.store.saveTable(room.code, t);
+        break;
+      }
+      case 'circle': {
+        const pids = room.seats.map((st) => st.pid);
+        if (op.order.length !== pids.length || !pids.every((p) => op.order.includes(p)))
+          return fail('Someone sat down or left; try again');
+        t.circle = op.order.slice();
+        this.changed(room, who, 'changed the seating');
+        this.store.saveTable(room.code, t);
+        break;
+      }
+      case 'shuffle': {
+        const c = t.circle.slice();
+        for (let i = c.length - 1; i > 0; i--) {
+          const j = randomInt(i + 1);
+          [c[i], c[j]] = [c[j]!, c[i]!];
+        }
+        t.circle = c;
+        this.changed(room, who, 'shuffled the seating');
+        this.store.saveTable(room.code, t);
+        break;
+      }
+      case 'firstMode': {
+        lines.push(...resetFirst(t, op.mode, cpus, names, this.opts.luck));
+        this.changed(
+          room,
+          who,
+          op.mode === 'roll'
+            ? 'started a roll for first'
+            : op.mode === 'random'
+              ? 'picked first at random'
+              : 'chose to pick who goes first',
+        );
+        break;
+      }
+      case 'pickFirst': {
+        if (t.first.mode !== 'pick') return fail('Choose “Pick” first');
+        if (!t.circle.includes(op.pid)) return fail('That seat isn’t at the table');
+        t.first.pid = op.pid;
+        this.changed(room, who, `picked ${names.get(op.pid)} to go first`);
+        break;
+      }
+      case 'roll': {
+        const r = t.first.roll;
+        if (t.first.mode !== 'roll' || !r || r.winner) return fail('Nobody is rolling for first');
+        if (!r.rolling.includes(seat.pid)) return fail('You’re not in this roll');
+        if (r.rolls[seat.pid]) return fail('You’ve rolled');
+        lines.push(...rollFor(t, [seat.pid], names, cpus, this.opts.luck));
+        break;
+      }
+      case 'autoRoll': {
+        const r = t.first.roll;
+        if (t.first.mode !== 'roll' || !r || r.winner) return fail('Nobody is rolling for first');
+        lines.push(
+          ...rollFor(
+            t,
+            r.rolling.filter((p) => !r.rolls[p]),
+            names,
+            cpus,
+            this.opts.luck,
+          ),
+        );
+        break;
+      }
+    }
+    if (op.k === 'firstMode' || op.k === 'pickFirst' || op.k === 'roll' || op.k === 'autoRoll')
+      this.store.tx(() => {
+        for (const line of lines) this.sys(room, line);
+        this.store.saveTable(room.code, t);
+      });
+    this.broadcast(room, this.takeSys(room));
+  }
+
+  /** The table as everyone sees it. */
+  private tableInfo(room: Room): TableInfo {
+    const { state: t, board } = this.table(room);
+    const cpus = this.cpus(room);
+    const n = room.seats.length;
+    let problem: string | null = null;
+    const allowed = room.options.ck ? board.map.players.filter((x) => x >= 3) : board.map.players;
+    if (n >= 2 && !allowed.includes(n)) problem = `This board is for ${allowed.join(' or ')} players`;
+    return {
+      board,
+      at: t.at,
+      count: t.seqs.length,
+      ready: [...new Set([...t.ready, ...cpus])].filter((p) => t.circle.includes(p)),
+      circle: t.circle,
+      first: t.first,
+      last: t.last,
+      problem,
+    };
   }
 
   /* ---------- System notices (stored in the chat table) ---------- */
@@ -1130,6 +1488,7 @@ export class Rooms {
           }
         : null,
       myProfile: room.seats.find((s) => s.pid === conn.pid)?.profileId ?? null,
+      ...(room.game ? {} : { table: this.tableInfo(room) }),
     };
   }
 
@@ -1179,7 +1538,7 @@ export class Rooms {
  * The game config for room options. A classic game with default options gets exactly the
  * config it always had ({}), so nothing changes for classic games.
  */
-export function gameConfigFor(o: RoomOptions): Partial<GameConfig> {
+export function gameConfigFor(o: RoomOptions, board?: MapData): Partial<GameConfig> {
   const map = SCENARIOS[o.scenario]!;
   const seafarers = map.modules.includes('seafarers');
   const hr: HouseRules = {};
@@ -1199,6 +1558,13 @@ export function gameConfigFor(o: RoomOptions): Partial<GameConfig> {
   if (o.ck) c.modules = [...map.modules, 'citiesKnights'];
   if (o.winVP !== map.winVP || o.scenario !== 'classic' || o.ck) c.winVP = o.winVP;
   if (Object.keys(hr).length) c.houseRules = hr;
+  // From the pre-game table: exactly its board, and the seats already in turn order.
+  if (board) {
+    c.map = board;
+    c.winVP = o.winVP;
+    if (o.ck) c.modules = [...board.modules, 'citiesKnights'];
+    c.order = 'given';
+  }
   return c;
 }
 

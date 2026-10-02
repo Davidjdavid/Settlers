@@ -42,7 +42,8 @@ export interface NewPlayer {
 const zeroDev = (): DevCounts => ({ knight: 0, road: 0, plenty: 0, mono: 0 });
 
 /**
- * Start a game. Turn order is shuffled from the seed. Without `config.map` this is the classic
+ * Start a game. Turn order is shuffled from the seed, or the seats' own order with
+ * `config.order: 'given'`. Without `config.map` this is the classic
  * board, and the config stays exactly { winVP } so classic games replay as they always have.
  */
 export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameConfig> = {}): GameState {
@@ -61,7 +62,7 @@ export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameCo
       throw new Error(`This game is for ${m.players.join(' or ')} players`);
   }
   const rng: RngState = seedRng(seed);
-  const order = shuffle(seats.slice(), rng);
+  const order = config.order === 'given' ? seats.slice() : shuffle(seats.slice(), rng);
   const { board, fog } = boardFromMap(map, rng);
   const g = geo({ board } as GameState);
   const s: GameState = {

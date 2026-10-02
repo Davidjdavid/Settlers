@@ -195,6 +195,11 @@ export interface GameConfig {
   /** The map or scenario (a copy of its data file, so saved games never depend on files changing). */
   map?: import('./map').MapData;
   houseRules?: HouseRules;
+  /**
+   * 'given': players take turns in the order the seats were given (chosen at the pre-game table,
+   * docs/pregame.md 2.4). Without it the seats are shuffled from the seed, as older games were.
+   */
+  order?: 'given';
 }
 
 /** Seafarers state. Only present when the seafarers module is on. */

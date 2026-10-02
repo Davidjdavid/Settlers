@@ -214,7 +214,13 @@ export const MapSchema = z.strictObject({
     .strictObject({
       by: z.string().max(40).optional(),
       at: z.number().int().optional(),
-      generator: z.strictObject({ preset: z.string().max(40), seed: z.string().max(40) }).optional(),
+      generator: z
+        .strictObject({
+          preset: z.string().max(40),
+          seed: z.string().max(40),
+          rules: z.lazy(() => GenRulesSchema).optional(),
+        })
+        .optional(),
       edited: z.array(z.string().max(40)).max(20).optional(),
     })
     .optional(),
@@ -240,6 +246,43 @@ export const GenRulesSchema = z.strictObject({
   harbors: z.enum(['standard', 'random']),
   numbers: z.enum(['spiral', 'random']),
 });
+
+/** Edits made on the pre-game table's board (docs/pregame.md 1.2). */
+const side = z.strictObject({ at, side: z.number().int().min(0).max(5) });
+export const TableEditSchema = z.discriminatedUnion('k', [
+  z.strictObject({ k: z.literal('terrain'), at, t: TERRAIN }),
+  z.strictObject({ k: z.literal('number'), at, n: token }),
+  z.strictObject({ k: z.literal('harbor'), at, side: z.number().int().min(0).max(5), t: PORT }),
+  z.strictObject({ k: z.literal('swapTile'), a: at, b: at }),
+  z.strictObject({ k: z.literal('swapNumber'), a: at, b: at }),
+  z.strictObject({ k: z.literal('moveHarbor'), from: side, to: side }),
+  z.strictObject({ k: z.literal('lock'), at, what: z.enum(['t', 'n']), on: z.boolean() }),
+  z.strictObject({ k: z.literal('lockHarbor'), at, side: z.number().int().min(0).max(5), on: z.boolean() }),
+]);
+
+const pidSchema = z.string().min(1).max(40);
+export const TableOpSchema = z.discriminatedUnion('k', [
+  /** The standard board, a saved map (`id`), or the generator with a preset (`preset`). */
+  z.strictObject({
+    k: z.literal('source'),
+    source: z.enum(['default', 'saved', 'generated']),
+    id: z.string().max(60).optional(),
+    preset: z.string().max(60).optional(),
+  }),
+  z.strictObject({ k: z.literal('reroll') }),
+  z.strictObject({ k: z.literal('seed'), seed: z.string().regex(/^[A-Za-z0-9-]{1,40}$/) }),
+  z.strictObject({ k: z.literal('back') }),
+  z.strictObject({ k: z.literal('forward') }),
+  z.strictObject({ k: z.literal('edit'), op: TableEditSchema }),
+  z.strictObject({ k: z.literal('ready'), on: z.boolean() }),
+  z.strictObject({ k: z.literal('circle'), order: z.array(pidSchema).min(1).max(4) }),
+  z.strictObject({ k: z.literal('shuffle') }),
+  z.strictObject({ k: z.literal('firstMode'), mode: z.enum(['roll', 'random', 'pick']) }),
+  z.strictObject({ k: z.literal('pickFirst'), pid: pidSchema }),
+  z.strictObject({ k: z.literal('roll') }),
+  z.strictObject({ k: z.literal('autoRoll') }),
+]);
+export type TableOp = z.infer<typeof TableOpSchema>;
 
 const roomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);
 const nick = z.string().min(1).max(40);
@@ -280,6 +323,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('deletePreset'), id: z.string().max(60) }),
   /** CPU chatter on or off for this room (SPEC 5.14), any time, by anyone seated. */
   z.strictObject({ t: z.literal('setCpuChat'), on: z.boolean() }),
+  /** The pre-game table: board, seating, Ready and who goes first (docs/pregame.md). Lobby only. */
+  z.strictObject({ t: z.literal('table'), op: TableOpSchema }),
   z.strictObject({ t: z.literal('setColor'), color: COLOR }),
   z.strictObject({ t: z.literal('leave') }),
   z.strictObject({ t: z.literal('start') }),
@@ -410,6 +455,40 @@ export interface PresetInfo {
   by: string | null;
 }
 
+/** The pre-game table as everyone sees it (lobby only). */
+export interface TableInfo {
+  board: {
+    map: MapData;
+    source:
+      | { kind: 'default' }
+      | { kind: 'saved'; id: string; name: string }
+      | { kind: 'generated'; preset: string; presetName: string };
+    seed: string;
+    edited: string[];
+  };
+  /** Position in the board history, and how many boards it holds. */
+  at: number;
+  count: number;
+  /** Who's ready (CPUs always are). */
+  ready: string[];
+  /** Seats in turn order around the table. */
+  circle: string[];
+  first: {
+    mode: 'roll' | 'random' | 'pick';
+    pid: string | null;
+    roll: {
+      round: number;
+      rolling: string[];
+      rolls: Record<string, [number, number]>;
+      winner: string | null;
+    } | null;
+  };
+  /** The last change: "Bob rerolled". */
+  last: { who: string; what: string; at: number } | null;
+  /** Why this board can't be played with these seats, if it can't. */
+  problem: string | null;
+}
+
 export interface RoomInfo {
   code: string;
   seats: SeatInfo[];
@@ -423,6 +502,8 @@ export interface RoomInfo {
   pendingReset: { pid: string; nick: string; expiresAt: number; kind: 'reset' | 'quit' } | null;
   /** Your profile, if you're seated. */
   myProfile: string | null;
+  /** The pre-game table, before a game starts. */
+  table?: TableInfo;
 }
 
 export type LogItem =

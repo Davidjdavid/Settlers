@@ -43,6 +43,8 @@ export interface RoomRow {
   gameId: string | null;
   /** Room options as JSON (validated by the caller), or null for defaults. */
   options: unknown;
+  /** The pre-game table (docs/pregame.md) as JSON, or null if it has none yet. */
+  table?: unknown;
 }
 
 export interface GameRow {
@@ -188,6 +190,12 @@ CREATE TABLE IF NOT EXISTS maps (
   updated_at INTEGER NOT NULL,
   deleted_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS table_boards (
+  room_code TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  board_json TEXT NOT NULL,
+  PRIMARY KEY (room_code, seq)
+);
 CREATE TABLE IF NOT EXISTS presets (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -222,6 +230,9 @@ export class Store {
     // Schema 3 (SPEC 5.1, 5.7): closed rooms (after "Save and quit"), when a game last moved.
     if (!cols.some((c) => c.name === 'closed_at'))
       this.db.exec('ALTER TABLE rooms ADD COLUMN closed_at INTEGER');
+    // Schema 4 (Milestone 6): the pre-game table.
+    if (!cols.some((c) => c.name === 'table_json'))
+      this.db.exec('ALTER TABLE rooms ADD COLUMN table_json TEXT');
     const gcols = this.db.prepare('PRAGMA table_info(games)').all() as { name: string }[];
     if (!gcols.some((c) => c.name === 'last_at'))
       this.db.exec('ALTER TABLE games ADD COLUMN last_at INTEGER');
@@ -488,7 +499,7 @@ export class Store {
   loadRooms(): RoomRow[] {
     const rows = this.db
       .prepare(
-        'SELECT code, created_at, seats_json, game_id, options_json FROM rooms WHERE closed_at IS NULL',
+        'SELECT code, created_at, seats_json, game_id, options_json, table_json FROM rooms WHERE closed_at IS NULL',
       )
       .all() as {
       code: string;
@@ -496,6 +507,7 @@ export class Store {
       seats_json: string;
       game_id: string | null;
       options_json: string | null;
+      table_json: string | null;
     }[];
     return rows.map((r) => ({
       code: r.code,
@@ -503,6 +515,7 @@ export class Store {
       seats: JSON.parse(r.seats_json),
       gameId: r.game_id,
       options: r.options_json ? JSON.parse(r.options_json) : null,
+      table: r.table_json ? JSON.parse(r.table_json) : null,
     }));
   }
 
@@ -643,6 +656,30 @@ export class Store {
     return rows
       .reverse()
       .map((r) => ({ id: r.id, roomCode: r.room_code, pid: r.pid, nick: r.nick, text: r.text, at: r.at }));
+  }
+
+  /* ---------- The pre-game table ---------- */
+
+  saveTable(code: string, table: unknown) {
+    this.db.prepare('UPDATE rooms SET table_json = ? WHERE code = ?').run(JSON.stringify(table), code);
+  }
+
+  putTableBoard(code: string, seq: number, board: unknown) {
+    this.db
+      .prepare('INSERT OR REPLACE INTO table_boards (room_code, seq, board_json) VALUES (?, ?, ?)')
+      .run(code, seq, JSON.stringify(board));
+  }
+
+  tableBoard(code: string, seq: number): unknown {
+    const r = this.db
+      .prepare('SELECT board_json FROM table_boards WHERE room_code = ? AND seq = ?')
+      .get(code, seq) as { board_json: string } | undefined;
+    return r ? JSON.parse(r.board_json) : null;
+  }
+
+  deleteTableBoards(code: string, seqs: number[]) {
+    const del = this.db.prepare('DELETE FROM table_boards WHERE room_code = ? AND seq = ?');
+    for (const q of seqs) del.run(code, q);
   }
 
   /* ---------- Maps and presets ---------- */

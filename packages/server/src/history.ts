@@ -21,7 +21,8 @@ import type { GameRow, Store } from './store';
 export type Mode = SavedGame['mode'];
 
 export function modeOf(config: Partial<GameConfig>): Mode {
-  const sea = !!config.map && config.map.id !== 'classic';
+  // Seafarers by its module (a custom or generated board may have any id).
+  const sea = !!(config.modules?.includes('seafarers') || config.map?.modules.includes('seafarers'));
   const ck = !!config.modules?.includes('citiesKnights');
   return sea ? (ck ? 'full' : 'seafarers') : ck ? 'knights' : 'base';
 }

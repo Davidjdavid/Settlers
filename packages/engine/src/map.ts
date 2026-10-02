@@ -54,7 +54,7 @@ export interface TileSet {
 export interface MapMade {
   by?: string;
   at?: number;
-  generator?: { preset: string; seed: string };
+  generator?: { preset: string; seed: string; rules?: import('./mapcheck').GenRules };
   /** Who edited it after it was generated. */
   edited?: string[];
 }
