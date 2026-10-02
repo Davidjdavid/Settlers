@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–9 done and live (deployed 2026-10-02). Milestone 10 built: Seafarers maps from the editor, the Fog Islands, regions and treasures.**
+Status: **Milestones 1–11 done and live (deployed 2026-10-02).**
 
 ## Milestone 1: base game
 
@@ -971,7 +971,7 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
 
 ## Milestone 10: Seafarers maps you design, fog islands and treasures
 
-**Status: built and tested (editor tests, rules tests for every treasure, 1,000 simulator games each on the Fog Islands and a treasure test map in Seafarers and Full game mode, e2e/m10.spec.ts). Treasure rules as agreed in docs/rules/treasures.md.** Your requests of 2 October.
+**Status: done and live (deployed 2026-10-02). Tested with editor tests, rules tests for every treasure, 1,000 simulator games each on the Fog Islands and a treasure test map in Seafarers and Full game mode, e2e/m10.spec.ts). Treasure rules as agreed in docs/rules/treasures.md.** Your requests of 2 October.
 
 ### 10.1 Seafarers maps from the editor, "broken" ones too
 
@@ -1051,7 +1051,7 @@ The exact rules, including what happens when the bank or a deck runs out, get wr
 
 ## Milestone 11: Your own screen layout
 
-**Status: built and tested (layout.test.ts, e2e/layout.spec.ts on a laptop, a tablet and a phone), with the defaults below; change any you don't like.** One addition: while editing, a hidden box's tab has a "Show" button to put it back where it was. You asked to move the boxes around, hide them, and pin them to the top, bottom, left, right or centre.
+**Status: done and live (deployed 2026-10-02); tested with layout.test.ts and e2e/layout.spec.ts on a laptop, a tablet and a phone. The defaults below are mine: change any you don't like.** One addition: while editing, a hidden box's tab has a "Show" button to put it back where it was. You asked to move the boxes around, hide them, and pin them to the top, bottom, left, right or centre.
 
 ### 11.1 What you can change
 
