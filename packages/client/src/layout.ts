@@ -12,14 +12,19 @@
 
 import type { PlayerSettings } from '@settlers/server/protocol';
 
-export const PANELS = ['players', 'talk', 'hand', 'barbarians'] as const;
+export const PANELS = ['players', 'talk', 'hand', 'build', 'improve', 'play', 'barbarians'] as const;
 export type PanelId = (typeof PANELS)[number];
 export const PANEL_LABEL: Record<PanelId, string> = {
   players: 'Players',
   talk: 'Table talk',
   hand: 'Your hand',
+  build: 'What you can do',
+  improve: 'Science · Trade · Politics',
+  play: 'Cards to play',
   barbarians: 'Barbarians',
 };
+/** Boxes split out of "Your hand" (2 October): a layout saved before then puts them after it. */
+const FROM_HAND: readonly PanelId[] = ['build', 'improve', 'play'];
 
 export const DOCKS = ['left', 'right', 'top', 'bottom'] as const;
 export type Dock = (typeof DOCKS)[number] | 'float';
@@ -52,19 +57,19 @@ export function standard(device: Device): Resolved {
       players: { dock: 'left', order: 1 },
       talk: { dock: 'left', order: 2 },
       hand: { dock: 'right', order: 0 },
+      build: { dock: 'right', order: 1 },
+      improve: { dock: 'right', order: 2 },
+      play: { dock: 'right', order: 3 },
     };
-  if (device === 'tablet')
-    return {
-      hand: { dock: 'right', order: 0 },
-      barbarians: { dock: 'right', order: 1 },
-      players: { dock: 'right', order: 2 },
-      talk: { dock: 'right', order: 3 },
-    };
+  const d: Dock = device === 'tablet' ? 'right' : 'bottom';
   return {
-    hand: { dock: 'bottom', order: 0 },
-    barbarians: { dock: 'bottom', order: 1 },
-    players: { dock: 'bottom', order: 2 },
-    talk: { dock: 'bottom', order: 3 },
+    hand: { dock: d, order: 0 },
+    build: { dock: d, order: 1 },
+    improve: { dock: d, order: 2 },
+    play: { dock: d, order: 3 },
+    barbarians: { dock: d, order: 4 },
+    players: { dock: d, order: 5 },
+    talk: { dock: d, order: 6 },
   };
 }
 
@@ -97,7 +102,15 @@ export function resolve(saved: unknown, device: Device): Resolved {
       (DOCKS as readonly string[]).concat('float').includes(p.dock as string) &&
       num(p.order);
     if (!ok) {
-      out[id] = { ...base[id] };
+      const h = out.hand;
+      const k = FROM_HAND.indexOf(id);
+      // An older layout: the split-out box goes right after (or under) your hand.
+      out[id] =
+        k >= 0 && h && panels.hand
+          ? h.dock === 'float'
+            ? { ...h, y: clamp((h.y ?? 0) + 0.18 * (k + 1), 0, 0.9) }
+            : { ...h, order: h.order + 0.1 * (k + 1) }
+          : { ...base[id] };
       continue;
     }
     let place: Place = { dock: p.dock!, order: p.order! };
@@ -204,7 +217,10 @@ export function preset(p: Preset, device: Device): Layout | null {
   if (p === 'bigBoard') {
     const out = {} as Resolved;
     for (const id of PANELS)
-      out[id] = id === 'hand' ? { dock: 'bottom', order: 0 } : { ...s[id], hidden: true };
+      out[id] =
+        id === 'hand' || FROM_HAND.includes(id)
+          ? { dock: 'bottom', order: PANELS.indexOf(id) }
+          : { ...s[id], hidden: true };
     return save(out);
   }
   const flip = (d: Dock): Dock => (d === 'left' ? 'right' : d === 'right' ? 'left' : d);

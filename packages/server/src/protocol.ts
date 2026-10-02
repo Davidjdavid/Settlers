@@ -187,7 +187,10 @@ const PlaceSchema = z.strictObject({
 });
 const LayoutSchema = z.strictObject({
   v: z.literal(1),
-  panels: z.partialRecord(z.enum(['players', 'talk', 'hand', 'barbarians']), PlaceSchema),
+  panels: z.partialRecord(
+    z.enum(['players', 'talk', 'hand', 'build', 'improve', 'play', 'barbarians']),
+    PlaceSchema,
+  ),
 });
 
 export const SettingsSchema = z.strictObject({
@@ -212,6 +215,8 @@ export const SettingsSchema = z.strictObject({
     .optional(),
   /** Knights: the event die's colour with a roll, "9 blue" (default), "blue 9" or left out. */
   eventDieText: z.enum(['after', 'before', 'off']).optional(),
+  /** Table talk's size: folded to its title, short, normal (default) or tall. */
+  talk: z.enum(['min', 'short', 'normal', 'tall']).optional(),
   /** SPEC 11: your own screen layout, one per kind of screen (none: the standard screen). */
   layout: z
     .strictObject({

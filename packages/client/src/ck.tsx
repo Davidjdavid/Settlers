@@ -1,14 +1,15 @@
 /* Cities & Knights parts of the table: barbarians, improvements, progress cards, knight and choice sheets. */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
-  COMS, RES, TRACKS, TRACK_COM, trackOf, type Action, type Card, type Owe, type PlayerView, type Progress,
-  type Seat, type Track,
+  COMS, RES, TRACKS, TRACK_COM, trackOf, type Action, type Card, type DevType, type Owe, type PlayerView,
+  type Progress, type Seat, type Track,
 } from '@settlers/engine'; // prettier-ignore
 import {
-  CARD_COLOR, CARD_LABEL, PCOL, PROGRESS_HELP, PROGRESS_LABEL, TRACK_ABILITY, TRACK_COLOR, TRACK_LABEL, TRACK_ORDER,
+  CARD_COLOR, CARD_LABEL, DEV_HELP, DEV_LABEL, PCOL, PROGRESS_HELP, PROGRESS_LABEL, TRACK_ABILITY, TRACK_COLOR, TRACK_LABEL, TRACK_ORDER,
   dieSVG,
 } from './art'; // prettier-ignore
+import { cardArt } from './cardart';
 import { client } from './net';
 import { CountSheet, Icon, Sheet, kindsOf } from './Sheets';
 import { listNames, nameOf } from './text';
@@ -263,6 +264,35 @@ export function ImproveRow({
   );
 }
 
+/** A progress or development card's face: its picture, name and what it does, always shown. */
+export function CardFace({
+  c,
+  sub,
+}: {
+  c: Progress | DevType;
+  /** A note after the name (the track, "×2", "+1 point"). */
+  sub?: ReactNode;
+}) {
+  const progress = c in PROGRESS_LABEL;
+  return (
+    <span className="cardface">
+      <span
+        className="art"
+        style={progress ? { ['--c' as string]: TRACK_COLOR[trackOf(c as Progress)] } : undefined}
+        dangerouslySetInnerHTML={{ __html: cardArt(c) }}
+      />
+      <span className="body">
+        <span className="t">
+          {progress ? PROGRESS_LABEL[c as Progress] : DEV_LABEL[c as DevType]}
+          {sub ? <span className="c"> {sub}</span> : null}
+        </span>
+        <span className="d">{progress ? PROGRESS_HELP[c as Progress] : DEV_HELP[c as DevType]}</span>
+      </span>
+    </span>
+  );
+}
+
+/** Your progress cards, each with its picture and what it does, and the ones shown for points. */
 export function ProgressRow({
   v,
   acts,
@@ -280,19 +310,18 @@ export function ProgressRow({
   const shown = v.ck?.shown[v.me!] ?? [];
   if (!hand.length && !shown.length) return null;
   return (
-    <div className="devrow progrow">
+    <>
       {hand.map((c, i) => {
         const plays = acts.filter((a): a is Play => a.type === 'progress' && a.card === c);
         const drop = acts.some((a) => a.type === 'dropProgress' && a.card === c);
         return (
           <div
             key={`${c}${i}`}
-            className="devcard pcard"
+            className="playcard"
             style={{ ['--c' as string]: TRACK_COLOR[trackOf(c)] }}
-            title={PROGRESS_HELP[c]}
             data-progress={c}
           >
-            <span className="t">{PROGRESS_LABEL[c]}</span>
+            <CardFace c={c} sub={TRACK_LABEL[trackOf(c)]} />
             <span className="row">
               <button className="btn small" disabled={busy || !plays.length} onClick={() => onPlay(c, plays)}>
                 Play
@@ -307,11 +336,11 @@ export function ProgressRow({
         );
       })}
       {shown.map((c, i) => (
-        <div key={`s${c}${i}`} className="devcard vp" title={PROGRESS_HELP[c]}>
-          <span className="t">{PROGRESS_LABEL[c]}</span> <span className="c">+1 point</span>
+        <div key={`s${c}${i}`} className="playcard vp" style={{ ['--c' as string]: TRACK_COLOR[trackOf(c)] }}>
+          <CardFace c={c} sub="+1 point" />
         </div>
       ))}
-    </div>
+    </>
   );
 }
 
@@ -482,7 +511,7 @@ export function OweSheet({
           title={title}
           sub={o.k === 'spy' ? `${nameOf(v, o.from)}’s progress cards. Take one.` : sub}
           options={cards}
-          label={(c) => PROGRESS_LABEL[c]}
+          label={(c) => <CardFace c={c} sub={TRACK_LABEL[trackOf(c)]} />}
           style={(c) => ({ ['--c' as string]: TRACK_COLOR[trackOf(c)] })}
           onPick={(card) => choose({ card })}
           onClose={onClose}

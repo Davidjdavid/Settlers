@@ -337,6 +337,10 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
       [1, 0, false],
       [1, 0, true],
     ]);
+    // The card shows its picture and what it does, without hovering.
+    await expect(c.locator('[data-progress=smith] .cardart')).toBeVisible();
+    await expect(c.locator('[data-progress=smith]')).toContainText('Promote up to 2 knights for free.');
+    await shot(c, 'progress-cards', true);
     await smith();
     expect(await lit()).toEqual([at[0]!, at[1]!].sort());
     await expect(c.locator('#board [data-ghost=knight]')).toHaveCount(2);

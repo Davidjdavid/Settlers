@@ -4,7 +4,10 @@ import type { RuleKey } from '@settlers/engine';
 import type { PlayerSettings } from '@settlers/server/protocol';
 
 /** The on/off switches (sounds and the pinned dice have their own pages). */
-export type SettingKey = Exclude<keyof PlayerSettings, 'sounds' | 'dicePin' | 'layout' | 'eventDieText'>;
+export type SettingKey = Exclude<
+  keyof PlayerSettings,
+  'sounds' | 'dicePin' | 'layout' | 'eventDieText' | 'talk'
+>;
 
 export const SETTING_LABEL: Record<SettingKey, string> = {
   confirmPlace: 'Confirm before placing a piece (mouse)',

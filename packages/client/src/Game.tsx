@@ -1,6 +1,6 @@
 /* The game table: board, prompt, hand and actions, players, log. */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   COMS, COST, DEV_PLAY, KEEP_MAX, KNIGHT_COST, SHIP_COST, WALL_COST, cardKinds, cardWarning, goldDue, handLimit, has,
   treasureDue,
@@ -33,7 +33,7 @@ import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
 import { handRisk } from './handrisk';
 import {
-  BOARD_OWES, BarbarianBox, BarbarianChip, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
+  BOARD_OWES, BarbarianBox, BarbarianChip, CardFace, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
   myOwe, owePrompt, paramOf,
 } from './ck'; // prettier-ignore
 
@@ -1312,25 +1312,35 @@ export function Game({
       </div>
     </main>
   );
+  const boxes =
+    me != null && v.hand
+      ? trayBoxes({
+          v,
+          mine,
+          busy,
+          mode,
+          setMode,
+          canPlay,
+          play,
+          canMove: acts.some((a) => a.type === 'moveShip'),
+          acts,
+          onImprove: improve,
+          onPlayProgress: playProgress,
+        })
+      : null;
+  // Your own layout places each part of your hand on its own; the standard screen stacks them.
   const handEl = (
     <section className="dock-wrap" aria-label="Your cards and actions">
       {my?.dicePin && phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} phone /> : null}
       <Offers v={v} busy={busy} ask={(q, go) => ask('confirmTrade', q, go)} />
-      {me != null && v.hand ? (
-        <Tray
-          v={v}
-          mine={mine}
-          busy={busy}
-          mode={mode}
-          setMode={setMode}
-          canPlay={canPlay}
-          play={play}
-          canMove={acts.some((a) => a.type === 'moveShip')}
-          acts={acts}
-          onImprove={improve}
-          onPlayProgress={playProgress}
-        />
-      ) : null}
+      {boxes?.hand}
+      {lay ? null : (
+        <>
+          {boxes?.build}
+          {boxes?.improve}
+          {boxes?.play}
+        </>
+      )}
     </section>
   );
   const barbEl = v.ck ? <BarbarianBox v={v} /> : null;
@@ -1439,11 +1449,73 @@ export function Game({
       </div>
     </section>
   );
+  const talkSize = my?.talk ?? 'normal';
+  const setTalk = (t: NonNullable<typeof talkSize>) =>
+    client.saveSettings({ ...(client.state.room?.mySettings ?? {}), talk: t });
+  const TALK_SIZES = ['short', 'normal', 'tall'] as const;
+  const sizeAt = TALK_SIZES.indexOf(talkSize as 'normal');
+  const cpus = v.players.some((p) => p.cpu);
   const talkEl = (
-    <section className="box talk" aria-label="Table talk">
-      <span className="eyebrow">Table talk</span>
-      <Log v={v} log={log} dieText={my?.eventDieText} />
-      <ChatForm />
+    <section className={`box talk talk-${talkSize}`} aria-label="Table talk" data-testid="talk">
+      <div className="talkhead">
+        <span className="eyebrow">Table talk</span>
+        <span className="talkbtns">
+          {cpus && me != null ? (
+            <button
+              type="button"
+              className={`lybtn${room.options.cpuChat !== false ? ' on' : ''}`}
+              data-testid="talk-cpuchat"
+              title="CPU chatter in table talk, for everyone at the table"
+              aria-pressed={room.options.cpuChat !== false}
+              onClick={() => client.setCpuChat(room.options.cpuChat === false)}
+            >
+              CPU chat {room.options.cpuChat !== false ? 'on' : 'off'}
+            </button>
+          ) : null}
+          {talkSize === 'min' ? null : (
+            <>
+              <button
+                type="button"
+                className="lybtn"
+                data-testid="talk-shorter"
+                aria-label="Make table talk shorter"
+                title="Shorter"
+                disabled={sizeAt <= 0}
+                onClick={() => setTalk(TALK_SIZES[sizeAt - 1]!)}
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className="lybtn"
+                data-testid="talk-taller"
+                aria-label="Make table talk taller"
+                title="Taller"
+                disabled={sizeAt >= TALK_SIZES.length - 1}
+                onClick={() => setTalk(TALK_SIZES[sizeAt + 1]!)}
+              >
+                +
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="lybtn"
+            data-testid="talk-min"
+            aria-expanded={talkSize !== 'min'}
+            title={talkSize === 'min' ? 'Open table talk' : 'Fold table talk away'}
+            onClick={() => setTalk(talkSize === 'min' ? 'normal' : 'min')}
+          >
+            {talkSize === 'min' ? 'Open' : 'Fold'}
+          </button>
+        </span>
+      </div>
+      {talkSize === 'min' ? null : (
+        <>
+          <Log v={v} log={log} dieText={my?.eventDieText} />
+          <ChatForm />
+        </>
+      )}
     </section>
   );
   return (
@@ -1535,7 +1607,15 @@ export function Game({
           device={device}
           editing={editing}
           main={mainEl}
-          panels={{ players: playersEl, talk: talkEl, hand: handEl, barbarians: barbEl }}
+          panels={{
+            players: playersEl,
+            talk: talkEl,
+            hand: handEl,
+            build: boxes?.build ?? null,
+            improve: boxes?.improve ?? null,
+            play: boxes?.play ?? null,
+            barbarians: barbEl,
+          }}
           onChange={saveLayout}
           onDone={() => setEditing(false)}
         />
@@ -2169,7 +2249,12 @@ function HandCount(props: {
   );
 }
 
-function Tray(props: {
+/**
+ * Your hand, split into boxes you can move on their own (SPEC 11): the cards in your hand, what
+ * you can build or do, Science · Trade · Politics (Knights), and the cards you can play, each
+ * with its picture and what it does. Not a component: Game places each box.
+ */
+function trayBoxes(props: {
   v: PlayerView;
   mine: boolean;
   busy: boolean;
@@ -2181,7 +2266,7 @@ function Tray(props: {
   acts: Action[];
   onImprove: (opts: Action[]) => void;
   onPlayProgress: (c: Progress, plays: Play[]) => void;
-}) {
+}): Record<'hand' | 'build' | 'improve' | 'play', ReactNode> {
   const { v, mine, busy } = props;
   const sea = v.rules.modules.includes('seafarers');
   const ck = !!v.ck;
@@ -2217,100 +2302,104 @@ function Tray(props: {
     ...DEV_PLAY.map((c) => ({ c, n: hand.dev[c], fresh: hand.fresh[c] })),
     { c: 'vp' as const, n: hand.vpCards, fresh: 0 },
   ].filter((d) => d.n + d.fresh > 0);
-  return (
-    <div className="tray">
-      <div className="traytitle">
-        <span className="eyebrow">Your hand</span>
-        <span className="handmeta">
-          <HandCount
-            v={v}
-            s={stateFromView(v)}
-            p={v.me!}
-            n={Object.values(hand.res).reduce((a, b) => a + b, 0)}
-            testid="hand-count"
-          />{' '}
-          · {hand.totalVP} points
-        </span>
-      </div>
-      <div className="hand" data-testid="hand">
-        {(ck ? [...RES, ...COMS] : RES).map((r) => (
-          <div
-            key={r}
-            className={`rcard${hand.res[r] ? '' : ' zero'}${(COMS as readonly string[]).includes(r) ? ' com' : ''}`}
-            style={{ ['--c' as string]: CARD_COLOR[r] }}
-            title={CARD_LABEL[r]}
-            data-res={r}
-            data-n={hand.res[r] ?? 0}
-          >
-            <span dangerouslySetInnerHTML={{ __html: cardIcon(r) }} style={{ display: 'contents' }} />
-            <span className="n">{hand.res[r] ?? 0}</span>
-          </div>
-        ))}
-      </div>
-      <div className="build">
-        {builds.map((b) => {
-          const ok = main && has(hand.res, b.cost) && b.left > 0;
-          return (
-            <button
-              key={b.k}
-              className={`btn bbtn${props.mode === b.k ? ' on' : ''}`}
-              disabled={!ok}
-              title={
-                b.k === 'knight'
-                  ? 'Basic knight. Activate it with 1 wheat.'
-                  : b.k === 'wall'
-                    ? '+2 to your hand limit on a 7'
-                    : undefined
-              }
-              data-testid={`build-${b.k}`}
-              onClick={() => {
-                if (b.k === 'dev') void client.act({ type: 'buyDev' });
-                else props.setMode(props.mode === b.k ? null : b.k);
-              }}
+  const any = devs.length > 0 || (v.ck?.hand?.length ?? 0) > 0 || (v.ck?.shown[me]?.length ?? 0) > 0;
+  return {
+    hand: (
+      <div className="tray handbox" data-box="hand">
+        <div className="traytitle">
+          <span className="eyebrow">Your hand</span>
+          <span className="handmeta">
+            <HandCount
+              v={v}
+              s={stateFromView(v)}
+              p={v.me!}
+              n={Object.values(hand.res).reduce((a, b) => a + b, 0)}
+              testid="hand-count"
+            />{' '}
+            · {hand.totalVP} points
+          </span>
+        </div>
+        <div className="hand" data-testid="hand">
+          {(ck ? [...RES, ...COMS] : RES).map((r) => (
+            <div
+              key={r}
+              className={`rcard${hand.res[r] ? '' : ' zero'}${(COMS as readonly string[]).includes(r) ? ' com' : ''}`}
+              style={{ ['--c' as string]: CARD_COLOR[r] }}
+              title={CARD_LABEL[r]}
+              data-res={r}
+              data-n={hand.res[r] ?? 0}
             >
-              <span>
-                {b.label}
-                {b.k !== 'dev' ? (
-                  <span
-                    className={`left${(b.k === 'knight' ? left.knight1 : b.k === 'wall' ? left.wall : b.left) === 0 ? ' out' : ''}`}
-                  >
-                    {' '}
-                    · {b.k === 'knight' ? left.knight1 : b.k === 'wall' ? left.wall : b.left} left
-                  </span>
-                ) : null}
-              </span>
-              <span className="cost">
-                {Object.entries(b.cost).flatMap(([r, n]) =>
-                  Array.from({ length: n ?? 0 }, (_, i) => (
-                    <i key={`${r}${i}`} style={{ ['--c' as string]: TILE_COLOR[r as 'wood'] }} />
-                  )),
-                )}
+              <span dangerouslySetInnerHTML={{ __html: cardIcon(r) }} style={{ display: 'contents' }} />
+              <span className="n">{hand.res[r] ?? 0}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+    build: (
+      <div className="tray buildbox" data-box="build">
+        <span className="eyebrow">What you can do</span>
+        <div className="build">
+          {builds.map((b) => {
+            const ok = main && has(hand.res, b.cost) && b.left > 0;
+            return (
+              <button
+                key={b.k}
+                className={`btn bbtn${props.mode === b.k ? ' on' : ''}`}
+                disabled={!ok}
+                title={
+                  b.k === 'knight'
+                    ? 'Basic knight. Activate it with 1 wheat.'
+                    : b.k === 'wall'
+                      ? '+2 to your hand limit on a 7'
+                      : undefined
+                }
+                data-testid={`build-${b.k}`}
+                onClick={() => {
+                  if (b.k === 'dev') void client.act({ type: 'buyDev' });
+                  else props.setMode(props.mode === b.k ? null : b.k);
+                }}
+              >
+                <span>
+                  {b.label}
+                  {b.k !== 'dev' ? (
+                    <span
+                      className={`left${(b.k === 'knight' ? left.knight1 : b.k === 'wall' ? left.wall : b.left) === 0 ? ' out' : ''}`}
+                    >
+                      {' '}
+                      · {b.k === 'knight' ? left.knight1 : b.k === 'wall' ? left.wall : b.left} left
+                    </span>
+                  ) : null}
+                </span>
+                <span className="cost">
+                  {Object.entries(b.cost).flatMap(([r, n]) =>
+                    Array.from({ length: n ?? 0 }, (_, i) => (
+                      <i key={`${r}${i}`} style={{ ['--c' as string]: TILE_COLOR[r as 'wood'] }} />
+                    )),
+                  )}
+                </span>
+              </button>
+            );
+          })}
+          {sea ? (
+            <button
+              className={`btn bbtn${props.mode === 'move' ? ' on' : ''}`}
+              disabled={!main || !props.canMove}
+              data-testid="move-ship"
+              onClick={() => props.setMode(props.mode === 'move' ? null : 'move')}
+              title="Move the ship at the open end of a route"
+            >
+              Move ship
+              <span className="cost" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                {v.rules.houseRules.freeShipMoves
+                  ? 'any number'
+                  : v.sea && v.sea.movesThisTurn
+                    ? 'used'
+                    : 'once a turn'}
               </span>
             </button>
-          );
-        })}
-        {sea ? (
-          <button
-            className={`btn bbtn${props.mode === 'move' ? ' on' : ''}`}
-            disabled={!main || !props.canMove}
-            data-testid="move-ship"
-            onClick={() => props.setMode(props.mode === 'move' ? null : 'move')}
-            title="Move the ship at the open end of a route"
-          >
-            Move ship
-            <span className="cost" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-              {v.rules.houseRules.freeShipMoves
-                ? 'any number'
-                : v.sea && v.sea.movesThisTurn
-                  ? 'used'
-                  : 'once a turn'}
-            </span>
-          </button>
-        ) : null}
-      </div>
-      {ck ? (
-        <>
-          <div className="build">
+          ) : null}
+          {ck ? (
             <button
               className={`btn bbtn${props.mode === 'knights' ? ' on' : ''}`}
               disabled={
@@ -2324,44 +2413,55 @@ function Tray(props: {
                 activate · promote · move
               </span>
             </button>
-          </div>
-          <ImproveRow v={v} acts={props.acts} busy={busy} onImprove={(_t, opts) => props.onImprove(opts)} />
-          <ProgressRow
-            v={v}
-            acts={props.acts}
-            busy={busy}
-            onPlay={props.onPlayProgress}
-            onDrop={(c) => void client.act({ type: 'dropProgress', card: c })}
-          />
-        </>
-      ) : null}
-      {devs.length ? (
-        <div className="devrow">
+          ) : null}
+        </div>
+      </div>
+    ),
+    improve: ck ? (
+      <div className="tray improvebox" data-box="improve">
+        <span className="eyebrow">Science · Trade · Politics</span>
+        <ImproveRow v={v} acts={props.acts} busy={busy} onImprove={(_t, opts) => props.onImprove(opts)} />
+      </div>
+    ) : null,
+    play: (
+      <div className="tray playbox" data-box="play">
+        <span className="eyebrow">Cards to play</span>
+        <div className="playcards" data-testid="play-cards">
+          {ck ? (
+            <ProgressRow
+              v={v}
+              acts={props.acts}
+              busy={busy}
+              onPlay={props.onPlayProgress}
+              onDrop={(c) => void client.act({ type: 'dropProgress', card: c })}
+            />
+          ) : null}
           {devs.map((d) => (
-            <div key={d.c} className={`devcard${d.c === 'vp' ? ' vp' : ''}`} title={DEV_HELP[d.c]}>
-              <span>
-                <span className="t">{DEV_LABEL[d.c]}</span>{' '}
-                <span className="c">
-                  ×{d.n + d.fresh}
-                  {d.fresh ? ` (${d.fresh} new)` : ''}
-                </span>
-              </span>
+            <div key={d.c} className={`playcard dev${d.c === 'vp' ? ' vp' : ''}`} data-dev={d.c}>
+              <CardFace c={d.c} sub={`×${d.n + d.fresh}${d.fresh ? ` (${d.fresh} new)` : ''}`} />
               {d.c !== 'vp' ? (
-                <button
-                  className="btn small"
-                  disabled={busy || !props.canPlay(d.c)}
-                  onClick={() => props.play(d.c as DevPlayable)}
-                  data-testid={`play-${d.c}`}
-                >
-                  Play
-                </button>
+                <span className="row">
+                  <button
+                    className="btn small"
+                    disabled={busy || !props.canPlay(d.c)}
+                    onClick={() => props.play(d.c as DevPlayable)}
+                    data-testid={`play-${d.c}`}
+                  >
+                    Play
+                  </button>
+                </span>
               ) : null}
             </div>
           ))}
+          {any ? null : (
+            <span className="none">
+              {ck ? 'No progress cards yet. Roll the event die for them.' : 'No development cards yet.'}
+            </span>
+          )}
         </div>
-      ) : null}
-    </div>
-  );
+      </div>
+    ),
+  };
 }
 
 function ChatForm() {

@@ -32,6 +32,11 @@ test('two people and a CPU play a full game', async ({ browser }) => {
     expect(v0.players[cpu].nick).toBe('Turnip');
     expect(v0.players[cpu].color).toBe('purple');
     await expect(a.locator('.player', { hasText: 'Turnip' }).getByText('CPU')).toBeVisible();
+    // CPU chatter switched off from table talk, for everyone; then back on.
+    await a.getByTestId('talk-cpuchat').click();
+    await expect(b.getByTestId('talk-cpuchat')).toHaveText('CPU chat off');
+    await b.getByTestId('talk-cpuchat').click();
+    await expect(a.getByTestId('talk-cpuchat')).toHaveText('CPU chat on');
 
     // Once, on a person's turn with a card to spare, offer the CPU a trade by clicking.
     let offered = false;

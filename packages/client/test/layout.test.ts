@@ -62,13 +62,13 @@ describe('your own layout (SPEC 11)', () => {
       return resolve(l, 'laptop');
     };
     r = check(dockAt(r, 'talk', 'right'));
-    expect(inDock(r, 'right')).toEqual(['hand', 'talk']);
+    expect(inDock(r, 'right')).toEqual(['hand', 'build', 'improve', 'play', 'talk']);
     expect(inDock(r, 'left')).toEqual(['barbarians', 'players']);
     r = check(shift(r, 'talk', -1));
-    expect(inDock(r, 'right')).toEqual(['talk', 'hand']);
+    expect(inDock(r, 'right')).toEqual(['hand', 'build', 'improve', 'talk', 'play']);
+    for (let i = 0; i < 5; i++) r = check(shift(r, 'talk', -1));
     // Can't move past the end.
-    r = check(shift(r, 'talk', -1));
-    expect(inDock(r, 'right')).toEqual(['talk', 'hand']);
+    expect(inDock(r, 'right')).toEqual(['talk', 'hand', 'build', 'improve', 'play']);
     // Moving along an edge skips boxes this game doesn't have (no barbarians outside Knights).
     const left = resolve(undefined, 'laptop');
     const lefts = (l: ReturnType<typeof shift>) => inDock(resolve(l, 'laptop'), 'left');
@@ -88,11 +88,22 @@ describe('your own layout (SPEC 11)', () => {
     expect(r.barbarians).toEqual({ dock: 'top', order: 0 });
   });
 
+  it('a layout saved before the hand was split puts the new boxes right after your hand', () => {
+    const docked = resolve({ v: 1, panels: { hand: { dock: 'top', order: 0 }, talk: { dock: 'top', order: 1 } } }, 'laptop'); // prettier-ignore
+    expect(inDock(docked, 'top')).toEqual(['hand', 'build', 'improve', 'play', 'talk']);
+    const floated = resolve({ v: 1, panels: { hand: { dock: 'float', order: 0, x: 0.1, y: 0.1, w: 0.3 }, } }, 'laptop'); // prettier-ignore
+    expect([floated.build.dock, floated.build.x, floated.build.y]).toEqual(['float', 0.1, 0.28]);
+    const hid = resolve({ v: 1, panels: { hand: { dock: 'left', order: 5, hidden: true } } }, 'tablet');
+    expect(hid.play).toMatchObject({ dock: 'left', hidden: true });
+    // No saved hand: the standard places.
+    expect(resolve({ v: 1, panels: {} }, 'laptop').build).toEqual(standard('laptop').build);
+  });
+
   it('presets: Standard is no saved layout; Big board keeps only your hand; Left-handed mirrors', () => {
     for (const d of DEVICES) {
       expect(preset('standard', d)).toBeNull();
       const big = resolve(preset('bigBoard', d), d);
-      expect(shown(big)).toEqual(['hand']);
+      expect(shown(big)).toEqual(['hand', 'build', 'improve', 'play']);
       expect(big.hand.dock).toBe('bottom');
       const left = resolve(preset('leftHanded', d), d);
       for (const id of PANELS) {

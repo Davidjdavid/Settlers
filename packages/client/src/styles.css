@@ -3844,3 +3844,134 @@ button.vp {
 .log .evword[data-ev='science'] {
   color: #74d683;
 }
+
+/* ---------- Your hand in separate boxes (2 October) ---------- */
+.tray.buildbox,
+.tray.improvebox,
+.tray.playbox {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.tray .improve {
+  grid-column: auto;
+}
+.playcards {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.playcards .none {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.playcard {
+  --c: #b98c3c;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--c);
+  min-width: 0;
+}
+.playcard.vp {
+  border-style: dashed;
+  border-left-style: solid;
+}
+.playcard .row {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cardface {
+  --c: #b98c3c;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.playcard .cardface {
+  --c: inherit;
+}
+.cardface .art {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: #fff8e8;
+  background: color-mix(in srgb, var(--c) 55%, #1b1712);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.cardface .body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cardface .t {
+  font-weight: 650;
+  color: var(--ink);
+}
+.cardface .t .c {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.cardface .d {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  font-weight: 450;
+}
+
+/* ---------- Table talk's own controls: fold, shorter, taller, CPU chatter ---------- */
+.talkhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.talkbtns {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.talkbtns .lybtn {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  font-size: 12px;
+}
+.talkbtns .lybtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.box.talk.talk-short .log,
+.lyp > .box.talk.talk-short .log {
+  max-height: 120px;
+}
+.box.talk.talk-tall .log,
+.lyp > .box.talk.talk-tall .log {
+  max-height: 560px;
+}
+@container app (min-width: 1180px) {
+  .app > .side > .box.talk.talk-short,
+  .app > .side > .box.talk.talk-min {
+    flex: none;
+    min-height: 0;
+  }
+  .app > .side > .box.talk.talk-short .log,
+  .app > .side > .box.talk.talk-short .logwrap {
+    flex: none;
+    max-height: 120px;
+  }
+  .app > .side > .box.talk.talk-tall {
+    flex: 3 0 380px;
+  }
+}

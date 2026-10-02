@@ -64,9 +64,14 @@ test('your own layout on a laptop, a tablet and a phone', async ({ browser }) =>
     lap
       .locator('[data-edge=right] > [data-panel]')
       .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.panel));
-  expect(await order()).toEqual(['hand', 'talk']);
-  await lap.getByTestId('ly-talk-earlier').click();
-  await expect.poll(order).toEqual(['talk', 'hand']);
+  expect(await order()).toEqual(['hand', 'build', 'play', 'talk']);
+  for (let i = 0; i < 3; i++) await lap.getByTestId('ly-talk-earlier').click();
+  await expect.poll(order).toEqual(['talk', 'hand', 'build', 'play']);
+  // Your hand is in separate boxes: what you can do goes to the left on its own.
+  await lap.getByTestId('ly-build-left').click();
+  await expect(lap.locator('[data-edge=left] [data-panel=build] [data-testid=build-road]')).toBeVisible();
+  await expect.poll(order).toEqual(['talk', 'hand', 'play']);
+  await expect(lap.locator('[data-edge=right] [data-panel=hand] [data-testid=hand]')).toBeVisible();
   // The players float over the board; drag them and widen them.
   await lap.getByTestId('ly-players-float').click();
   const float = lap.locator('.lyfloat[data-panel=players]');
@@ -116,6 +121,48 @@ test('your own layout on a laptop, a tablet and a phone', async ({ browser }) =>
   expect(await noSideScroll(tab)).toBe(true);
   await shot(tab, 'tablet');
 
+  /* ---------- Table talk: shorter, taller, folded away (saved on the profile) ---------- */
+  const log = tab.getByTestId('log');
+  const h0 = (await log.boundingBox())!.height;
+  await tab.getByTestId('talk-shorter').click();
+  await expect.poll(async () => (await mine(tab))?.talk).toBe('short');
+  await expect.poll(async () => (await log.boundingBox())!.height).toBeLessThanOrEqual(130);
+  await expect(tab.getByTestId('talk-shorter')).toBeDisabled();
+  await tab.getByTestId('talk-taller').click();
+  await tab.getByTestId('talk-taller').click();
+  await expect.poll(async () => (await mine(tab))?.talk).toBe('tall');
+  await expect(tab.getByTestId('talk-taller')).toBeDisabled();
+  await tab.getByTestId('talk-min').click();
+  await expect(log).toHaveCount(0);
+  await expect(tab.getByTestId('talk-min')).toHaveText('Open');
+  await shot(tab, 'talk-folded');
+  await tab.reload();
+  await expect(tab.getByTestId('talk-min')).toHaveText('Open');
+  await tab.getByTestId('talk-min').click();
+  await expect(log).toBeVisible();
+  expect(Math.abs((await log.boundingBox())!.height - h0)).toBeLessThan(40);
+  // No CPUs at this table: no CPU chatter switch.
+  await expect(tab.getByTestId('talk-cpuchat')).toHaveCount(0);
+
+  /* ---------- Cards to play: every card with its picture and what it does ---------- */
+  await tab.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test hook returns plain JSON
+    const s = (window as any).__settlers;
+    const v = structuredClone(s.state().game);
+    v.hand.dev = { knight: 2, road: 1, plenty: 0, mono: 1 };
+    v.hand.vpCards = 1;
+    s.stage(v);
+  });
+  const cards = tab.getByTestId('play-cards');
+  await expect(cards.locator('.playcard')).toHaveCount(4);
+  await expect(cards.locator('.cardart')).toHaveCount(4);
+  await expect(cards.locator('[data-dev=knight]')).toContainText('Move the robber and steal a card');
+  await expect(cards.locator('[data-dev=knight]')).toContainText('×2');
+  await expect(cards.locator('[data-dev=vp]')).toContainText('Worth 1 point');
+  await shot(tab, 'cards-to-play');
+  await tab.reload();
+  await expect(cards.locator('.none')).toBeVisible();
+
   /* ---------- The phone: up and down, and hide ---------- */
   await openEditor(phone);
   await expect(phone.getByTestId('ly-players-left')).toHaveCount(0);
@@ -124,9 +171,9 @@ test('your own layout on a laptop, a tablet and a phone', async ({ browser }) =>
     phone
       .locator('[data-edge=bottom] > [data-panel]')
       .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.panel));
-  expect(await phoneOrder()).toEqual(['hand', 'players', 'talk']);
+  expect(await phoneOrder()).toEqual(['hand', 'build', 'play', 'players', 'talk']);
   await phone.getByTestId('ly-players-earlier').click();
-  await expect.poll(phoneOrder).toEqual(['players', 'hand', 'talk']);
+  await expect.poll(phoneOrder).toEqual(['hand', 'build', 'players', 'play', 'talk']);
   await phone.getByTestId('ly-talk-hide').click();
   await phone.getByTestId('ly-done').click();
   await expect(phone.getByTestId('ly-tab-talk')).toBeVisible();
