@@ -1,15 +1,23 @@
-/* Turning events into short sentences for the log. Wording follows the prototype. */
+/*
+ * Turning events into log lines (SPEC 8.10). A line is a list of parts: plain words, player
+ * names, cards with their amount, hidden cards ("a card") and warnings. The log draws each part
+ * in its colour with its icon; lineText gives the same line as plain text. Wording follows the
+ * prototype.
+ */
 
 import {
   COMS,
   RES,
+  isLogNote,
+  type Card,
   type Cards,
   type GameEvent,
+  type LogNote,
   type PlayerView,
   type RuleKey,
   type Seat,
 } from '@settlers/engine';
-import { DEV_LABEL, PROGRESS_LABEL, TRACK_LABEL } from './art';
+import { CARD_LABEL, DEV_LABEL, PROGRESS_LABEL, RES_LABEL, TRACK_LABEL } from './art';
 
 export function nameOf(v: PlayerView, p: Seat | null): string {
   if (p == null) return 'Nobody';
@@ -17,8 +25,9 @@ export function nameOf(v: PlayerView, p: Seat | null): string {
   return v.players[p]?.nick || 'Someone';
 }
 
+/** Cards as plain text: "2 Brick, 1 Ore", or "nothing". */
 export function cardsText(c: Cards | null | undefined): string {
-  const parts = [...RES, ...COMS].filter((r) => (c?.[r] ?? 0) > 0).map((r) => `${c![r]} ${r}`);
+  const parts = [...RES, ...COMS].filter((r) => (c?.[r] ?? 0) > 0).map((r) => `${c![r]} ${CARD_LABEL[r]}`);
   return parts.length ? parts.join(', ') : 'nothing';
 }
 
@@ -32,246 +41,349 @@ export function listNames(v: PlayerView, seats: Seat[]): string {
 export const routeName = (v: PlayerView) =>
   v.rules.modules.includes('seafarers') ? 'Longest Trade Route' : 'Longest Road';
 
-/** One log line, or null for events that only matter to the UI. */
-export function eventText(
-  v: PlayerView,
-  e: GameEvent,
-): { text: string; big?: boolean; sep?: boolean; bad?: boolean } | null {
-  const who = (p: Seat | null) => nameOf(v, p);
+/** One part of a log line. */
+export type Seg =
+  | string
+  /** A player's name: "Alex" / "You"; `f` for "you", "Alex’s"/"Your", or mid-sentence "your". */
+  | { p: Seat | null; f?: 'obj' | 'poss' | 'possMid' }
+  /** n cards of one kind, with its colour and icon. */
+  | { c: Card; n: number }
+  /** Cards this player may not see: "a card", "2 cards". */
+  | { hidden: number }
+  /** 7s, the robber, the barbarians. */
+  | { warn: string };
+
+export interface Line {
+  parts: Seg[];
+  big?: boolean;
+  bad?: boolean;
+  /** A turn divider (SPEC 8.10): the log adds the roll to it. */
+  turn?: Seat;
+}
+
+/** A line's parts from a template: interpolated parts stay parts, numbers become words. */
+function L(strs: TemplateStringsArray, ...args: (Seg | Seg[] | number)[]): Seg[] {
+  const out: Seg[] = [];
+  strs.forEach((s, i) => {
+    if (s) out.push(s);
+    if (i >= args.length) return;
+    const a = args[i]!;
+    if (Array.isArray(a)) out.push(...a);
+    else out.push(typeof a === 'number' ? String(a) : a);
+  });
+  return out;
+}
+
+const P = (p: Seat | null, f?: 'obj' | 'poss' | 'possMid'): Seg => (f ? { p, f } : { p });
+const W = (warn: string): Seg => ({ warn });
+
+/** "A, B and C" from parts. */
+function and(xs: Seg[][]): Seg[] {
+  const out: Seg[] = [];
+  xs.forEach((x, i) => {
+    if (i) out.push(i === xs.length - 1 ? ' and ' : ', ');
+    out.push(...x);
+  });
+  return out;
+}
+
+/** Cards as parts: "2 Brick and 1 Ore", or "nothing". */
+function C(c: Cards | Partial<Record<Card, number>> | null | undefined): Seg[] {
+  const kinds = ([...RES, ...COMS] as Card[]).filter((r) => (c?.[r] ?? 0) > 0);
+  return kinds.length ? and(kinds.map((r) => [{ c: r, n: c![r]! }])) : ['nothing'];
+}
+
+const names = (seats: Seat[]): Seg[] => and(seats.map((p) => [P(p)]));
+const count = (o: Record<number, number>) => Object.values(o).reduce((a, b) => a + b, 0);
+
+/** A tile in words: "Ore 6", "the desert". */
+function tile(v: PlayerView, h: number): string {
+  const x = v.board.hexes[h];
+  if (!x) return 'a tile';
+  if (x.t in RES_LABEL) return `${RES_LABEL[x.t as keyof typeof RES_LABEL]} ${x.n}`;
+  return x.t === 'gold' ? `the gold field ${x.n}` : `the ${x.t}`;
+}
+
+/** Plain text for a part. */
+export function segText(v: PlayerView, s: Seg): string {
+  if (typeof s === 'string') return s;
+  if ('p' in s) {
+    const me = s.p != null && s.p === v.me;
+    const n = nameOf(v, s.p);
+    if (s.f === 'obj') return me ? 'you' : n;
+    if (s.f === 'poss') return me ? 'Your' : `${n}’s`;
+    if (s.f === 'possMid') return me ? 'your' : `${n}’s`;
+    return n;
+  }
+  if ('c' in s) return `${s.n} ${CARD_LABEL[s.c]}`;
+  if ('hidden' in s) return s.hidden === 1 ? 'a card' : `${s.hidden} cards`;
+  return s.warn;
+}
+
+export const lineText = (v: PlayerView, l: Line) => l.parts.map((s) => segText(v, s)).join('');
+
+/** The log lines for an event or note; none for events that only matter to the UI. */
+export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
+  const one = (parts: Seg[], o: Omit<Line, 'parts'> = {}): Line[] => [{ parts, ...o }];
+  if (isLogNote(e)) {
+    // "The robber blocked 1 Brick from Joe"
+    return Object.entries(e.lost).map(([p, c]) => ({
+      parts: L`The ${W('robber')} blocked ${C(c)} from ${P(Number(p), 'obj')}`,
+    }));
+  }
   switch (e.k) {
     case 'start':
-      return { text: 'The game started', big: true };
+      return one(['The game started'], { big: true });
     case 'setup': {
       const what = v.verts[e.v]?.[1] === 2 && v.ck ? 'a city' : 'a settlement';
-      return {
-        text: e.got ? `${who(e.p)} placed ${what} and got ${cardsText(e.got)}` : `${who(e.p)} placed ${what}`,
-      };
+      return one(e.got ? L`${P(e.p)} placed ${what} and got ${C(e.got)}` : L`${P(e.p)} placed ${what}`);
     }
     case 'turn':
-      return { text: `${who(e.p) === 'You' ? 'Your' : `${who(e.p)}’s`} turn`, sep: true };
+      return one(L`${P(e.p, 'poss')} turn`, { turn: e.p });
     case 'roll':
       if (e.redo)
-        return {
-          text: v.ck
-            ? `${who(e.p)} rolled 7, but there are no 7s yet: rolling again`
-            : `${who(e.p)} rolled 7, but there are no 7s in the first round: rolling again`,
-        };
-      return { text: `${who(e.p)} rolled ${e.d[0] + e.d[1]}`, big: e.d[0] + e.d[1] === 7 };
+        return one(
+          v.ck
+            ? L`${P(e.p)} rolled ${W('7')}, but there are no 7s yet: rolling again`
+            : L`${P(e.p)} rolled ${W('7')}, but there are no 7s in the first round: rolling again`,
+        );
+      return one(
+        e.d[0] + e.d[1] === 7
+          ? L`${P(e.p)} rolled ${e.d[0]} + ${e.d[1]} = ${W('7')}`
+          : L`${P(e.p)} rolled ${e.d[0]} + ${e.d[1]} = ${e.d[0] + e.d[1]}`,
+      );
     case 'produce': {
-      const lines = Object.entries(e.gains).map(([p, g]) => `${who(Number(p))} got ${cardsText(g)}`);
-      const short = e.short.length ? ` ${shortText(e.short, e.gains, who)}` : '';
-      return { text: (lines.length ? lines.join('. ') + '.' : 'Nobody got anything.') + short };
+      const got = Object.entries(e.gains).map(([p, g]) => ({ parts: L`${P(Number(p))} got ${C(g)}` }));
+      const lines = got.length ? got : [{ parts: ['Nobody got anything'] }];
+      return [...lines, ...shortLines(e.short, e.gains)];
     }
     case 'mustDiscard':
-      return { text: `${listNames(v, Object.keys(e.need).map(Number))} must discard half their cards` };
+      return one(L`${names(Object.keys(e.need).map(Number))} must discard half their cards`);
     case 'discard':
-      return { text: `${who(e.p)} discarded ${cardsText(e.c)}` };
+      return one(L`${P(e.p)} discarded ${C(e.c)}`);
     case 'robber':
-      return { text: `${who(e.p)} moved the robber` };
+      return one(L`${P(e.p)} moved the ${W('robber')} to ${tile(v, e.h)}`);
     case 'steal':
-      return {
-        text: e.r
-          ? `${who(e.p)} stole 1 ${e.r} from ${who(e.from)}`
-          : `${who(e.p)} stole a card from ${who(e.from)}`,
-      };
+      return one(
+        e.r
+          ? L`${P(e.p)} stole ${[{ c: e.r, n: 1 }]} from ${P(e.from, 'obj')}`
+          : L`${P(e.p)} stole ${[{ hidden: 1 }]} from ${P(e.from, 'obj')}`,
+      );
     case 'build':
-      return { text: `${who(e.p)} built a ${e.what}${e.free ? ' (free)' : ''}` };
+      return one(L`${P(e.p)} built a ${e.what}${e.free ? ' (free)' : ''}`);
     case 'buyDev':
-      return {
-        text: e.card
-          ? `${who(e.p)} bought a ${DEV_LABEL[e.card]} card`
-          : `${who(e.p)} bought a development card`,
-      };
+      return one(
+        e.card ? L`${P(e.p)} bought a ${DEV_LABEL[e.card]} card` : L`${P(e.p)} bought a development card`,
+      );
     case 'playDev':
-      return { text: `${who(e.p)} played ${DEV_LABEL[e.card]}` };
+      return one(L`${P(e.p)} played ${DEV_LABEL[e.card]}`);
     case 'plenty':
-      return { text: `${who(e.p)} took ${cardsText(e.got)} from the bank` };
+      return one(L`${P(e.p)} took ${C(e.got)} from the bank`);
     case 'mono': {
-      const n = Object.values(e.from).reduce((a, b) => a + b, 0);
-      return { text: `${who(e.p)} took ${n} ${e.r} from everyone` };
+      const from = Object.entries(e.from).filter(([, n]) => n > 0);
+      const detail = from.length
+        ? L`: ${and(from.map(([q, n]) => L`${n} from ${P(Number(q), 'obj')}`))}`
+        : [];
+      return one([...L`${P(e.p)} took ${[{ c: e.r, n: count(e.from) }]} with Monopoly`, ...detail]);
     }
     case 'bank':
-      return { text: `${who(e.p)} traded ${e.n} ${e.give} for 1 ${e.get} with the bank` };
+      return one(L`${P(e.p)} traded ${[{ c: e.give, n: e.n }]} to the bank for ${[{ c: e.get, n: 1 }]}`);
     case 'offer':
-      return {
-        text: `${who(e.offer.from)} offered ${cardsText(e.offer.give)} for ${cardsText(e.offer.want)}`,
-      };
+      return one(L`${P(e.offer.from)} offered ${C(e.offer.give)} for ${C(e.offer.want)}`);
     case 'trade':
-      return { text: `${who(e.a)} gave ${cardsText(e.give)} to ${who(e.b)} for ${cardsText(e.want)}` };
+      return one(L`${P(e.a)} gave ${P(e.b, 'obj')} ${C(e.give)} for ${C(e.want)}`);
     case 'longest':
-      return {
-        text: e.p == null ? `Nobody holds ${routeName(v)} now` : `${who(e.p)} took ${routeName(v)} (${e.n})`,
-        big: true,
-      };
+      return one(
+        e.p == null
+          ? L`Nobody holds ${routeName(v)} now`
+          : e.from != null
+            ? L`${P(e.p)} took ${routeName(v)} (${e.n}) from ${P(e.from, 'obj')}`
+            : L`${P(e.p)} took ${routeName(v)} (${e.n})`,
+        { big: true },
+      );
     case 'largest':
-      return { text: `${who(e.p)} took Largest Army (${e.n} knights)`, big: true };
+      return one(
+        e.from != null
+          ? L`${P(e.p)} took Largest Army (${e.n} knights) from ${P(e.from, 'obj')}`
+          : L`${P(e.p)} took Largest Army (${e.n} knights)`,
+        { big: true },
+      );
     case 'win':
-      return {
-        text: e.overtime
-          ? `${who(e.p)} won in overtime with ${e.vp} points!`
-          : `${who(e.p)} won with ${e.vp} points!`,
-        big: true,
-      };
+      return one(
+        e.overtime
+          ? L`${P(e.p)} won in overtime with ${e.vp} points!`
+          : L`${P(e.p)} won with ${e.vp} points!`,
+        { big: true },
+      );
     case 'respond':
     case 'cancelOffer':
-      return null;
+      return [];
     case 'moveShip':
-      return { text: `${who(e.p)} moved a ship` };
+      return one(L`${P(e.p)} moved a ship`);
     case 'pirate':
-      return { text: `${who(e.p)} moved the pirate` };
-    case 'goldOwed':
-      return {
-        text: `Gold! ${listNames(v, Object.keys(e.owed).map(Number))} ${Object.keys(e.owed).length === 1 ? 'picks' : 'pick'} resources`,
-      };
+      return one(L`${P(e.p)} moved the ${W('pirate')}`);
+    case 'goldOwed': {
+      const who = Object.keys(e.owed).map(Number);
+      return one(L`Gold! ${names(who)} ${who.length === 1 && who[0] !== v.me ? 'picks' : 'pick'} resources`);
+    }
     case 'gold':
-      return { text: `${who(e.p)} took ${cardsText(e.got)} from a gold field` };
-    case 'discover':
-      return {
-        text: `${who(e.p)} discovered ${e.t === 'sea' ? 'open sea' : e.t === 'gold' ? 'a gold field' : `${e.t}${e.n ? ` (${e.n})` : ''}`}${e.got ? ` and got ${cardsText(e.got)}` : ''}`,
-      };
+      return one(L`${P(e.p)} took ${C(e.got)} from a gold field`);
+    case 'discover': {
+      const what =
+        e.t === 'sea' ? 'open sea' : e.t === 'gold' ? 'a gold field' : `${e.t}${e.n ? ` (${e.n})` : ''}`;
+      return one(
+        e.got ? L`${P(e.p)} discovered ${what} and got ${C(e.got)}` : L`${P(e.p)} discovered ${what}`,
+      );
+    }
     case 'islandBonus':
-      return { text: `${who(e.p)} settled a new island: +${e.vp} points`, big: true };
+      return one(L`${P(e.p)} settled a new island: +${e.vp} points`, { big: true });
     /* Cities & Knights */
     case 'eventDie':
-      return {
-        text:
-          e.face === 'ship'
-            ? 'Event die: the barbarian ship'
-            : `Event die: ${TRACK_LABEL[e.face].toLowerCase()} gate`,
-      };
+      return one(
+        e.face === 'ship'
+          ? L`Event die: the ${W('barbarian')} ship`
+          : L`Event die: ${TRACK_LABEL[e.face].toLowerCase()} gate`,
+      );
     case 'barbarians':
-      return {
-        text: e.at >= 7 ? 'The barbarians land!' : `The barbarians sail closer (${e.at} of 7)`,
-        big: e.at >= 7,
-      };
-    case 'attack':
-      return {
-        text:
-          e.strength > e.defense
-            ? `The barbarians (${e.strength}) beat the knights (${e.defense})${e.losers.length ? `: ${listNames(v, e.losers)} ${e.losers.length === 1 && e.losers[0] !== v.me ? 'loses' : 'lose'} a city` : ''}`
-            : `The knights (${e.defense}) drive off the barbarians (${e.strength})${e.defender != null ? `: ${who(e.defender)} ${e.defender === v.me ? 'are' : 'is'} Defender of Catan (+1 point)` : e.tied.length ? `: ${listNames(v, e.tied)} each draw a progress card` : ''}`,
-        big: true,
-        bad: e.strength > e.defense,
-      };
+      return one(
+        e.at >= 7 ? L`${W('The barbarians land!')}` : L`The ${W('barbarians')} sail closer (${e.at} of 7)`,
+        { big: e.at >= 7 },
+      );
+    case 'attack': {
+      const lost = e.losers.length === 1 && e.losers[0] !== v.me ? 'loses' : 'lose';
+      return one(
+        e.strength > e.defense
+          ? [
+              ...L`The ${W('barbarians')} (${e.strength}) beat the knights (${e.defense})`,
+              ...(e.losers.length ? L`: ${names(e.losers)} ${lost} a city` : []),
+            ]
+          : [
+              ...L`The knights (${e.defense}) drive off the ${W('barbarians')} (${e.strength})`,
+              ...(e.defender != null
+                ? L`: ${P(e.defender)} ${e.defender === v.me ? 'are' : 'is'} Defender of Catan (+1 point)`
+                : e.tied.length
+                  ? L`: ${names(e.tied)} each draw a progress card`
+                  : []),
+            ],
+        { big: true, bad: e.strength > e.defense },
+      );
+    }
     case 'cityLost':
-      return {
-        text: `${who(e.p)} lost a city to the barbarians: it’s a settlement now`,
+      return one(L`${P(e.p)} lost a city to the ${W('barbarians')}: it’s a settlement now`, {
         big: true,
         bad: true,
-      };
-    case 'draw':
-      return {
-        text: e.card
-          ? `${who(e.p)} drew ${PROGRESS_LABEL[e.card]}${e.card === 'printer' || e.card === 'constitution' ? ' (+1 point)' : ''}`
-          : `${who(e.p)} drew a ${TRACK_LABEL[e.track].toLowerCase()} card`,
-        big: e.card === 'printer' || e.card === 'constitution',
-      };
-    case 'commodities': {
-      const lines = Object.entries(e.gains).map(([p, g]) => `${who(Number(p))} got ${cardsText(g)}`);
-      const short = e.short?.length ? ` ${shortText(e.short, e.gains, who)}` : '';
-      return { text: (lines.length ? lines.join('. ') + '.' : '') + short };
+      });
+    case 'draw': {
+      const vp = e.card === 'printer' || e.card === 'constitution';
+      return one(
+        e.card
+          ? L`${P(e.p)} drew ${PROGRESS_LABEL[e.card]}${vp ? ' (+1 point)' : ''}`
+          : L`${P(e.p)} drew a ${TRACK_LABEL[e.track].toLowerCase()} card`,
+        { big: vp },
+      );
     }
+    case 'commodities':
+      return [
+        ...Object.entries(e.gains).map(([p, g]) => ({ parts: L`${P(Number(p))} got ${C(g)}` })),
+        ...shortLines(e.short ?? [], e.gains),
+      ];
     case 'improve':
-      return { text: `${who(e.p)} raised ${TRACK_LABEL[e.track].toLowerCase()} to level ${e.lvl}` };
-    case 'metropolis':
-      return {
-        text:
-          e.from != null
-            ? `${who(e.p)} took the ${TRACK_LABEL[e.track].toLowerCase()} metropolis from ${who(e.from)}`
-            : `${who(e.p)} built the ${TRACK_LABEL[e.track].toLowerCase()} metropolis`,
-        big: true,
-      };
+      return one(L`${P(e.p)} raised ${TRACK_LABEL[e.track].toLowerCase()} to level ${e.lvl}`);
+    case 'metropolis': {
+      const t = TRACK_LABEL[e.track].toLowerCase();
+      return one(
+        e.from != null
+          ? L`${P(e.p)} took the ${t} metropolis from ${P(e.from, 'obj')}`
+          : L`${P(e.p)} built the ${t} metropolis`,
+        { big: true },
+      );
+    }
     case 'wall':
-      return { text: `${who(e.p)} built a city wall${e.free ? ' (free)' : ''}` };
+      return one(L`${P(e.p)} built a city wall${e.free ? ' (free)' : ''}`);
     case 'knight':
-      return { text: `${who(e.p)} built a knight` };
+      return one(L`${P(e.p)} built a knight`);
     case 'promote':
-      return {
-        text: `${who(e.p)} promoted a knight to ${['', 'basic', 'strong', 'mighty'][e.lvl]}${e.free ? ' (free)' : ''}`,
-      };
+      return one(
+        L`${P(e.p)} promoted a knight to ${['', 'basic', 'strong', 'mighty'][e.lvl]!}${e.free ? ' (free)' : ''}`,
+      );
     case 'activate':
-      return { text: `${who(e.p)} activated a knight` };
+      return one(L`${P(e.p)} activated a knight`);
     case 'activateAll':
-      return { text: `${who(e.p)} activated ${e.n} knight${e.n === 1 ? '' : 's'}` };
+      return one(L`${P(e.p)} activated ${e.n} knight${e.n === 1 ? '' : 's'}`);
     case 'moveKnight':
-      return {
-        text:
-          e.displaced != null
-            ? `${who(e.p)}’s knight chased away ${who(e.displaced) === 'You' ? 'your' : `${who(e.displaced)}’s`} knight`
-            : `${who(e.p)} moved a knight`,
-      };
+      return one(
+        e.displaced != null
+          ? L`${P(e.p, 'poss')} knight chased away ${P(e.displaced, 'possMid')} knight`
+          : L`${P(e.p)} moved a knight`,
+      );
     case 'relocate':
-      return {
-        text:
-          e.to == null
-            ? `${who(e.p)}’s knight had nowhere to go and went home`
-            : `${who(e.p)} placed a knight`,
-      };
+      return one(
+        e.to == null
+          ? L`${P(e.p, 'poss')} knight had nowhere to go and went home`
+          : L`${P(e.p)} placed a knight`,
+      );
     case 'knightRemoved':
-      return { text: `${who(e.p)} lost a knight` };
+      return one(L`${P(e.p)} lost a knight`);
     case 'chase':
-      return { text: `${who(e.p)}’s knight chased the robber` };
+      return one(L`${P(e.p, 'poss')} knight chased the ${W('robber')}`);
     case 'progress':
-      return { text: `${who(e.p)} played ${PROGRESS_LABEL[e.card]}`, big: true };
+      return one(L`${P(e.p)} played ${PROGRESS_LABEL[e.card]}`, { big: true });
     case 'progressBack':
-      return { text: `${who(e.p)} put a ${TRACK_LABEL[e.track].toLowerCase()} card back` };
+      return one(L`${P(e.p)} put a ${TRACK_LABEL[e.track].toLowerCase()} card back`);
     case 'aqueduct':
-      return { text: `${who(e.p)} took 1 ${e.r} (aqueduct)` };
+      return one(L`${P(e.p)} took ${[{ c: e.r, n: 1 }]} (aqueduct)`);
     case 'give':
-      return {
-        text: e.cards
-          ? `${who(e.from)} gave ${cardsText(e.cards)} to ${who(e.to)}`
-          : `${who(e.from)} gave ${e.n} card${e.n === 1 ? '' : 's'} to ${who(e.to)}`,
-      };
+      return one(
+        e.cards
+          ? L`${P(e.from)} gave ${P(e.to, 'obj')} ${C(e.cards)}`
+          : L`${P(e.from)} gave ${P(e.to, 'obj')} ${[{ hidden: e.n }]}`,
+      );
     case 'spy':
-      return {
-        text: e.card
-          ? `${who(e.p)} took ${PROGRESS_LABEL[e.card]} from ${who(e.from)}`
-          : `${who(e.p)} took a ${TRACK_LABEL[e.track].toLowerCase()} card from ${who(e.from)}`,
-      };
+      return one(
+        e.card
+          ? L`${P(e.p)} took ${PROGRESS_LABEL[e.card]} from ${P(e.from, 'obj')}`
+          : L`${P(e.p)} took a ${TRACK_LABEL[e.track].toLowerCase()} card from ${P(e.from, 'obj')}`,
+      );
     case 'merchant':
-      return { text: `${who(e.p)} placed the merchant` };
+      return one(L`${P(e.p)} placed the merchant on ${tile(v, e.h)}`);
     case 'inventor':
-      return { text: `${who(e.p)} swapped two number tokens` };
+      return one(L`${P(e.p)} swapped two number tokens`);
     case 'gain':
-      return {
-        text: e.from
-          ? `${who(e.p)} took ${cardsText(e.cards)} from everyone`
-          : `${who(e.p)} took ${cardsText(e.cards)} from the bank`,
-      };
+      return one(
+        e.from
+          ? L`${P(e.p)} took ${C(e.cards)} from everyone`
+          : L`${P(e.p)} took ${C(e.cards)} from the bank`,
+      );
     case 'roadRemoved':
-      return {
-        text: `${who(e.by)} removed ${e.p === e.by ? 'their own' : who(e.p) === 'You' ? 'your' : `${who(e.p)}’s`} road`,
-      };
+      return one(
+        e.p === e.by ? L`${P(e.by)} removed their own road` : L`${P(e.by)} removed ${P(e.p, 'possMid')} road`,
+      );
     case 'owe':
-      return null;
+      return [];
     case 'askBack':
-      return { text: `${who(e.p)} asked for the dice back`, big: true };
+      return one(L`${P(e.p)} asked for the dice back`, { big: true });
     case 'handBack':
-      return {
-        text: `${who(e.p)} handed the dice back to ${who(e.to) === 'You' ? 'you' : who(e.to)}`,
-        big: true,
-      };
+      return one(L`${P(e.p)} handed the dice back to ${P(e.to, 'obj')}`, { big: true });
     case 'refuseBack':
-      return { text: `${who(e.p)} kept the dice` };
+      return one(L`${P(e.p)} kept the dice`);
     case 'askUndo':
-      return { text: `${who(e.p)} asked to undo their last move` };
+      return one(L`${P(e.p)} asked to undo their last move`);
     case 'answerUndo':
-      return { text: e.yes ? `${who(e.p)} agreed to the undo` : `${who(e.p)} said no to the undo` };
+      return one(e.yes ? L`${P(e.p)} agreed to the undo` : L`${P(e.p)} said no to the undo`);
     case 'cancelUndo':
-      return { text: `${who(e.p)} withdrew the undo request` };
+      return one(L`${P(e.p)} withdrew the undo request`);
     case 'undo':
-      return { text: `${who(e.p)}’s last move was undone`, big: true };
+      return one(L`${P(e.p, 'poss')} last move was undone`, { big: true });
     case 'rule':
-      return { text: `${who(e.p)} ${ruleText(e.rule, e.value)}`, big: true };
+      return one(L`${P(e.p)} ${ruleText(e.rule, e.value)}`, { big: true });
     case 'askKeep':
-      return { text: `${who(e.p)} asked to keep playing, first to ${e.target} points` };
+      return one(L`${P(e.p)} asked to keep playing, first to ${e.target} points`);
     case 'answerKeep':
-      return { text: e.yes ? `${who(e.p)} wants to keep playing` : `${who(e.p)} would rather stop` };
+      return one(e.yes ? L`${P(e.p)} wants to keep playing` : L`${P(e.p)} would rather stop`);
     case 'cancelKeep':
-      return { text: `${who(e.p)} withdrew the request to keep playing` };
+      return one(L`${P(e.p)} withdrew the request to keep playing`);
     case 'keepPlaying':
-      return { text: `Keep playing! First to ${e.target} points wins in overtime`, big: true };
+      return one(L`Keep playing! First to ${e.target} points wins in overtime`, { big: true });
   }
 }
 
@@ -279,20 +391,18 @@ export function eventText(
  * SPEC 8.1: a limited bank that couldn't pay a roll. Nobody gets that card, unless only one
  * player was owed it: they get what was left.
  */
-function shortText(
-  cards: readonly string[],
-  gains: Record<number, Partial<Record<string, number>>>,
-  who: (p: number) => string,
-): string {
-  return cards
-    .map((c) => {
-      const name = c[0]!.toUpperCase() + c.slice(1);
-      const got = Object.keys(gains).find((p) => gains[Number(p)]![c]);
-      return got != null
-        ? `The bank ran out of ${name}: ${who(Number(got))} got what was left.`
-        : `The bank is out of ${name}: nobody gets ${name} this roll.`;
-    })
-    .join(' ');
+function shortLines(cards: readonly Card[], gains: Record<number, Partial<Record<Card, number>>>): Line[] {
+  return cards.map((c) => {
+    const name = CARD_LABEL[c];
+    const got = Object.keys(gains).find((p) => gains[Number(p)]![c]);
+    return {
+      parts:
+        got != null
+          ? L`The bank ran out of ${name}: ${P(Number(got))} got what was left`
+          : L`The bank is out of ${name}: nobody gets ${name} this roll`,
+      bad: true,
+    };
+  });
 }
 
 /** Names for game rules, as switches and in the log. */

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   COMS, COST, DEV_PLAY, KEEP_MAX, KNIGHT_COST, SHIP_COST, WALL_COST, cardKinds, cardWarning, goldDue, handLimit, has,
-  keepMinTarget, legalActions,
+  isLogNote, keepMinTarget, legalActions,
   piecesLeft, rateFor, RES, stateFromView, vpBreakdown, type Action, type Card, type DevPlayable, type GameStats, type PlayerView, type Progress, type Seat, type VPPart,
 } from '@settlers/engine'; // prettier-ignore
 import type { DiceInfo, LogItem, RoomInfo } from '@settlers/server/protocol';
@@ -24,7 +24,8 @@ import {
   Chips, ConfirmTwice, DiscardSheet, GoldSheet, MenuSheet, MonoSheet, PieceSheet, PlentySheet, TradeSheet,
   VictimSheet,
 } from './Sheets'; // prettier-ignore
-import { eventText, listNames, nameOf, routeName } from './text';
+import { listNames, nameOf, routeName } from './text';
+import { Log } from './log';
 import {
   BOARD_OWES, BarbarianBox, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
   myOwe, owePrompt, paramOf,
@@ -959,7 +960,7 @@ export function Game({
   useEffect(
     () =>
       client.onFresh(({ items, after }) => {
-        const evs = items.flatMap((it) => (it.k === 'ev' ? [it.e] : []));
+        const evs = items.flatMap((it) => (it.k === 'ev' && !isLogNote(it.e) ? [it.e] : []));
         const attack = evs.find((e): e is Raid['attack'] => e.k === 'attack');
         const lost = evs.filter((e): e is Raid['lost'][number] => e.k === 'cityLost');
         if (attack) {
@@ -2219,50 +2220,6 @@ function Tray(props: {
           ))}
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = box.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [log.length]);
-  return (
-    <div className="log" ref={box} data-testid="log">
-      {log.map((it, i) => {
-        if (it.k === 'chat')
-          return (
-            <div
-              key={`c${it.id}`}
-              className={`e chat${it.cpu ? ' cpu' : ''}`}
-              data-cpu={it.cpu ? 1 : undefined}
-            >
-              <b>{it.nick}</b>
-              {it.cpu ? <span className="cputag">CPU</span> : null}: {it.text}
-            </div>
-          );
-        if (it.k === 'sys')
-          return (
-            <div key={`c${it.id}`} className="e big">
-              {it.text}
-            </div>
-          );
-        const t = eventText(v, it.e);
-        if (!t) return null;
-        if (t.sep)
-          return (
-            <div key={i} className="sep">
-              {t.text}
-            </div>
-          );
-        return (
-          <div key={i} className={`e${t.big ? ' big' : ''}${t.bad ? ' bad' : ''}`}>
-            {t.text}
-          </div>
-        );
-      })}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   COM_OF,
   RES,
   geometryFor,
+  isLogNote,
   isResource,
   type Card as CardKind,
   type Cards,
@@ -90,7 +91,7 @@ export function Flights() {
         requestAnimationFrame(() => {
           let delay = 0;
           for (const it of items) {
-            if (it.k !== 'ev') continue;
+            if (it.k !== 'ev' || isLogNote(it.e)) continue;
             for (const f of flightsFor(it.e, after)) {
               if (!f.from || !f.to) continue;
               fly(layer.current!, f.from, f.to, f.card, delay);

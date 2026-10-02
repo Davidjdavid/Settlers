@@ -14,7 +14,7 @@ import {
   COLORS, type CpuMemo, StatsFold, cpuChat, type CpuLevel, type GameStats, cpuObserve, cloneJson, type CpuBrain,
   type CpuOptions,
   type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView, type MapData,
-  type GenRules, type EditOp, OUR_RULES, scenarioMap,
+  type GenRules, type EditOp, OUR_RULES, scenarioMap, isLogNote, logNotes, type LogNote,
 } from '@settlers/engine'; // prettier-ignore
 import { History, modeOf } from './history';
 import { MapLibrary } from './maps';
@@ -67,7 +67,7 @@ interface LiveGame {
   /** Client action ids already applied, so resends are harmless. */
   clientIds: Set<string>;
   /** Every event so far, for the log. */
-  events: { seq: number; at: number; e: GameEvent }[];
+  events: LogEntry[];
   /** Stats kept move by move (SPEC 5.6); null if the game couldn't be replayed from the start. */
   fold: StatsFold | null;
 }
@@ -135,16 +135,33 @@ function cleanText(s: string): string {
     .slice(0, 240);
 }
 
-/** Rebuild a game from its seed and action log, checking it matches what was saved. */
+/** A game log entry: an event, or a note worked out from the state after its move. */
+type LogEntry = { seq: number; at: number; e: GameEvent | LogNote };
+
+/** A move's log entries: its events, then the notes about them (SPEC 8.10). */
+const entriesOf = (seq: number, at: number, s: GameState, events: GameEvent[]): LogEntry[] =>
+  [...events, ...logNotes(s, events)].map((e) => ({ seq, at, e }));
+
+/**
+ * Rebuild a game from its seed and action log, checking it matches what was saved. `events` is
+ * the game's log, with notes worked out on the way (saved actions keep only their events).
+ */
 export function rebuildGame(
   store: Store,
   row: GameRow,
   log: (m: string) => void,
-): { state: GameState; actions: ActionRow[]; problems: string[]; fold: StatsFold | null } {
+): {
+  state: GameState;
+  actions: ActionRow[];
+  problems: string[];
+  fold: StatsFold | null;
+  events: LogEntry[];
+} {
   const actions = store.loadActions(row.id);
   const problems: string[] = [];
   let s = newGame(row.seed, row.players, row.config);
   let fold: StatsFold | null = new StatsFold(s);
+  let events: LogEntry[] = [];
   for (const a of actions) {
     const r = applyAction(s, a.seat, a.action);
     if (!r.ok) {
@@ -161,9 +178,15 @@ export function rebuildGame(
       log(`game ${row.id}: stats stopped at ${a.seq}: ${String(e)}`);
       fold = null;
     }
+    events.push(...entriesOf(a.seq, a.at, r.state, r.events));
+    if (events.length > LOG_EVENTS * 2) events = events.slice(-LOG_EVENTS);
     s = r.state;
   }
-  if (problems.length) fold = null;
+  if (problems.length) {
+    fold = null;
+    // Replay broke: the log is the saved events, without notes.
+    events = actions.flatMap((a) => a.events.map((e) => ({ seq: a.seq, at: a.at, e })));
+  }
   if (problems.length) {
     // The engine changed in a way that breaks replay. Fall back to the latest snapshot
     // and apply only the actions after it.
@@ -183,7 +206,7 @@ export function rebuildGame(
   }
   const bad = checkInvariants(s);
   if (bad.length) problems.push(...bad.map((b) => `invariant: ${b}`));
-  return { state: s, actions, problems, fold };
+  return { state: s, actions, problems, fold, events: events.slice(-LOG_EVENTS) };
 }
 
 export class Rooms {
@@ -247,15 +270,13 @@ export class Rooms {
       if (r.gameId) {
         const row = this.store.loadGame(r.gameId);
         if (row) {
-          const { state, actions, problems, fold } = rebuildGame(this.store, row, this.log);
+          const { state, actions, problems, fold, events } = rebuildGame(this.store, row, this.log);
           if (problems.length) this.log(`room ${r.code} game ${row.id}: ${problems.join('; ')}`);
           room.game = {
             row,
             state,
             clientIds: new Set(actions.map((a) => a.clientId)),
-            events: actions
-              .flatMap((a) => a.events.map((e) => ({ seq: a.seq, at: a.at, e })))
-              .slice(-LOG_EVENTS),
+            events,
             fold,
           };
         }
@@ -596,7 +617,7 @@ export class Rooms {
     if (!row || row.endedAt != null) return conn.send({ t: 'error', text: 'That game isn’t saved any more' });
     for (const room of this.rooms.values())
       if (room.game?.row.id === gameId) return this.attach(conn, room, null);
-    const { state, actions, problems, fold } = rebuildGame(this.store, row, this.log);
+    const { state, actions, problems, fold, events } = rebuildGame(this.store, row, this.log);
     if (problems.length) this.log(`resume ${row.id}: ${problems.join('; ')}`);
     const links = new Map(this.store.gamePlayers(row.id).map((g) => [g.pid, g]));
     const code = this.newCode();
@@ -618,7 +639,7 @@ export class Rooms {
         row,
         state,
         clientIds: new Set(actions.map((a) => a.clientId)),
-        events: actions.flatMap((a) => a.events.map((e) => ({ seq: a.seq, at: a.at, e }))).slice(-LOG_EVENTS),
+        events,
         fold,
       },
       pendingReset: null,
@@ -1080,7 +1101,7 @@ export class Rooms {
     if (over && g.fold) this.store.saveStats(g.row.id, ENGINE_VERSION, r.state.seq, g.fold.st);
     // A rule changed mid-game also becomes the room's option for the next game.
     for (const e of r.events) if (e.k === 'rule') this.optionFromRule(room, e.rule, e.value);
-    const items = r.events.map((e) => ({ seq: r.state.seq, at, e }));
+    const items = entriesOf(r.state.seq, at, r.state, r.events);
     g.events.push(...items);
     if (g.events.length > LOG_EVENTS * 2) g.events = g.events.slice(-LOG_EVENTS);
     if (over) room.pendingReset = null;
@@ -1625,7 +1646,10 @@ export class Rooms {
   }
 
   private redact(items: LogItem[], seat: number | null): LogItem[] {
-    return items.map((it) => (it.k === 'ev' ? { ...it, e: eventsFor([it.e], seat)[0]! } : it));
+    // Notes are public (the board and the dice); events are redacted for this seat.
+    return items.map((it) =>
+      it.k === 'ev' && !isLogNote(it.e) ? { ...it, e: eventsFor([it.e], seat)[0]! } : it,
+    );
   }
 
   private fullLog(room: Room, conn: Conn): LogItem[] {

@@ -5,6 +5,7 @@ export * from './board';
 export * from './queries';
 export * from './rules';
 export * from './view';
+export * from './lognotes';
 export * from './legal';
 export * from './invariants';
 export * from './bot';

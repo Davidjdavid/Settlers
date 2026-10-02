@@ -180,3 +180,36 @@ describe('The bank setting (SPEC 8.1)', () => {
     expect(conns[0]!.last('error').text).toMatch(/before the game starts/);
   });
 });
+
+describe('Log notes (SPEC 8.10)', () => {
+  const notes = (msgs: ServerMsg[]) =>
+    msgs.flatMap((m) =>
+      m.t === 'update' || m.t === 'sync'
+        ? m.log.flatMap((it) => (it.k === 'ev' && it.e.k === 'blocked' ? [it] : []))
+        : [],
+    );
+
+  it('everyone sees what the robber blocked, and the notes come back after a restart', () => {
+    const { code, conns } = table(['Ann', 'Bob', 'Cat']);
+    send(conns[0]!, { t: 'start' });
+    play(code, conns, () => notes(conns[0]!.msgs).length >= 2);
+    const seen = notes(conns[0]!.msgs);
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+    // The same notes for every player: they're public.
+    for (const c of conns) expect(notes(c.msgs)).toEqual(seen);
+    const token = conns[1]!.last('seat').token;
+
+    rooms.stop();
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    open();
+    const back = new FakeConn();
+    send(back, { t: 'hello', room: code, token });
+    // Rebuilt from the saved moves: the same notes, in the same places in the log.
+    const log = back.last('sync').log;
+    expect(notes([back.last('sync')])).toEqual(seen);
+    const at = (l: typeof log, n: (typeof seen)[number]) =>
+      l.findIndex((it) => it.k === 'ev' && it.seq === n.seq && it.e.k === 'blocked');
+    for (const n of seen) expect(log[at(log, n) - 1]).toMatchObject({ k: 'ev', seq: n.seq });
+  }, 120000);
+});

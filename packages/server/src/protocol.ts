@@ -8,6 +8,7 @@ import type {
   Color,
   CpuLevel,
   GameEvent,
+  LogNote,
   GameStats,
   GenRules,
   MapData,
@@ -566,7 +567,8 @@ export interface RoomInfo {
 }
 
 export type LogItem =
-  | { k: 'ev'; seq: number; at: number; e: GameEvent }
+  /** A game event, or a note about one (the robber's blocked cards, SPEC 8.10). */
+  | { k: 'ev'; seq: number; at: number; e: GameEvent | LogNote }
   | { k: 'chat'; id: number; at: number; pid: string; nick: string; text: string; cpu?: true }
   | { k: 'sys'; id: number; at: number; text: string };
 
