@@ -585,7 +585,7 @@ This replaces bot.md D6 ("the CPU never talks").
 
 ## Milestone 6: Custom maps, the generator and the pre-game table
 
-**Status: proposed. Waiting for your OK.**
+**Status: agreed. Being implemented.**
 
 The full design is in **[docs/maps.md](docs/maps.md)** (map format, editor, generator and its rules, with "touching" diagrams) and **[docs/pregame.md](docs/pregame.md)** (pre-game table and turn order, with the Joe/Alex/Sam example).
 
@@ -598,7 +598,7 @@ The full design is in **[docs/maps.md](docs/maps.md)** (map format, editor, gene
 
 ## Milestone 7: Medium and Hard CPUs
 
-**Status: proposed. Waiting for your OK.**
+**Status: agreed. Being implemented (after Milestone 6).** Also: custom CPUs and a page explaining the difficulties (docs/bot-medium-hard.md §5).
 
 The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 
@@ -609,7 +609,7 @@ The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 
 ## Milestone 8: Bank, gates, warnings, trading, helpers, keep playing, the log
 
-**Status: proposed. Waiting for your OK (questions in 8.11).**
+**Status: agreed (your answers are in 8.11). Being implemented (after Milestone 7).**
 
 ### 8.1 Bank supply
 
@@ -811,14 +811,23 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 - Colour is never the only signal; the icons and words are always there.
 - Player names in table talk are coloured too.
 
-### 8.11 Questions
+### 8.11 Decisions
 
-1. **Q1 Old Knights games.** Games already saved keep unlimited commodities (they replay exactly as played). New games get the setting, default Limited. OK?
-2. **Q2 Hand-limit warning with "No discards before the first attack".** With that house rule on, a 7 makes nobody discard before the first attack, so I'd show no warning until then. OK?
-3. **Q3 Keep playing in the history.** Overtime wins are only counted in games that count for stats (finished, 2+ people). OK?
-4. **Q4 Smith with nothing to promote.** It warns you, then lets you play it anyway if you insist, wasting it? Or refuse to play it at all?
-5. **Q5 Bank button with no harbor.** It shows "Bank · 4:1" (or 3:1 with the house rule) when no card has a better rate. OK?
-6. **Q6 "Lumber/Wool/Grain".** Your examples call wood "Lumber", sheep "Wool" and wheat "Grain", but the game says Wood, Sheep and Wheat everywhere today. Switch everywhere to Lumber, Wool and Grain (the official card names), or keep what we have?
+1. **D1 Old Knights games** keep unlimited commodities and replay as played. New games default to Limited.
+2. **D2 Hand-limit warning with "No discards before the first attack":**
+   - No red warning until the first attack.
+   - Instead, a calm note: "11 cards: a 7 would cost you 5, but nobody discards until the barbarians have attacked".
+3. **D3 Overtime wins** count only in games that count for stats: finished, with 2 or more people.
+4. **D4 Cards that wouldn't do anything** warn before being played and say why ("Smith: none of your knights can be promoted right now"), then let you play them anyway. This applies to **every** card, not just the Smith. Examples:
+   - Monopoly when nobody holds that card;
+   - a Knight with no robber spot that matters;
+   - Road Building with no road or ship space;
+   - Year of Plenty with an empty bank.
+5. **D5 Bank button:**
+   - It shows "Bank · 4:1", or 3:1 with that house rule, when no card has a better rate.
+   - With the "3:1 bank trades for everyone" house rule on, the **3:1 harbors disappear from the board**, since they'd do nothing.
+   - 2:1 harbors stay.
+6. **D6 Card names:** keep Wood, Sheep and Wheat. **Cloth is renamed Linen** everywhere it's shown: hand, bank, log, stats, help. The rules engine's internal name doesn't change, so saved games still load.
 
 ### 8.12 Done means
 

@@ -1,6 +1,6 @@
 # The pre-game table and turn order
 
-**Status: proposed. Waiting for your OK (open questions at the end).**
+**Status: agreed (your answers are in section 4). Being implemented.**
 
 This covers Milestone 6's last two parts:
 
@@ -54,8 +54,8 @@ The room's lobby becomes the pre-game table. Above the seats is a big **board pr
 
 - Each person has a **Ready** button. CPUs are always ready.
 - Every seat shows a tick when ready.
-- **Changing anything clears everyone's Ready:** the board, the options, the seating or the first player. That way nobody starts on a board they didn't see.
-- **Start** is enabled when every person is Ready, and anyone seated can press it (Q1).
+- **Ready is only a signal (D1).** Anyone seated can press **Start** at any time; you sort out the rest by talking.
+- **Changing anything clears everyone's Ready:** the board, the options, the seating or the first player. That way the ticks always mean "happy with what's on screen now".
 - **When the game starts:**
   - The board locks.
   - The game saves its own copy of the board, plus the source, preset and seed (maps.md 3.2).
@@ -128,8 +128,10 @@ There are three ways:
    - The game starts with **exactly** that board: the board in the game equals the preview, tile by tile, number by number, harbor by harbor.
 3. **Full 3-player games:** one on a custom map, one on a generated map.
 
-## 4. Open questions
+## 4. Decisions
 
-1. **Q1 Start.** Must every person be Ready before Start (my suggestion), or can anyone start at any time, with Ready only as a signal?
-2. **Q2 Who can edit.** Anyone seated, as you wrote. Watchers can't. OK?
-3. **Q3 Seating for Seafarers scenarios.** Some scenarios fix where players start. The order still comes from the circle; only the board is fixed. OK?
+1. **D1 Start:** anyone seated can start whenever they like. Ready is just a signal.
+2. **D2 Who can change things:** anyone seated. Watchers can't touch anything.
+3. **D3 Scenarios with fixed starting islands:**
+   - The turn order comes from the circle by default.
+   - A table option switches that off, so the scenario's own order is used.

@@ -1,6 +1,6 @@
 # Maps: file format, editor and generator
 
-**Status: proposed. Waiting for your OK (open questions at the end).**
+**Status: agreed (your answers are in section 7). Being implemented.**
 
 This covers Milestone 6's first two parts:
 
@@ -330,11 +330,16 @@ Shown under every board: in the editor, the pre-game table and the end screen.
 4. **Editor actions have tests:** place, remove, swap, drag, lock, fill-the-rest (keeps locks), undo/redo after every kind of action, reshape, rename/duplicate/delete, import of a bad file.
 5. **A full 3-player game** on a custom map, and another on a generated map (both in browsers, Part C of pregame.md).
 
-## 7. Open questions
+## 7. Decisions
 
-1. **Q1 Show each part, or wait?** You asked to see each part working before the next starts. Shall I send screenshots and a short video-like walkthrough of each part and **carry on**, or **stop and wait** for your OK after each part? My suggestion: show and carry on, unless you say stop.
-2. **Q2 "No desert".** The standard set has 18 number tokens for 18 producing hexes. With no desert the 19th hex needs a token and a terrain. My suggestion: the desert becomes a random resource with a random extra token from 3–5 or 9–11, and the robber starts off the board until the first 7. Or would you rather "no desert" drop that hex (an 18-hex board)?
-3. **Q3 Bad-spot limit default.** I suggest **4**: no inland corner below 4 pips. On the standard board, corners on the desert are the usual offenders. Should a corner touching the desert count as a failing spot, or should desert corners be left out of this rule? My suggestion: leave them out, since every board has 3 of them and it's obvious they're weak.
-4. **Q4 Resource balance default.** **±25%** of fair share. On the standard board that means a 4-hex resource stays between 10 and 16 pips, and a 3-hex resource between 7 and 12.
-5. **Q5 Starting-fairness default.** A gap of **4 pips** or less between the best and worst player's two picks, with the greedy-draft model in 5.12.
-6. **Q6 Player counts.** Generated boards are for 3–4 players on the standard shape (and 2, which plays on it today). Bigger boards for 5–6 aren't in scope unless you want them.
+1. **D1 Showing each part:** I show each part working (screenshots and a short walkthrough) and carry on unless you say stop.
+2. **D2 No desert:**
+   - "None" is a desert setting (5.15), alongside center, edge and random.
+   - The 19th hex becomes a random resource with an extra token from 3–5 or 9–11.
+   - The robber starts off the board.
+3. **D3 Bad-spot limit:**
+   - Default 4.
+   - Corners on the desert are left out by default, with a switch to include them.
+4. **D4 Resource balance:** ±25% of fair share by default, with its own on/off switch.
+5. **D5 Starting fairness:** a gap of at most 4 pips by default, with its own on/off switch.
+6. **D6 Player counts:** generated boards for 2, 3 and 4 players.

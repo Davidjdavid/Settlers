@@ -1,6 +1,6 @@
 # CPU players: Medium and Hard
 
-**Status: proposed. Waiting for your OK (open questions at the end).**
+**Status: agreed (your answers are in section 6). Being implemented.**
 
 Today's CPU becomes **Easy** and stays exactly as it is ([bot.md](bot.md)). This adds **Medium** and **Hard**.
 
@@ -40,8 +40,10 @@ Today's CPU becomes **Easy** and stays exactly as it is ([bot.md](bot.md)). This
 - **Pace:** every CPU waits **1 to 3 seconds** per move, so people can follow along.
 - **Trading with people** (Medium and Hard; Easy never trades with people, as now):
   - It answers offers made to it: accept or decline.
-  - It makes **at most one offer per turn**, only fair ones.
-  - **"CPU trading"** is a room setting, on by default, in the lobby and in table rules. Off means CPUs neither offer nor accept; offers to them are declined.
+  - It makes **at most one offer per turn**, only fair ones, made to everyone like a person's offer.
+  - Two room settings, both set at the pre-game table before the game starts (D4):
+    - **"CPU trading"**, on by default. Off means CPUs neither offer nor accept; offers to them are declined.
+    - **"One CPU offer per turn"**, on by default. Off lets a CPU make more than one offer in a turn (still only fair ones, and never the same offer twice).
 - **Chatter:** as in SPEC 5.14. Medium only says true things; Hard can be cagey or bluff, still knowing only what its screen shows.
 
 ## 2. Medium: a normal, solid player
@@ -84,7 +86,8 @@ Each corner is scored by:
 
 ### 2.4 The robber and stealing
 
-- **Who:** the robber goes against **whoever is ahead** on public points. Ties go to the player with more cards.
+- **When it attacks (D1):** only when someone is **close to winning**, within 3 points of the target on public points. Until then Medium places the robber like Easy: on a hex nobody uses, else one only it uses, and never against a person.
+- **Who:** once someone is close, the robber goes against **whoever is ahead** on public points. Ties go to the player with more cards.
 - **Where:** on that player's best hex (most pips × their buildings there) that doesn't touch Medium's own buildings.
 - **The steal** is from that player.
 - **Seafarers:** the pirate goes after the leader's ship routes when that hurts them more.
@@ -150,7 +153,7 @@ Hard keeps an estimate of **how many turns** each way to the target would take, 
 
 - It searches the sequences of moves it can make: trades, builds, cards, in different orders.
 - It takes the one that leaves it best placed for its plan.
-- It's allowed about a second of thinking, inside the 1–3 second pace.
+- **Thinking time (D3):** small moves still take 1–3 seconds. For the big decisions (planning its turn, the robber, a card play) Hard may think up to about 5 seconds, to play stronger.
 
 ### 3.4 Timing and combinations
 
@@ -192,10 +195,48 @@ Hard keeps an estimate of **how many turns** each way to the target would take, 
 4. **Trading with people:** CPUs accept only trades that pass their rules, offer at most once per turn, and stop completely when "CPU trading" is off.
 5. **Pace:** every CPU move waits 1–3 seconds (tested on the fake clock).
 
-## 5. Open questions
+## 5. Custom CPUs and the CPU page
 
-1. **Q1 The robber against people.** Easy never robs a person (bot.md D1, your rule). Medium and Hard will rob whoever is ahead, people included, since you asked for that. OK?
-2. **Q2 Tournament targets.** Hard at least 40% against three Mediums, and Medium at least 60% against three Easys. Are those the right bar for "clearly beats"?
-3. **Q3 Hard's thinking time.** Up to about a second of search per move, inside the 1–3 second pace. OK, or should Hard take longer to be stronger?
-4. **Q4 CPU trading offers.** At most one offer per turn per CPU, made to everyone at once (as a person's offer is today). Or should a CPU offer to one chosen player?
-5. **Q5 Default difficulty.** When you add a CPU, should it default to Easy (as now), Medium, or the last one chosen in that room?
+### 5.1 The CPU page
+
+A page on the site (from the start screen and the CPU seat menu) explains in plain words how Easy, Medium, Hard and your custom CPUs play. It's the same differences as this document, shown side by side:
+
+- where they start;
+- what they build;
+- when and whom they rob;
+- how they trade;
+- how they use cards.
+
+### 5.2 Custom CPUs
+
+You can make your own CPU personalities, saved for everyone like maps and presets.
+
+**What a custom CPU is:** a name, plus a base level (Medium or Hard), with sliders:
+
+| Slider | Range |
+|---|---|
+| Robber | Gentle (Easy's rule) · Only near the end (Medium) · Always the leader |
+| Trading | Never · Fair only · Generous · Shrewd |
+| Building style | Cities first · Settlements and roads · Development/progress cards · Balanced |
+| Longest Road / Army / metropolis focus | Ignore · Normal · Chase hard |
+| Card timing | Play as soon as useful (Medium) · Hold for the best moment (Hard) |
+| Chatter | Off · Quiet · Chatty |
+
+**Rules for custom CPUs:**
+
+- A custom CPU can be picked for any CPU seat, like a difficulty.
+- It plays in all four modes.
+- It's held to the same no-cheating rule and tests as every CPU.
+- Its stats record is under its own name.
+
+## 6. Decisions
+
+1. **D1 The robber:**
+   - Easy never robs a person.
+   - Medium robs whoever is ahead, only once someone is within 3 points of winning; before that it robs like Easy.
+   - Hard always goes for the real leader, people included.
+2. **D2 Tournament targets:** Hard wins at least 40% against three Mediums, and Medium at least 60% against three Easys.
+3. **D3 Hard's thinking time:** up to about 5 seconds for big decisions, so it can play stronger; 1–3 seconds otherwise.
+4. **D4 CPU offers:** made to everyone. "One CPU offer per turn" and "CPU trading" are both switches set before the game starts.
+5. **D5 Default difficulty:** Easy.
+6. **D6 Custom CPUs and the CPU page:** section 5.
