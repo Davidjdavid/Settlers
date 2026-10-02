@@ -166,6 +166,20 @@ export const SoundsSchema = z.strictObject({
 });
 export type SoundPrefs = z.infer<typeof SoundsSchema>;
 
+/** SPEC 11: one box's place on the game screen (docked to an edge, floating, or hidden). */
+const PlaceSchema = z.strictObject({
+  dock: z.enum(['left', 'right', 'top', 'bottom', 'float']),
+  order: z.number().int().min(0).max(99),
+  hidden: z.boolean().optional(),
+  x: z.number().min(0).max(1).optional(),
+  y: z.number().min(0).max(1).optional(),
+  w: z.number().min(0).max(1).optional(),
+});
+const LayoutSchema = z.strictObject({
+  v: z.literal(1),
+  panels: z.partialRecord(z.enum(['players', 'talk', 'hand', 'barbarians']), PlaceSchema),
+});
+
 export const SettingsSchema = z.strictObject({
   confirmPlace: z.boolean().optional(),
   confirmPlaceTouch: z.boolean().optional(),
@@ -185,6 +199,14 @@ export const SettingsSchema = z.strictObject({
   /** SPEC 9.5: the dice statistics pinned to a corner of the board, full or as a strip. */
   dicePin: z
     .strictObject({ corner: z.enum(['tl', 'tr', 'bl', 'br']), small: z.boolean().optional() })
+    .optional(),
+  /** SPEC 11: your own screen layout, one per kind of screen (none: the standard screen). */
+  layout: z
+    .strictObject({
+      laptop: LayoutSchema.optional(),
+      tablet: LayoutSchema.optional(),
+      phone: LayoutSchema.optional(),
+    })
     .optional(),
 });
 export type PlayerSettings = z.infer<typeof SettingsSchema>;

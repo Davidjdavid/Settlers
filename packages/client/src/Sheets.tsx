@@ -498,6 +498,7 @@ export function MenuSheet({
   onSettings,
   onRules,
   onQuit,
+  onLayout,
 }: {
   v: PlayerView | null;
   code: string;
@@ -509,6 +510,8 @@ export function MenuSheet({
   onRules?: () => void;
   /** "Save and quit" (SPEC 5.7). */
   onQuit?: () => void;
+  /** "Edit layout" (SPEC 11). */
+  onLayout?: () => void;
 }) {
   const link = `${location.origin}/r/${code}`;
   const seated = v?.me != null;
@@ -538,6 +541,11 @@ export function MenuSheet({
         {onSettings ? (
           <button className="btn" onClick={onSettings} data-testid="menu-settings">
             My settings
+          </button>
+        ) : null}
+        {onLayout ? (
+          <button className="btn" onClick={onLayout} data-testid="menu-layout">
+            Edit layout
           </button>
         ) : null}
         {onRules && v ? (

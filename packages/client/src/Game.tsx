@@ -29,6 +29,8 @@ import {
 import { listNames, nameOf, routeName } from './text';
 import { Log } from './log';
 import { DicePin, useLayoutWidth } from './dicepin';
+import { deviceOf, resolve, withLayout, type Layout } from './layout';
+import { LayoutView } from './layoutview';
 import { handRisk } from './handrisk';
 import {
   BOARD_OWES, BarbarianBox, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
@@ -200,7 +202,8 @@ export function Game({
   const [metroOpts, setMetroOpts] = useState<Action[]>([]);
   const [hideOver, setHideOver] = useState(false);
   // A phone (SPEC 9.5): the pinned dice are a strip above the hand, not on the board.
-  const phone = useLayoutWidth() <= 560;
+  const layoutW = useLayoutWidth();
+  const phone = layoutW <= 560;
   // On a laptop the players list may scroll inside its box: keep whoever's turn it is in view.
   // Only that box scrolls, never the page.
   const playersBox = useRef<HTMLElement | null>(null);
@@ -401,6 +404,15 @@ export function Game({
 
   const doAct = (a: Action, after?: () => void) => void client.act(a).then((r) => r.ok && after?.());
   const my = room.mySettings;
+  // Your own layout (SPEC 11): none saved for this kind of screen means the standard screen.
+  const device = deviceOf(layoutW);
+  const [editing, setEditing] = useState(false);
+  const savedLay = my?.layout?.[device];
+  const lay = editing || savedLay ? resolve(savedLay, device) : null;
+  const saveLayout = (l: Layout | null) => {
+    const mine = client.state.room?.mySettings ?? {};
+    client.saveSettings({ ...mine, layout: withLayout(mine, device, l) });
+  };
   /** Place a piece: at once, or after Confirm if that setting is on for this kind of pointer. */
   const place = (a: Action, touch: boolean, after?: () => void) => {
     if (settingOn(my, touch ? 'confirmPlaceTouch' : 'confirmPlace'))
@@ -1053,8 +1065,346 @@ export function Game({
   const myPid = room.me;
   const disconnected = room.seats.map((x, i) => ({ ...x, i })).filter((x) => !x.connected);
 
+  const mainEl = (
+    <main className="main">
+      {pr ? (
+        <div className="banner" data-testid="reset-banner">
+          {pr.pid === myPid ? (
+            <>
+              <span>
+                {pr.kind === 'quit'
+                  ? 'You asked to save the game and stop for tonight. Everyone has been told.'
+                  : 'You asked to end this game. Everyone has been warned.'}
+              </span>
+              <span className="acts">
+                <button
+                  className={`btn small${pr.kind === 'quit' ? ' primary' : ' danger'}`}
+                  onClick={() => client.resetConfirm()}
+                  data-testid="reset-confirm"
+                >
+                  {pr.kind === 'quit' ? 'Yes, save and quit' : 'Yes, end the game'}
+                </button>
+                <button className="btn small" onClick={() => client.resetCancel()}>
+                  Never mind
+                </button>
+              </span>
+            </>
+          ) : (
+            <>
+              <span>
+                {pr.kind === 'quit'
+                  ? `${pr.nick} wants to save the game and stop for tonight.`
+                  : `${pr.nick} wants to end this game and start a new one.`}
+              </span>
+              {myPid ? (
+                <span className="acts">
+                  <button className="btn small primary" onClick={() => client.resetCancel()}>
+                    Keep playing
+                  </button>
+                </span>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
+      {answerUndo && v.undo ? (
+        <div className="banner" data-testid="undo-banner">
+          <span>{nameOf(v, v.undo.p)} asks to undo their last move.</span>
+          <span className="acts">
+            <button
+              className="btn small primary"
+              disabled={busy}
+              data-testid="undo-yes"
+              onClick={() => void client.act({ type: 'answerUndo', yes: true })}
+            >
+              OK, undo it
+            </button>
+            <button
+              className="btn small"
+              disabled={busy}
+              data-testid="undo-no"
+              onClick={() => void client.act({ type: 'answerUndo', yes: false })}
+            >
+              No
+            </button>
+          </span>
+        </div>
+      ) : null}
+      {canHandBack && v.back?.asked ? (
+        <div className="banner" data-testid="back-banner">
+          <span>{backFrom} asks for the dice back. Their turn would come back exactly as it was.</span>
+          <span className="acts">
+            <button
+              className="btn small primary"
+              disabled={busy}
+              data-testid="hand-back"
+              onClick={() => void client.act({ type: 'handBack' })}
+            >
+              Hand them back
+            </button>
+            {myActs.some((a) => a.type === 'refuseBack') ? (
+              <button
+                className="btn small"
+                disabled={busy}
+                data-testid="refuse-back"
+                onClick={() => void client.act({ type: 'refuseBack' })}
+              >
+                Keep them
+              </button>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
+      {me == null && v.phase === 'play' ? (
+        <div className="banner">
+          <span>
+            You’re watching.
+            {' Playing here? Pick your name to get your seat on this screen.'}
+          </span>
+          <RejoinForm room={room} />
+          <span className="acts">
+            {disconnected.length ? <span className="hint">Or take over a seat:</span> : null}
+            {disconnected.map((x) => (
+              <button
+                key={x.pid}
+                className="btn small"
+                onClick={() => setSheet({ k: 'claim', seat: x.i, nick: x.nick })}
+              >
+                {x.nick}
+              </button>
+            ))}
+          </span>
+        </div>
+      ) : null}
+      <div className="board-wrap">
+        <Board
+          view={v}
+          targets={targets}
+          myColor={me != null ? PCOL[v.players[me]!.color] : null}
+          onVert={onVert}
+          onEdge={onEdge}
+          onHex={onHex}
+          preview={previewAt}
+          pending={placing?.ghosts ?? smithGhosts}
+          flash={raid?.lost.map((l) => l.v)}
+        />
+        {/* Hidden while you still pick which city to lose: the prompt says so, and the board stays clear. */}
+        {raid && !(me != null && raid.attack.losers.includes(me) && !raid.lost.some((l) => l.p === me)) ? (
+          <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
+        ) : null}
+        {my?.dicePin && !phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} /> : null}
+        {settingOn(my, 'diceCorner') ? (
+          <RollDice
+            dice={v.dice}
+            {...(v.ck ? { event: v.ck.event } : {})}
+            canRoll={false}
+            onRoll={() => {}}
+            sound={false}
+            corner
+          />
+        ) : null}
+        {celebrating ? (
+          <Celebration
+            color={PCOL[v.players[v.winner!]!.color]}
+            text={`${v.winner === me ? 'You win' : `${nameOf(v, v.winner)} wins`}${v.keep?.on ? ' in overtime' : ''}!`}
+            onDone={() => setCelebrating(false)}
+          />
+        ) : v.phase === 'over' && !hideOver ? (
+          <div className="overlay endoverlay">
+            <GameOver v={v} stats={stats ?? null} onHide={() => setHideOver(true)} />
+          </div>
+        ) : null}
+      </div>
+      <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
+        <RollDice
+          dice={v.dice}
+          {...(v.ck ? { event: v.ck.event } : {})}
+          canRoll={canRoll}
+          onRoll={() => client.act({ type: 'roll' })}
+          sound={settingOn(my, 'gameSounds')}
+          rollRef={rollRef}
+        />
+        <div className="msg">
+          <strong>{pm.title}</strong>
+          {pm.sub ? <span>{pm.sub}</span> : null}
+        </div>
+        {pm.buttons?.length ? (
+          <div className="acts">
+            {pm.buttons.map((b) => (
+              <button
+                key={b.label}
+                className={`btn${b.primary ? ' primary' : ''}${b.kind ? ` actbtn ${b.kind}btn` : ''}`}
+                disabled={busy || b.off != null}
+                title={b.off}
+                onClick={b.on}
+                data-testid={b.testid}
+              >
+                {b.kind ? (
+                  <span
+                    className="acticon"
+                    aria-hidden="true"
+                    dangerouslySetInnerHTML={{ __html: ACT_ICON[b.kind] }}
+                  />
+                ) : null}
+                {b.label}
+                {b.warn ? (
+                  <span
+                    className="endwarn"
+                    title={b.warn}
+                    data-testid={`${b.testid}-warn`}
+                    aria-label={b.warn}
+                  >
+                    ⚠
+                  </span>
+                ) : null}
+                {b.badge ? (
+                  <span className="badge" data-testid={`${b.testid}-badge`}>
+                    {b.badge}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </main>
+  );
+  const handEl = (
+    <section className="dock-wrap" aria-label="Your cards and actions">
+      {my?.dicePin && phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} phone /> : null}
+      <Offers v={v} busy={busy} ask={(q, go) => ask('confirmTrade', q, go)} />
+      {me != null && v.hand ? (
+        <Tray
+          v={v}
+          mine={mine}
+          busy={busy}
+          mode={mode}
+          setMode={setMode}
+          canPlay={canPlay}
+          play={play}
+          canMove={acts.some((a) => a.type === 'moveShip')}
+          acts={acts}
+          onImprove={improve}
+          onPlayProgress={playProgress}
+        />
+      ) : null}
+    </section>
+  );
+  const barbEl = v.ck ? <BarbarianBox v={v} /> : null;
+  const playersEl = (
+    <section className="box players-box" aria-label="Players" ref={playersBox}>
+      <span className="eyebrow">
+        Players · first to <b data-testid="win-target">{v.winVP}</b> points
+      </span>
+      <div className="players">
+        {v.players.map((p, i) => (
+          <div
+            key={p.pid}
+            className={`player${i === v.turn && v.phase === 'play' ? ' turn' : ''}${connected(i) ? '' : ' away'}`}
+            data-seat={i}
+          >
+            <span className="pc">
+              <svg viewBox="-15 -15 30 30" aria-hidden="true">
+                <path
+                  d="M-10 9V-2L0-11 10-2V9Z"
+                  fill={PCOL[p.color]}
+                  stroke={PEDGE(p.color)}
+                  strokeWidth="2"
+                />
+              </svg>
+            </span>
+            <span className="nm">
+              <span>{p.nick}</span>
+              {i === me ? <span className="you">you</span> : null}
+              {p.cpu ? (
+                <span className="you" data-testid="cpu-tag">
+                  CPU · {room.seats.find((x) => x.pid === p.pid)?.levelName ?? 'Easy'}
+                </span>
+              ) : null}
+              {v.discard?.[i] != null ? <span className="tag wait">discarding</span> : null}
+              <span
+                className={`online${connected(i) ? '' : ' away'}`}
+                title={connected(i) ? 'Connected' : 'Disconnected'}
+              />
+            </span>
+            <Score v={v} s={s} p={i} always={settingOn(my, 'showBreakdown')} />
+            <PiecesLeft s={s} p={i} color={p.color} />
+            <span className="stats">
+              <HandCount v={v} s={s} p={i} n={p.resCount} testid={`cards-${i}`} />
+              {v.ck ? null : (
+                <>
+                  <span>
+                    <b>{p.devCount}</b> dev
+                  </span>
+                  <span>
+                    <b>{p.knights}</b> knights
+                  </span>
+                </>
+              )}
+              <span>
+                <b>{p.roadLen}</b> road
+              </span>
+            </span>
+            {v.ck ? <PlayerCK v={v} p={i} /> : null}
+            {(() => {
+              const metros = v.ck
+                ? (Object.entries(v.ck.metro) as [keyof typeof TRACK_COLOR, number | null][]).filter(
+                    ([, at]) => at != null && v.verts[at]?.[0] === i,
+                  )
+                : [];
+              const merchant = v.ck?.merchant?.p === i;
+              if (!(v.longest === i || v.largest === i || metros.length || merchant)) return null;
+              return (
+                <span className="badges">
+                  {v.longest === i ? <span className="badge">{routeName(v)}</span> : null}
+                  {v.largest === i ? <span className="badge">Largest Army</span> : null}
+                  {metros.map(([t]) => (
+                    <span key={t} className="badge" style={{ borderColor: TRACK_COLOR[t] }}>
+                      {TRACK_LABEL[t]} metropolis
+                    </span>
+                  ))}
+                  {merchant ? <span className="badge">Merchant</span> : null}
+                </span>
+              );
+            })()}
+          </div>
+        ))}
+      </div>
+      <div className="bankline" data-bank>
+        <span>Bank:</span>
+        {/* SPEC 8.1: every resource and commodity in play; ∞ when it never runs out. */}
+        {[...RES, ...(v.ck ? COMS : [])].map((r) => {
+          const unlimited =
+            v.rules.bank === 'unlimited' ||
+            (!RES.includes(r as (typeof RES)[number]) && v.rules.bank !== 'limited');
+          return (
+            <span key={r} title={CARD_LABEL[r]} data-testid={`bank-${r}`}>
+              <i
+                style={{
+                  display: 'inline-block',
+                  width: 9,
+                  height: 13,
+                  borderRadius: 2,
+                  background: CARD_COLOR[r],
+                }}
+              />{' '}
+              {unlimited ? '∞' : v.bank[r]}
+            </span>
+          );
+        })}
+        {v.ck ? null : <span>Dev deck {v.deckCount}</span>}
+      </div>
+    </section>
+  );
+  const talkEl = (
+    <section className="box talk" aria-label="Table talk">
+      <span className="eyebrow">Table talk</span>
+      <Log v={v} log={log} />
+      <ChatForm />
+    </section>
+  );
   return (
-    <div className="app">
+    <div className={`app${lay ? ' custom' : ''}${editing ? ' editing' : ''}`}>
       <header className="top">
         <div className="brand">
           <span dangerouslySetInnerHTML={{ __html: BRAND_SVG }} style={{ display: 'contents' }} />
@@ -1125,340 +1475,29 @@ export function Game({
         </button>
       </header>
 
-      <main className="main">
-        {pr ? (
-          <div className="banner" data-testid="reset-banner">
-            {pr.pid === myPid ? (
-              <>
-                <span>
-                  {pr.kind === 'quit'
-                    ? 'You asked to save the game and stop for tonight. Everyone has been told.'
-                    : 'You asked to end this game. Everyone has been warned.'}
-                </span>
-                <span className="acts">
-                  <button
-                    className={`btn small${pr.kind === 'quit' ? ' primary' : ' danger'}`}
-                    onClick={() => client.resetConfirm()}
-                    data-testid="reset-confirm"
-                  >
-                    {pr.kind === 'quit' ? 'Yes, save and quit' : 'Yes, end the game'}
-                  </button>
-                  <button className="btn small" onClick={() => client.resetCancel()}>
-                    Never mind
-                  </button>
-                </span>
-              </>
-            ) : (
-              <>
-                <span>
-                  {pr.kind === 'quit'
-                    ? `${pr.nick} wants to save the game and stop for tonight.`
-                    : `${pr.nick} wants to end this game and start a new one.`}
-                </span>
-                {myPid ? (
-                  <span className="acts">
-                    <button className="btn small primary" onClick={() => client.resetCancel()}>
-                      Keep playing
-                    </button>
-                  </span>
-                ) : null}
-              </>
-            )}
-          </div>
-        ) : null}
-        {answerUndo && v.undo ? (
-          <div className="banner" data-testid="undo-banner">
-            <span>{nameOf(v, v.undo.p)} asks to undo their last move.</span>
-            <span className="acts">
-              <button
-                className="btn small primary"
-                disabled={busy}
-                data-testid="undo-yes"
-                onClick={() => void client.act({ type: 'answerUndo', yes: true })}
-              >
-                OK, undo it
-              </button>
-              <button
-                className="btn small"
-                disabled={busy}
-                data-testid="undo-no"
-                onClick={() => void client.act({ type: 'answerUndo', yes: false })}
-              >
-                No
-              </button>
-            </span>
-          </div>
-        ) : null}
-        {canHandBack && v.back?.asked ? (
-          <div className="banner" data-testid="back-banner">
-            <span>{backFrom} asks for the dice back. Their turn would come back exactly as it was.</span>
-            <span className="acts">
-              <button
-                className="btn small primary"
-                disabled={busy}
-                data-testid="hand-back"
-                onClick={() => void client.act({ type: 'handBack' })}
-              >
-                Hand them back
-              </button>
-              {myActs.some((a) => a.type === 'refuseBack') ? (
-                <button
-                  className="btn small"
-                  disabled={busy}
-                  data-testid="refuse-back"
-                  onClick={() => void client.act({ type: 'refuseBack' })}
-                >
-                  Keep them
-                </button>
-              ) : null}
-            </span>
-          </div>
-        ) : null}
-        {me == null && v.phase === 'play' ? (
-          <div className="banner">
-            <span>
-              You’re watching.
-              {' Playing here? Pick your name to get your seat on this screen.'}
-            </span>
-            <RejoinForm room={room} />
-            <span className="acts">
-              {disconnected.length ? <span className="hint">Or take over a seat:</span> : null}
-              {disconnected.map((x) => (
-                <button
-                  key={x.pid}
-                  className="btn small"
-                  onClick={() => setSheet({ k: 'claim', seat: x.i, nick: x.nick })}
-                >
-                  {x.nick}
-                </button>
-              ))}
-            </span>
-          </div>
-        ) : null}
-        <div className="board-wrap">
-          <Board
-            view={v}
-            targets={targets}
-            myColor={me != null ? PCOL[v.players[me]!.color] : null}
-            onVert={onVert}
-            onEdge={onEdge}
-            onHex={onHex}
-            preview={previewAt}
-            pending={placing?.ghosts ?? smithGhosts}
-            flash={raid?.lost.map((l) => l.v)}
-          />
-          {/* Hidden while you still pick which city to lose: the prompt says so, and the board stays clear. */}
-          {raid && !(me != null && raid.attack.losers.includes(me) && !raid.lost.some((l) => l.p === me)) ? (
-            <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
-          ) : null}
-          {my?.dicePin && !phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} /> : null}
-          {settingOn(my, 'diceCorner') ? (
-            <RollDice
-              dice={v.dice}
-              {...(v.ck ? { event: v.ck.event } : {})}
-              canRoll={false}
-              onRoll={() => {}}
-              sound={false}
-              corner
-            />
-          ) : null}
-          {celebrating ? (
-            <Celebration
-              color={PCOL[v.players[v.winner!]!.color]}
-              text={`${v.winner === me ? 'You win' : `${nameOf(v, v.winner)} wins`}${v.keep?.on ? ' in overtime' : ''}!`}
-              onDone={() => setCelebrating(false)}
-            />
-          ) : v.phase === 'over' && !hideOver ? (
-            <div className="overlay endoverlay">
-              <GameOver v={v} stats={stats ?? null} onHide={() => setHideOver(true)} />
-            </div>
-          ) : null}
-        </div>
-        <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
-          <RollDice
-            dice={v.dice}
-            {...(v.ck ? { event: v.ck.event } : {})}
-            canRoll={canRoll}
-            onRoll={() => client.act({ type: 'roll' })}
-            sound={settingOn(my, 'gameSounds')}
-            rollRef={rollRef}
-          />
-          <div className="msg">
-            <strong>{pm.title}</strong>
-            {pm.sub ? <span>{pm.sub}</span> : null}
-          </div>
-          {pm.buttons?.length ? (
-            <div className="acts">
-              {pm.buttons.map((b) => (
-                <button
-                  key={b.label}
-                  className={`btn${b.primary ? ' primary' : ''}${b.kind ? ` actbtn ${b.kind}btn` : ''}`}
-                  disabled={busy || b.off != null}
-                  title={b.off}
-                  onClick={b.on}
-                  data-testid={b.testid}
-                >
-                  {b.kind ? (
-                    <span
-                      className="acticon"
-                      aria-hidden="true"
-                      dangerouslySetInnerHTML={{ __html: ACT_ICON[b.kind] }}
-                    />
-                  ) : null}
-                  {b.label}
-                  {b.warn ? (
-                    <span
-                      className="endwarn"
-                      title={b.warn}
-                      data-testid={`${b.testid}-warn`}
-                      aria-label={b.warn}
-                    >
-                      ⚠
-                    </span>
-                  ) : null}
-                  {b.badge ? (
-                    <span className="badge" data-testid={`${b.testid}-badge`}>
-                      {b.badge}
-                    </span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </main>
+      {lay ? (
+        <LayoutView
+          r={lay}
+          device={device}
+          editing={editing}
+          main={mainEl}
+          panels={{ players: playersEl, talk: talkEl, hand: handEl, barbarians: barbEl }}
+          onChange={saveLayout}
+          onDone={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          {mainEl}
 
-      <section className="dock-wrap" aria-label="Your cards and actions">
-        {my?.dicePin && phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} phone /> : null}
-        <Offers v={v} busy={busy} ask={(q, go) => ask('confirmTrade', q, go)} />
-        {me != null && v.hand ? (
-          <Tray
-            v={v}
-            mine={mine}
-            busy={busy}
-            mode={mode}
-            setMode={setMode}
-            canPlay={canPlay}
-            play={play}
-            canMove={acts.some((a) => a.type === 'moveShip')}
-            acts={acts}
-            onImprove={improve}
-            onPlayProgress={playProgress}
-          />
-        ) : null}
-      </section>
+          {handEl}
 
-      <aside className="side">
-        {v.ck ? <BarbarianBox v={v} /> : null}
-        <section className="box players-box" aria-label="Players" ref={playersBox}>
-          <span className="eyebrow">
-            Players · first to <b data-testid="win-target">{v.winVP}</b> points
-          </span>
-          <div className="players">
-            {v.players.map((p, i) => (
-              <div
-                key={p.pid}
-                className={`player${i === v.turn && v.phase === 'play' ? ' turn' : ''}${connected(i) ? '' : ' away'}`}
-                data-seat={i}
-              >
-                <span className="pc">
-                  <svg viewBox="-15 -15 30 30" aria-hidden="true">
-                    <path
-                      d="M-10 9V-2L0-11 10-2V9Z"
-                      fill={PCOL[p.color]}
-                      stroke={PEDGE(p.color)}
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </span>
-                <span className="nm">
-                  <span>{p.nick}</span>
-                  {i === me ? <span className="you">you</span> : null}
-                  {p.cpu ? (
-                    <span className="you" data-testid="cpu-tag">
-                      CPU · {room.seats.find((x) => x.pid === p.pid)?.levelName ?? 'Easy'}
-                    </span>
-                  ) : null}
-                  {v.discard?.[i] != null ? <span className="tag wait">discarding</span> : null}
-                  <span
-                    className={`online${connected(i) ? '' : ' away'}`}
-                    title={connected(i) ? 'Connected' : 'Disconnected'}
-                  />
-                </span>
-                <Score v={v} s={s} p={i} always={settingOn(my, 'showBreakdown')} />
-                <PiecesLeft s={s} p={i} color={p.color} />
-                <span className="stats">
-                  <HandCount v={v} s={s} p={i} n={p.resCount} testid={`cards-${i}`} />
-                  {v.ck ? null : (
-                    <>
-                      <span>
-                        <b>{p.devCount}</b> dev
-                      </span>
-                      <span>
-                        <b>{p.knights}</b> knights
-                      </span>
-                    </>
-                  )}
-                  <span>
-                    <b>{p.roadLen}</b> road
-                  </span>
-                </span>
-                {v.ck ? <PlayerCK v={v} p={i} /> : null}
-                {(() => {
-                  const metros = v.ck
-                    ? (Object.entries(v.ck.metro) as [keyof typeof TRACK_COLOR, number | null][]).filter(
-                        ([, at]) => at != null && v.verts[at]?.[0] === i,
-                      )
-                    : [];
-                  const merchant = v.ck?.merchant?.p === i;
-                  if (!(v.longest === i || v.largest === i || metros.length || merchant)) return null;
-                  return (
-                    <span className="badges">
-                      {v.longest === i ? <span className="badge">{routeName(v)}</span> : null}
-                      {v.largest === i ? <span className="badge">Largest Army</span> : null}
-                      {metros.map(([t]) => (
-                        <span key={t} className="badge" style={{ borderColor: TRACK_COLOR[t] }}>
-                          {TRACK_LABEL[t]} metropolis
-                        </span>
-                      ))}
-                      {merchant ? <span className="badge">Merchant</span> : null}
-                    </span>
-                  );
-                })()}
-              </div>
-            ))}
-          </div>
-          <div className="bankline" data-bank>
-            <span>Bank:</span>
-            {/* SPEC 8.1: every resource and commodity in play; ∞ when it never runs out. */}
-            {[...RES, ...(v.ck ? COMS : [])].map((r) => {
-              const unlimited =
-                v.rules.bank === 'unlimited' ||
-                (!RES.includes(r as (typeof RES)[number]) && v.rules.bank !== 'limited');
-              return (
-                <span key={r} title={CARD_LABEL[r]} data-testid={`bank-${r}`}>
-                  <i
-                    style={{
-                      display: 'inline-block',
-                      width: 9,
-                      height: 13,
-                      borderRadius: 2,
-                      background: CARD_COLOR[r],
-                    }}
-                  />{' '}
-                  {unlimited ? '∞' : v.bank[r]}
-                </span>
-              );
-            })}
-            {v.ck ? null : <span>Dev deck {v.deckCount}</span>}
-          </div>
-        </section>
-        <section className="box talk" aria-label="Table talk">
-          <span className="eyebrow">Table talk</span>
-          <Log v={v} log={log} />
-          <ChatForm />
-        </section>
-      </aside>
+          <aside className="side">
+            {barbEl}
+            {playersEl}
+            {talkEl}
+          </aside>
+        </>
+      )}
 
       {sheet?.k === 'trade' ? (
         <TradeSheet v={v} tab={sheet.tab ?? 'players'} onClose={() => setSheet(null)} />
@@ -1533,6 +1572,14 @@ export function Game({
           onSettings={me != null ? () => setSheet({ k: 'settings' }) : undefined}
           onRules={() => setSheet({ k: 'rules' })}
           onQuit={me != null && v.phase === 'play' ? () => setSheet({ k: 'quit' }) : undefined}
+          onLayout={
+            me != null
+              ? () => {
+                  setSheet(null);
+                  setEditing(true);
+                }
+              : undefined
+          }
         />
       ) : null}
       {sheet?.k === 'settings' ? (

@@ -1051,7 +1051,7 @@ The exact rules, including what happens when the bank or a deck runs out, get wr
 
 ## Milestone 11: Your own screen layout
 
-**Status: written down from your request of 2 October; to build after treasures (Milestone 10). The choices below are my defaults: change any you don't like.** You asked to move the boxes around, hide them, and pin them to the top, bottom, left, right or centre.
+**Status: built and tested (layout.test.ts, e2e/layout.spec.ts on a laptop, a tablet and a phone), with the defaults below; change any you don't like.** One addition: while editing, a hidden box's tab has a "Show" button to put it back where it was. You asked to move the boxes around, hide them, and pin them to the top, bottom, left, right or centre.
 
 ### 11.1 What you can change
 
