@@ -20,6 +20,7 @@ const SETTINGS: SettingKey[] = [
   'gameSounds',
   'browserNotify',
   'showBreakdown',
+  'diceCorner',
 ];
 
 function Switch(props: {

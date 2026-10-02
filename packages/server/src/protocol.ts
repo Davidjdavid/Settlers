@@ -138,6 +138,8 @@ export const SettingsSchema = z.strictObject({
   browserNotify: z.boolean().optional(),
   /** SPEC 5.8: show every score's breakdown all the time (off unless true). */
   showBreakdown: z.boolean().optional(),
+  /** SPEC 9.1: also show the dice in the board's top-right corner (off unless true). */
+  diceCorner: z.boolean().optional(),
 });
 export type PlayerSettings = z.infer<typeof SettingsSchema>;
 export type RoomOptions = z.infer<typeof OptionsSchema>;

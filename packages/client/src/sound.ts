@@ -5,7 +5,7 @@
  * the audio starts on the first tap.
  */
 
-export type SoundKind = 'turn' | 'dice' | 'build' | 'fanfare';
+export type SoundKind = 'turn' | 'dice' | 'build' | 'fanfare' | 'sad' | 'horn';
 
 let ctx: AudioContext | null = null;
 /** What has played, for the end-to-end test. */
@@ -77,6 +77,35 @@ export function play(kind: SoundKind) {
   else if (kind === 'build') tone(a, 330, t, 0.12, 0.12, 'triangle');
   else if (kind === 'fanfare')
     [523, 659, 784, 1047].forEach((f, i) => tone(a, f, t + i * 0.14, i === 3 ? 0.7 : 0.2, 0.14, 'triangle'));
+  else if (kind === 'sad')
+    // "Wah wah wah waaah": four falling notes, the last one long and wobbling down.
+    [392, 370, 349, 330].forEach((f, i) =>
+      slide(a, f, i === 3 ? f * 0.88 : f * 0.97, t + i * 0.42, i === 3 ? 1.1 : 0.36),
+    );
+  else if (kind === 'horn') {
+    // The barbarians' horn: two low blasts.
+    slide(a, 147, 140, t, 0.5, 0.12);
+    slide(a, 147, 131, t + 0.6, 0.9, 0.12);
+  }
+}
+
+/** A brassy note that bends from one pitch to another. */
+function slide(a: AudioContext, from: number, to: number, at: number, len: number, gain = 0.1) {
+  const o = a.createOscillator();
+  const f = a.createBiquadFilter();
+  const g = a.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(from, at);
+  o.frequency.linearRampToValueAtTime(to, at + len);
+  f.type = 'lowpass';
+  f.frequency.value = 1100;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(gain, at + 0.05);
+  g.gain.setValueAtTime(gain, at + len * 0.7);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+  o.connect(f).connect(g).connect(a.destination);
+  o.start(at);
+  o.stop(at + len + 0.05);
 }
 
 /** A browser notification while the tab is in the background (SPEC 5.9, opt-in). */

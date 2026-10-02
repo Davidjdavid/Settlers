@@ -15,6 +15,7 @@ export const SETTING_LABEL: Record<SettingKey, string> = {
   gameSounds: 'Other game sounds',
   browserNotify: 'Notify me when the tab is in the background',
   showBreakdown: 'Always show what scores are made of',
+  diceCorner: 'Also show the dice in the board’s top-right corner',
 };
 
 export const SETTING_HELP: Record<SettingKey, string> = {
@@ -36,6 +37,8 @@ export const SETTING_HELP: Record<SettingKey, string> = {
     'When it’s your move and this tab is in the background, your browser shows a notification. Switching this on asks your browser for permission. Off by default.',
   showBreakdown:
     'Every player’s score shows what it’s made of all the time, for example “5 = 3 settlements (3) + Longest Road (2)”. When off, tap or hover a score to see it.',
+  diceCorner:
+    'The last roll also shows in the top-right corner of the board, so you can see it while looking at the board: both number dice and, in Knights games, the event die. Off by default.',
 };
 
 export const RULE_HELP: Record<RuleKey, string> = {
@@ -77,4 +80,4 @@ export const settingOn = (s: PlayerSettings | null | undefined, k: SettingKey) =
   OFF_BY_DEFAULT.includes(k) ? s?.[k] === true : s?.[k] !== false;
 
 /** Settings that are off unless switched on. */
-export const OFF_BY_DEFAULT: SettingKey[] = ['browserNotify', 'showBreakdown'];
+export const OFF_BY_DEFAULT: SettingKey[] = ['browserNotify', 'showBreakdown', 'diceCorner'];

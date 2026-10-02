@@ -373,6 +373,8 @@ export function Board(props: {
   preview?: (t: 'v' | 'e' | 'h', id: number) => Ghost[];
   /** Pieces waiting for Confirm. */
   pending?: Ghost[];
+  /** Corners to draw attention to (a city just lost to the barbarians, SPEC 9.2). */
+  flash?: number[];
 }) {
   const { view, targets } = props;
   const [hover, setHover] = useState<string | null>(null);
@@ -459,6 +461,12 @@ export function Board(props: {
     });
   }
   seen.current = now;
+  for (const v of props.flash ?? []) {
+    const V = g.verts[v]!;
+    parts.push(
+      `<circle class="flashring" data-flash="${v}" cx="${f1(V.x * K)}" cy="${f1(V.y * K)}" r="${0.42 * K}"/>`,
+    );
+  }
 
   if (targets.ghost != null && props.myColor)
     parts.push(ghostSVG(g, { kind: 'settlement', at: targets.ghost }, props.myColor, false));

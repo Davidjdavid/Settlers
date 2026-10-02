@@ -6,22 +6,33 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { dieSVG } from './art';
+import { dieSVG, eventDieSVG } from './art';
+import type { Track } from '@settlers/engine';
 import { client } from './net';
 import { play } from './sound';
 
 export const TUMBLE_MS = 500;
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 const face = () => 1 + Math.floor(Math.random() * 6);
+/** The event die's sides: three barbarian ships and a gate of each colour. */
+const EVENT_FACES = ['ship', 'ship', 'ship', 'science', 'trade', 'politics'] as const;
+const eventFace = () => EVENT_FACES[Math.floor(Math.random() * 6)]!;
+type EventFace = 'ship' | Track;
 
 export function RollDice({
   dice,
+  event,
   canRoll,
   onRoll,
   sound,
   rollRef,
+  corner,
 }: {
   dice: [number, number] | null;
+  /** Knights games: the event die's last face (null before the first roll); undefined otherwise. */
+  event?: EventFace | null;
+  /** The copy in the board's corner (SPEC 9.1): just for looking at. */
+  corner?: boolean;
   canRoll: boolean;
   onRoll: () => Promise<{ ok: boolean }> | void;
   /** Game sounds on (the dice sound plays for everyone, SPEC 5.9). */
@@ -30,6 +41,7 @@ export function RollDice({
   rollRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const [tumble, setTumble] = useState<[number, number] | null>(null);
+  const [tumbleEvent, setTumbleEvent] = useState<EventFace | null>(null);
   const [fade, setFade] = useState(false);
   const started = useRef(0);
   const mine = useRef(false);
@@ -41,13 +53,18 @@ export function RollDice({
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     setTumble(null);
+    setTumbleEvent(null);
   };
   const start = () => {
     started.current = Date.now();
     if (reduced()) return;
     if (timer.current) return;
     setTumble([face(), face()]);
-    timer.current = setInterval(() => setTumble([face(), face()]), 70);
+    setTumbleEvent(eventFace());
+    timer.current = setInterval(() => {
+      setTumble([face(), face()]);
+      setTumbleEvent(eventFace());
+    }, 70);
   };
 
   useEffect(
@@ -55,7 +72,7 @@ export function RollDice({
       client.onFresh(({ items }) => {
         if (!items.some((it) => it.k === 'ev' && it.e.k === 'roll')) return;
         if (!mine.current) {
-          if (soundRef.current) play('dice');
+          if (soundRef.current && !corner) play('dice');
           start();
         }
         mine.current = false;
@@ -90,10 +107,11 @@ export function RollDice({
   const shown = tumble ?? dice;
   return (
     <div
-      className={`dice rolldice${canRoll ? ' canroll' : ''}${tumble ? ' tumbling' : ''}${fade ? ' fade' : ''}`}
-      data-testid="dice"
+      className={`dice rolldice${canRoll ? ' canroll' : ''}${tumble ? ' tumbling' : ''}${fade ? ' fade' : ''}${corner ? ' cornerdice' : ''}`}
+      data-testid={corner ? 'corner-dice' : 'dice'}
       data-state={tumble ? 'tumbling' : 'still'}
       data-faces={dice ? dice.join(',') : ''}
+      data-event={event ?? undefined}
       {...(canRoll
         ? {
             role: 'button',
@@ -105,17 +123,16 @@ export function RollDice({
           }
         : { title: dice ? `Last roll: ${dice[0]} and ${dice[1]} (${dice[0] + dice[1]})` : '' })}
     >
-      {shown ? (
-        <span
-          dangerouslySetInnerHTML={{ __html: dieSVG(shown[0]) + dieSVG(shown[1]) }}
-          style={{ display: 'flex', gap: 6 }}
-        />
-      ) : (
-        <span
-          dangerouslySetInnerHTML={{ __html: dieSVG(1) + dieSVG(1) }}
-          style={{ display: 'flex', gap: 6, opacity: 0.35 }}
-        />
-      )}
+      {/* Both number dice, then the event die in Knights games (SPEC 9.1). */}
+      <span
+        dangerouslySetInnerHTML={{
+          __html:
+            dieSVG(shown ? shown[0] : 1) +
+            dieSVG(shown ? shown[1] : 1) +
+            (event !== undefined ? eventDieSVG(tumble ? tumbleEvent : event) : ''),
+        }}
+        style={{ display: 'flex', gap: 6, opacity: shown ? 1 : 0.35 }}
+      />
       {!tumble && dice ? <span className="sum">{dice[0] + dice[1]}</span> : null}
     </div>
   );

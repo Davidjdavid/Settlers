@@ -6,7 +6,8 @@ import {
   type Seat, type Track,
 } from '@settlers/engine'; // prettier-ignore
 import {
-  CARD_COLOR, CARD_LABEL, PCOL, PROGRESS_HELP, PROGRESS_LABEL, TRACK_ABILITY, TRACK_COLOR, TRACK_LABEL, dieSVG,
+  CARD_COLOR, CARD_LABEL, PCOL, PROGRESS_HELP, PROGRESS_LABEL, TRACK_ABILITY, TRACK_COLOR, TRACK_LABEL, TRACK_ORDER,
+  dieSVG,
 } from './art'; // prettier-ignore
 import { client } from './net';
 import { CountSheet, Icon, Sheet, kindsOf } from './Sheets';
@@ -107,7 +108,7 @@ export function BarbarianBox({ v }: { v: PlayerView }) {
         {waiting ? <span>Event die starts in round {delay + 1}</span> : null}
       </div>
       <div className="ckline decks">
-        {TRACKS.map((t) => (
+        {TRACK_ORDER.map((t) => (
           <span key={t} style={{ ['--c' as string]: TRACK_COLOR[t] }} className="deck">
             {TRACK_LABEL[t]} {ck.decks[t]}
           </span>
@@ -152,7 +153,7 @@ export function PlayerCK({ v, p }: { v: PlayerView; p: Seat }) {
       <span title="Active knight strength / knights">
         <b>{active}</b>/{knights.length} knights
       </span>
-      {TRACKS.map((t) => (
+      {TRACK_ORDER.map((t) => (
         <span
           key={t}
           className="lvl"
@@ -163,7 +164,7 @@ export function PlayerCK({ v, p }: { v: PlayerView; p: Seat }) {
         </span>
       ))}
       <span title="Progress cards by colour" className="pcols">
-        {TRACKS.flatMap((t) =>
+        {TRACK_ORDER.flatMap((t) =>
           Array.from({ length: col[t] }, (_, i) => (
             <i key={`${t}${i}`} style={{ background: TRACK_COLOR[t] }} data-pcol={t} />
           )),
@@ -189,9 +190,11 @@ export function ImproveRow({
 }) {
   const ck = v.ck!;
   const me = v.me!;
+  // Improvements need a city (SPEC 9.2: a blocked button says why).
+  const hasCity = v.verts.some((b) => b && b[0] === me && b[1] === 2);
   return (
     <div className="improve">
-      {TRACKS.map((t) => {
+      {TRACK_ORDER.map((t) => {
         const L = ck.lvl[me]![t];
         const opts = acts.filter((a) => a.type === 'improve' && a.track === t);
         const cost = Math.max(0, L + 1 - (ck.crane > 0 ? 1 : 0));
@@ -202,14 +205,20 @@ export function ImproveRow({
             style={{ ['--c' as string]: TRACK_COLOR[t] }}
             disabled={busy || !opts.length}
             data-testid={`improve-${t}`}
-            title={`Level 3: ${TRACK_ABILITY[t]}. Level 4 earns the metropolis.`}
+            title={
+              !hasCity && L < 5
+                ? 'You need a city to buy city improvements'
+                : `Level 3: ${TRACK_ABILITY[t]}. Level 4 earns the metropolis.`
+            }
             onClick={() => onImprove(t, opts)}
           >
             <span>
               {TRACK_LABEL[t]} <b>{L}</b>
               {L >= 3 ? ' ★' : ''}
             </span>
-            <span className="cost">{L >= 5 ? 'complete' : `next: ${cost} ${TRACK_COM[t]}`}</span>
+            <span className="cost" data-testid={`ibtn-why-${t}`}>
+              {L >= 5 ? 'complete' : !hasCity ? 'needs a city' : `next: ${cost} ${TRACK_COM[t]}`}
+            </span>
           </button>
         );
       })}

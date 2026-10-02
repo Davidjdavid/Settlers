@@ -118,6 +118,25 @@ export const TRACK_COLOR: Record<Track, string> = {
   politics: '#3b82f6',
   science: '#3fa34d',
 };
+/**
+ * The order tracks are shown in everywhere: the same as their commodities in your hand
+ * (book, linen, coin), SPEC 9.6. The rules engine keeps its own order, so saved games replay.
+ */
+export const TRACK_ORDER: readonly Track[] = ['science', 'trade', 'politics'];
+
+/** The event die (C&K): the barbarian ship, or a gate in a track's colour. */
+export function eventDieSVG(face: 'ship' | Track | null): string {
+  const bg = !face ? '#f4ecd6' : face === 'ship' ? '#1d3b52' : TRACK_COLOR[face];
+  const ink = face === 'ship' ? '#f4ecd6' : '#10181c';
+  const art = !face
+    ? ''
+    : face === 'ship'
+      ? `<path d="M-6 2h12l-2.5 3.5h-7z" fill="${ink}"/><path d="M-0.4 -6.5v8.2M-0.4 -6.5l5 6h-5z" fill="${ink}" stroke="${ink}" stroke-width=".8" stroke-linejoin="round"/>`
+      : `<path d="M-5.5 5.5v-7l2-2h7l2 2v7h-3.5v-4a2 2 0 0 0-4 0v4z" fill="none" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  const label = !face ? '' : face === 'ship' ? 'Barbarian ship' : `${TRACK_LABEL[face]} gate`;
+  return `<svg class="die eventdie" viewBox="-10 -10 20 20" role="img" aria-label="${label}" data-event="${face ?? ''}"><title>${label}</title><rect x="-9" y="-9" width="18" height="18" rx="4" fill="${bg}" stroke="#0a1b23" stroke-width="1"/>${art}</svg>`;
+}
+
 export const TRACK_LABEL: Record<Track, string> = {
   trade: 'Trade',
   politics: 'Politics',

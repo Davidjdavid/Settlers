@@ -36,7 +36,7 @@ export const routeName = (v: PlayerView) =>
 export function eventText(
   v: PlayerView,
   e: GameEvent,
-): { text: string; big?: boolean; sep?: boolean } | null {
+): { text: string; big?: boolean; sep?: boolean; bad?: boolean } | null {
   const who = (p: Seat | null) => nameOf(v, p);
   switch (e.k) {
     case 'start':
@@ -146,9 +146,14 @@ export function eventText(
             ? `The barbarians (${e.strength}) beat the knights (${e.defense})${e.losers.length ? `: ${listNames(v, e.losers)} ${e.losers.length === 1 && e.losers[0] !== v.me ? 'loses' : 'lose'} a city` : ''}`
             : `The knights (${e.defense}) drive off the barbarians (${e.strength})${e.defender != null ? `: ${who(e.defender)} ${e.defender === v.me ? 'are' : 'is'} Defender of Catan (+1 point)` : e.tied.length ? `: ${listNames(v, e.tied)} each draw a progress card` : ''}`,
         big: true,
+        bad: e.strength > e.defense,
       };
     case 'cityLost':
-      return { text: `${who(e.p)} lost a city to the barbarians` };
+      return {
+        text: `${who(e.p)} lost a city to the barbarians: it’s a settlement now`,
+        big: true,
+        bad: true,
+      };
     case 'draw':
       return {
         text: e.card

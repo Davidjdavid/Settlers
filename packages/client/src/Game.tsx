@@ -14,6 +14,7 @@ import { Board, NO_TARGETS, type Ghost, type Targets } from './Board';
 import { settingOn } from './help';
 import { AskSheet, RulesSheet, SettingsSheet } from './settings';
 import { RollDice } from './dice';
+import { RaidNotice, type Raid } from './raid';
 import { DicePanel, GameStatsView } from './stats';
 import { play as playSound, notify } from './sound';
 import { Celebration } from './celebrate';
@@ -755,6 +756,28 @@ export function Game({
     if (settingOn(my, 'turnSound')) playSound('turn');
     if (settingOn(my, 'browserNotify')) notify(fresh[0]![1]);
   }, [needKey]);
+  // The barbarians' attack (SPEC 9.2): a notice everyone sees, the sad tune for whoever lost a
+  // city and the horn for everyone else. A city chosen later (from several) joins the notice.
+  const [raid, setRaid] = useState<Raid | null>(null);
+  const lastAttack = useRef<Raid['attack'] | null>(null);
+  useEffect(
+    () =>
+      client.onFresh(({ items, after }) => {
+        const evs = items.flatMap((it) => (it.k === 'ev' ? [it.e] : []));
+        const attack = evs.find((e): e is Raid['attack'] => e.k === 'attack');
+        const lost = evs.filter((e): e is Raid['lost'][number] => e.k === 'cityLost');
+        if (attack) {
+          lastAttack.current = attack;
+          setRaid({ attack, lost });
+          if (settingOn(client.state.room?.mySettings, 'gameSounds'))
+            playSound(after?.me != null && attack.losers.includes(after.me) ? 'sad' : 'horn');
+        } else if (lost.length && lastAttack.current) {
+          const at = lastAttack.current;
+          setRaid((r) => ({ attack: at, lost: [...(r?.lost ?? []), ...lost] }));
+        }
+      }),
+    [],
+  );
   // Building sounds for everyone (game sounds switch).
   useEffect(
     () =>
@@ -969,7 +992,22 @@ export function Game({
             onHex={onHex}
             preview={previewAt}
             pending={placing?.ghosts}
+            flash={raid?.lost.map((l) => l.v)}
           />
+          {/* Hidden while you still pick which city to lose: the prompt says so, and the board stays clear. */}
+          {raid && !(me != null && raid.attack.losers.includes(me) && !raid.lost.some((l) => l.p === me)) ? (
+            <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
+          ) : null}
+          {settingOn(my, 'diceCorner') ? (
+            <RollDice
+              dice={v.dice}
+              {...(v.ck ? { event: v.ck.event } : {})}
+              canRoll={false}
+              onRoll={() => {}}
+              sound={false}
+              corner
+            />
+          ) : null}
           {celebrating ? (
             <Celebration
               color={PCOL[v.players[v.winner!]!.color]}
@@ -985,6 +1023,7 @@ export function Game({
         <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
           <RollDice
             dice={v.dice}
+            {...(v.ck ? { event: v.ck.event } : {})}
             canRoll={canRoll}
             onRoll={() => client.act({ type: 'roll' })}
             sound={settingOn(my, 'gameSounds')}
@@ -1808,7 +1847,7 @@ function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
             </div>
           );
         return (
-          <div key={i} className={`e${t.big ? ' big' : ''}`}>
+          <div key={i} className={`e${t.big ? ' big' : ''}${t.bad ? ' bad' : ''}`}>
             {t.text}
           </div>
         );

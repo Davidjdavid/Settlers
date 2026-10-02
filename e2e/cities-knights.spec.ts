@@ -14,6 +14,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
 import { checkFrames, confirmPlace, playUntil, seatedTable, turnPage, view, type Table } from './table';
 
+const SHOTS = process.env.SHOTS;
+
+test.use({ actionTimeout: 30_000 });
+
 test('three players play a full Cities & Knights game', async ({ browser }) => {
   const server = new TestServer(await freePort(), 'ck passphrase');
   await server.start();
@@ -41,6 +45,8 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     await expect.poll(async () => (await view(a)).seq).toBe(1);
 
     const ui = { knight: 0, activate: 0, improve: 0, owed: 0 };
+    // SPEC 9.2: the barbarian notice seen per seat, and whether it named your own lost city.
+    const raids = { seen: 0, mine: new Set<number>() };
     const clickVert = async (p: Page) => {
       await p.locator('#board [data-v]').first().click();
       await confirmPlace(p);
@@ -50,6 +56,30 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const byHand = async (p: Page): Promise<boolean> => {
       const v = await view(p);
       if (!v || v.phase !== 'play' || v.me == null) return false;
+      // The barbarians attacked: read the notice, then close it.
+      // (A sheet you owe an answer to comes first; the notice waits under it.)
+      const raid = p.getByTestId('raid');
+      if (
+        (await raid.isVisible().catch(() => false)) &&
+        !(await p
+          .locator('.back')
+          .isVisible()
+          .catch(() => false))
+      ) {
+        raids.seen++;
+        const mine = p.getByTestId('raid-mine');
+        if (await mine.isVisible().catch(() => false)) {
+          await expect(mine).toContainText(/pillaged your (city|cities) on/);
+          raids.mine.add(v.me);
+          if (SHOTS) await p.screenshot({ path: `${SHOTS}/ck-raid-${v.me}.png` });
+          // Improvements without a city say why.
+          const hasCity = v.verts.some((x: [number, number] | null) => x && x[0] === v.me && x[1] === 2);
+          if (!hasCity) await expect(p.getByTestId('ibtn-why-science')).toHaveText('needs a city');
+        }
+        await p.getByTestId('raid-ok').click();
+        await expect(raid).toHaveCount(0);
+        return true;
+      }
       // Choices owed: answer them in their sheet (or on the board).
       if (v.stage === 'ck') {
         const owe = v.ck.owe.find((o: { p: number }) => o.p === v.me);
@@ -105,7 +135,29 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
       return false;
     };
 
+    // Ann shows the dice in the board's corner too (SPEC 9.1).
+    await a.getByRole('button', { name: 'Menu', exact: true }).click();
+    await a.getByTestId('menu-settings').click();
+    await a.getByTestId('setting-diceCorner').click();
+    await a.getByTestId('settings-close').click();
+
     await playUntil(t, async () => (await view(a)).turnN >= 20, { beforeStep: byHand });
+    // SPEC 9.1: both number dice, then the event die, on every screen (and in Ann's corner).
+    for (const p of t.pages) {
+      await expect(p.locator('[data-testid=dice] svg.die')).toHaveCount(3);
+      await expect(p.locator('[data-testid=dice] svg.eventdie')).toHaveAttribute(
+        'data-event',
+        /^(ship|science|trade|politics)$/,
+      );
+    }
+    await expect(a.locator('[data-testid=corner-dice] svg.die')).toHaveCount(3);
+    await expect(b.getByTestId('corner-dice')).toHaveCount(0);
+    if (SHOTS) await a.screenshot({ path: `${SHOTS}/ck-dice.png` });
+    // SPEC 9.6: tracks in the order of the commodity cards (book, linen, coin).
+    const order = await a
+      .locator('[data-testid^=improve-]')
+      .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+    expect(order).toEqual(['improve-science', 'improve-trade', 'improve-politics']);
     const bSeat = (await view(b)).me;
     await b.reload();
     await expect(b.locator('#board')).toBeVisible();
@@ -131,6 +183,18 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     );
     expect(ui.knight).toBeGreaterThan(0);
     expect(ui.improve).toBeGreaterThan(0);
+    // Everyone who lost a city to the barbarians was told so in their own notice.
+    const losers = new Set<number>();
+    t.frames.forEach((frames, i) => {
+      for (const f of frames)
+        for (const it of f.log ?? [])
+          if (it.k === 'ev' && it.e?.k === 'cityLost' && it.e.p === finals[i].me) losers.add(it.e.p);
+    });
+    console.log(
+      `barbarian notices seen ${raids.seen}; cities lost by seats ${[...losers]}; told ${[...raids.mine]}`,
+    );
+    if (ck.attacks) expect(raids.seen).toBeGreaterThan(0);
+    for (const p of losers) expect(raids.mine.has(p)).toBe(true);
     checkFrames(
       t,
       finals.map((f) => f.me),

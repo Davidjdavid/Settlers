@@ -2650,3 +2650,114 @@ button.vp {
   display: inline-flex;
   gap: 2px;
 }
+
+/* The dice in the board's corner (SPEC 9.1, a setting). */
+.rolldice.cornerdice {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  background: rgba(10, 27, 35, 0.78);
+  border: 1px solid var(--line-2);
+  pointer-events: none;
+}
+.rolldice.cornerdice .die {
+  width: 26px;
+  height: 26px;
+}
+.rolldice.tumbling .eventdie {
+  animation-duration: 0.16s;
+}
+
+/* The barbarians' attack (SPEC 9.2). */
+.overlay.raid {
+  z-index: 30;
+}
+.raidcard {
+  max-width: 420px;
+  margin: auto;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 2px solid var(--line-2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+.raid.lost .raidcard {
+  border-color: var(--alarm);
+}
+.raid.held .raidcard {
+  border-color: var(--go);
+}
+.raidcard h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 22px;
+}
+.raidcard p {
+  margin: 0;
+}
+.raidcard .mine {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 138, 117, 0.14);
+  color: var(--ink);
+  font-weight: 600;
+}
+.raidcard .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.raidship {
+  font-size: 34px;
+  animation: raidsail 1.2s ease-out both;
+}
+@keyframes raidsail {
+  from {
+    transform: translateX(-120px) rotate(-8deg);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.flashring {
+  fill: none;
+  stroke: var(--alarm);
+  stroke-width: 5;
+  animation: flashring 1s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes flashring {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .raidship,
+  .flashring {
+    animation: none;
+  }
+}
+.log .e.bad {
+  color: var(--alarm);
+}
+/* The notice never blocks the board: a loser may have to pick which city to lose. */
+.overlay.raid {
+  pointer-events: none;
+  background: none;
+  align-items: flex-start;
+  padding-top: 10px;
+}
+.overlay.raid .raidcard {
+  pointer-events: auto;
+}
