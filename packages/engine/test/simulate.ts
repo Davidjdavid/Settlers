@@ -5,7 +5,7 @@
  */
 
 import {
-  COST, DEV_TYPES, RES, RULE_KEYS, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
+  COST, DEV_TYPES, RES, RULE_KEYS, keepMinTarget, TRACKS, applyAction, cardKinds, ckDiscardDue, cloneJson, checkTransition, devCount, eventsFor, firstOwe, geo, goldDue, legalRoads, legalSettlements, legalShips, progressColors, vertFree, vertexOK, checkInvariants, legalActions, mustDiscard, newGame, nextFloat, nextInt, rateFor, seedRng, shuffle, total,
   PROGRESS, GAIN_SOURCES, LOSS_SOURCES, StatsFold, statsFromLog, sumCards, totalVP, type GameStats, piecesLeft, stateFromView, viewFor, vpBreakdown, waitingOn, type Action, type Cards, type GameConfig, type GameEvent, type GameState, type HouseRules, type MapData, type ModuleId, type NewPlayer, type PartialRes, type Progress, type RngState, type Seat,
 } from '../src/index'; // prettier-ignore
 
@@ -31,6 +31,8 @@ export interface SimOptions {
   /** Modules (default: the map's). */
   modules?: ModuleId[];
   winVP?: number;
+  /** The bank's supply (SPEC 8.1); absent as in games from before Milestone 8. */
+  bank?: GameConfig['bank'];
 }
 
 export function configFor(opts: SimOptions): Partial<GameConfig> {
@@ -39,6 +41,7 @@ export function configFor(opts: SimOptions): Partial<GameConfig> {
   if (opts.modules) c.modules = opts.modules;
   if (opts.winVP) c.winVP = opts.winVP;
   if (opts.houseRules && Object.keys(opts.houseRules).length) c.houseRules = opts.houseRules;
+  if (opts.bank) c.bank = opts.bank;
   return c;
 }
 
@@ -63,6 +66,7 @@ const WEIGHT: Record<Action['type'], number> = {
   dropProgress: 1, progress: 4, choose: 1,
   // Hand-backs and rule changes are made on purpose in chooseMove, not picked at random.
   askBack: 0, handBack: 0, refuseBack: 0, setRule: 0, askUndo: 0, answerUndo: 0, cancelUndo: 0,
+  askKeep: 0, answerKeep: 0, cancelKeep: 0,
 }; // prettier-ignore
 
 function randomCards(s: GameState, p: Seat, need: number, rng: RngState): Cards {
@@ -543,7 +547,13 @@ export function statsCheck(
   const rolls = live.dice.reduce((a, b) => a + b, 0);
   if (rolls !== live.rollLog.length) bad.push(`dice chart ${rolls} rolls, log ${live.rollLog.length}`);
   if (live.dice[0] || live.dice[1]) bad.push('dice chart has totals below 2');
-  if (live.winner !== s.winner) bad.push(`stats winner ${live.winner} != ${s.winner}`);
+  // After keep playing, the game's result is still its first win (SPEC 8.9); overtime wins are listed.
+  const first = s.keep?.on ? s.keep.first.p : s.winner;
+  if (live.winner !== first) bad.push(`stats winner ${live.winner} != ${first}`);
+  const overtime = (live.overtime ?? []).map((w) => w.p);
+  const want = s.keep?.on ? s.keep.wins.map((w) => w.p) : [];
+  if (JSON.stringify(overtime) !== JSON.stringify(want))
+    bad.push(`stats overtime wins ${JSON.stringify(overtime)} != ${JSON.stringify(want)}`);
   return bad;
 }
 
@@ -562,11 +572,51 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
   const live = new StatsFold(s);
   const fail = (msg: string) => errors.push(`seq ${s.seq} turn ${s.turnN}: ${msg}`);
 
+  // Keep playing after a win (SPEC 8.9): in about a quarter of games, once or twice. Decided by
+  // its own stream, so games that don't keep playing are unchanged.
+  const krng = seedRng(`keep:${seed}`);
+  const keepRounds = nextInt(krng, 4) === 0 ? 1 + nextInt(krng, 2) : 0;
+  let keeps = 0;
+  let keptAt = Infinity;
   let guard = 0;
-  while (s.phase === 'play' && s.turnN <= maxTurns && !errors.length) {
+  while (
+    (s.phase === 'play' || (s.phase === 'over' && keeps < keepRounds)) &&
+    s.turnN <= Math.min(maxTurns, keptAt + 300) &&
+    !errors.length
+  ) {
     if (++guard > maxTurns * 200) {
       fail('too many actions without finishing');
       break;
+    }
+    if (s.phase === 'over') {
+      // Someone asks to keep playing to a higher target; now and then one says no first.
+      keeps++;
+      const asker = nextInt(krng, nPlayers);
+      const ask: Action = { type: 'askKeep', target: keepMinTarget(s) + nextInt(krng, 3) };
+      if (!legalActions(s, asker).some((x) => x.type === 'askKeep')) fail('askKeep not offered after a win');
+      const no = nPlayers > 1 && nextInt(krng, 3) === 0;
+      const moves: [Seat, Action][] = [[asker, ask]];
+      if (no) moves.push([(asker + 1) % nPlayers, { type: 'answerKeep', yes: false }], [asker, ask]);
+      for (let q = 0; q < nPlayers; q++) if (q !== asker) moves.push([q, { type: 'answerKeep', yes: true }]);
+      for (const [q, ka] of moves) {
+        const r = applyAction(s, q, ka);
+        if (!r.ok) {
+          fail(`keep playing rejected for ${q}: ${JSON.stringify(ka)} -> ${r.error}`);
+          break;
+        }
+        const prev = s;
+        try {
+          live.step(s, q, ka, r.events, r.state);
+        } catch (e) {
+          fail(`stats: ${String(e)}`);
+        }
+        s = r.state;
+        log.push([q, ka]);
+        for (const b of checkInvariants(s, prev)) fail(`after ${JSON.stringify(ka)}: ${b}`);
+      }
+      if (s.phase !== 'play') fail('everyone agreed but the game did not resume');
+      keptAt = Math.min(keptAt, s.turnN);
+      continue;
     }
 
     if (chance(rng, 0.02)) {
@@ -670,7 +720,8 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
   }
 
   if (!errors.length) for (const b of viewScoreCheck(s)) fail(`at the end: ${b}`);
-  const finished = s.phase === 'over';
+  // A game that kept playing was already won; random bots may never reach a higher target.
+  const finished = s.phase === 'over' || !!s.keep?.on;
   if (!finished && !errors.length) fail(`game did not finish within ${maxTurns} turns`);
 
   // Determinism: replaying the log from the seed gives the identical state.

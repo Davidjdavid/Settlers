@@ -10,7 +10,7 @@
 import { mods } from './modules/api';
 import {
   COST, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, has, legalCities, legalRoads,
-  legalSettlements, legalSetupRoads, legalSetupVerts, rateFor, robberHexOK, robberVictims,
+  keepMinTarget, legalSettlements, legalSetupRoads, legalSetupVerts, rateFor, robberHexOK, robberVictims,
 } from './queries'; // prettier-ignore
 import { RES, type Action, type GameState, type Seat } from './types';
 
@@ -20,11 +20,14 @@ export function mustDiscard(s: GameState, seat: Seat): number {
 
 /** Requests between players (undo, the dice back, rule changes): never picked by a bot or CPU. */
 export const TABLE_TALK: readonly Action['type'][] = [
-  'askUndo', 'answerUndo', 'cancelUndo', 'askBack', 'handBack', 'refuseBack', 'setRule',
+  'askUndo', 'answerUndo', 'cancelUndo', 'askBack', 'handBack', 'refuseBack', 'setRule', 'askKeep', 'answerKeep',
+  'cancelKeep',
 ]; // prettier-ignore
 
 export function legalActions(s: GameState, p: Seat): Action[] {
-  if (s.phase !== 'play' || p < 0 || p >= s.players.length) return [];
+  if (p < 0 || p >= s.players.length) return [];
+  if (s.phase === 'over') return keepActions(s, p);
+  if (s.phase !== 'play') return [];
   const out: Action[] = [];
   const me = s.players[p]!;
   const myTurn = s.turn === p;
@@ -138,4 +141,16 @@ function pushDevPlays(s: GameState, p: Seat, out: Action[]) {
     }
   }
   if (me.dev.mono > 0) for (const r of RES) out.push({ type: 'playMono', r });
+}
+
+/** After a win (SPEC 8.9): ask to keep playing (to the smallest target allowed), or answer. */
+function keepActions(s: GameState, p: Seat): Action[] {
+  const ask = s.keep?.ask;
+  if (!ask) return s.winner != null ? [{ type: 'askKeep', target: keepMinTarget(s) + 1 }] : [];
+  if (ask.p === p) return [{ type: 'cancelKeep' }];
+  if (ask.ok.includes(p)) return [];
+  return [
+    { type: 'answerKeep', yes: true },
+    { type: 'answerKeep', yes: false },
+  ];
 }

@@ -71,11 +71,15 @@ export interface PlayerView {
     /** Starting-area hexes as q,r, or 'all'. */
     start: 'all' | [number, number][];
     newIslandVP: number;
+    /** The bank's supply (SPEC 8.1); absent in games from before Milestone 8. */
+    bank?: 'limited' | 'unlimited';
   };
   /** A move that can be undone: whose, whether they asked, who has agreed. */
   undo?: { p: Seat; asked: boolean; ok: Seat[] };
   /** A turn that can be handed back (who ended it, whether they asked). */
   back?: { from: Seat; asked: boolean; refused: boolean };
+  /** Keep playing after a win (SPEC 8.9): all public. */
+  keep?: GameState['keep'];
   /** Seafarers (public parts only). */
   sea?: SeaView;
   /** Cities & Knights (public parts, plus the viewer's own cards). */
@@ -144,10 +148,12 @@ export function viewFor(s: GameState, seat: Seat | null): PlayerView {
       mapName: s.config.map?.name ?? 'Classic',
       start: s.config.map?.start ?? 'all',
       newIslandVP: s.config.map?.specialVP?.newIsland ?? 0,
+      ...(s.config.bank ? { bank: s.config.bank } : {}),
     },
   } satisfies PlayerView);
   if (s.back) v.back = { from: s.back.from, asked: s.back.asked, refused: s.back.refused };
   if (s.undo) v.undo = { p: s.undo.p, asked: s.undo.asked, ok: s.undo.ok.slice() };
+  if (s.keep) v.keep = cloneJson(s.keep);
   for (const m of mods(s)) m.view?.(s, me, v);
   return v;
 }
@@ -185,6 +191,7 @@ export function stateFromView(v: PlayerView): GameState {
   const config: GameState['config'] = { winVP: v.winVP };
   if (v.rules.modules.length) config.modules = v.rules.modules.slice();
   if (Object.keys(v.rules.houseRules).length) config.houseRules = { ...v.rules.houseRules };
+  if (v.rules.bank) config.bank = v.rules.bank;
   if (v.rules.mapId !== 'classic') {
     // Only the public parts of the map matter for legal-move checks.
     config.map = {
@@ -241,6 +248,7 @@ export function stateFromView(v: PlayerView): GameState {
   // The turn to restore is server-only; legal moves only need to know a hand-back is possible.
   if (v.back) s.back = { ...v.back, state: null };
   if (v.undo) s.undo = { ...v.undo, ok: v.undo.ok.slice(), state: null };
+  if (v.keep) s.keep = cloneJson(v.keep);
   for (const m of mods(s)) m.fromView?.(v, s);
   return s;
 }

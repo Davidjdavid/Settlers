@@ -11,14 +11,14 @@ import {
   stealRandom, updateLargest, updateLongest,
 } from './ops'; // prettier-ignore
 import {
-  BANK_EACH, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, geo, has,
-  publicVP, rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, totalVP, settlementOK, setupVertOK, snakeOrder, total,
+  BANK_EACH, UNLIMITED, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, geo, has,
+  keepMinTarget, publicVP, rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, totalVP, settlementOK, setupVertOK, snakeOrder, total,
   vertFree, vertexOK, zeroRes,
 } from './queries'; // prettier-ignore
 import { nextInt, seedRng, shuffle, type RngState } from './rng';
 import {
-  COLORS, DEV_PLAY, DEV_TYPES, RULE_KEYS, isResource, type Action, type ApplyResult, type Card, type Color, type DevCounts,
-  type GameConfig, type GameEvent, type GameState, type Hand, type PartialRes, type Player, type Seat,
+  COLORS, DEV_PLAY, DEV_TYPES, RES, RULE_KEYS, isResource, type Action, type ApplyResult, type Card, type Color, type DevCounts,
+  type GameConfig, type GameEvent, type GameState, type Hand, type KeepPlaying, type PartialRes, type Player, type Seat,
 } from './types'; // prettier-ignore
 
 /** Bump when a rules change would replay saved games differently. */
@@ -88,7 +88,9 @@ export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameCo
       pieces: { ...PIECES },
       ...(x.cpu ? { cpu: true as const } : {}),
     })),
-    bank: { wood: BANK_EACH, brick: BANK_EACH, sheep: BANK_EACH, wheat: BANK_EACH, ore: BANK_EACH },
+    bank: Object.fromEntries(
+      RES.map((r) => [r, config.bank === 'unlimited' ? UNLIMITED : BANK_EACH]),
+    ) as Hand,
     deck: { ...DEV_COUNTS },
     turn: 0,
     turnN: 0,
@@ -249,12 +251,80 @@ function doTrade(
 const notMain = (s: GameState) =>
   s.stage === 'preroll' ? 'Roll the dice first' : 'Finish what you’re doing first';
 
+/* ---------- Keep playing after a win (SPEC 8.9) ---------- */
+
+/** The highest target anyone may pick: well above any real game. */
+export const KEEP_MAX = 99;
+
+function keepPlaying(
+  s: GameState,
+  p: Seat,
+  a: Extract<Action, { type: 'askKeep' | 'answerKeep' | 'cancelKeep' }>,
+  events: GameEvent[],
+): string | null {
+  if (s.phase !== 'over' || s.winner == null) return 'The game isn’t over';
+  const k = s.keep;
+  switch (a.type) {
+    case 'askKeep': {
+      if (k?.ask) return 'Someone already asked';
+      const t = a.target;
+      if (!isInt(t) || t < keepMinTarget(s) || t > KEEP_MAX)
+        return `Pick a target from ${keepMinTarget(s)} to ${KEEP_MAX}`;
+      const keep: KeepPlaying = k ?? {
+        first: { p: s.winner, vp: totalVP(s, s.winner), target: s.config.winVP, seq: s.seq },
+        on: false,
+        wins: [],
+      };
+      // CPUs always agree.
+      keep.ask = { p, target: t, ok: [p, ...s.players.flatMap((pl, i) => (i !== p && pl.cpu ? [i] : []))] };
+      s.keep = keep;
+      events.push({ k: 'askKeep', p, target: t });
+      resumeIfAgreed(s, events);
+      return null;
+    }
+    case 'answerKeep': {
+      if (!k?.ask) return 'Nobody asked to keep playing';
+      if (k.ask.ok.includes(p)) return 'You already said yes';
+      if (typeof a.yes !== 'boolean') return 'Say yes or no';
+      events.push({ k: 'answerKeep', p, yes: a.yes });
+      if (!a.yes) {
+        delete k.ask;
+        return null;
+      }
+      k.ask.ok.push(p);
+      resumeIfAgreed(s, events);
+      return null;
+    }
+    case 'cancelKeep': {
+      if (!k?.ask || k.ask.p !== p) return 'You haven’t asked to keep playing';
+      delete k.ask;
+      events.push({ k: 'cancelKeep', p });
+      return null;
+    }
+  }
+}
+
+/** Everyone has agreed: play on from exactly where the game stopped, to the new target. */
+function resumeIfAgreed(s: GameState, events: GameEvent[]) {
+  const k = s.keep!;
+  const ask = k.ask!;
+  if (!s.players.every((_, i) => ask.ok.includes(i))) return;
+  delete k.ask;
+  k.on = true;
+  events.push({ k: 'keepPlaying', target: ask.target, from: s.config.winVP });
+  s.config.winVP = ask.target;
+  s.phase = 'play';
+  s.winner = null;
+}
+
 /* ---------- The reducer. Returns an error message, or null on success. ---------- */
 
 function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string | null {
   if (!a || typeof a !== 'object' || typeof a.type !== 'string') return 'Unknown action';
-  if (s.phase === 'over') return 'This game is over';
   if (!isInt(p) || p < 0 || p >= s.players.length) return 'You are not in this game';
+  if (a.type === 'askKeep' || a.type === 'answerKeep' || a.type === 'cancelKeep')
+    return keepPlaying(s, p, a, events);
+  if (s.phase === 'over') return 'This game is over';
   const g = geo(s);
   const me = s.players[p]!;
   const myTurn = s.turn === p;

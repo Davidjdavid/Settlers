@@ -28,6 +28,17 @@ export const COST = {
 export const DEV_COUNTS = { knight: 14, vp: 5, road: 2, plenty: 2, mono: 2 };
 export const PIECES = { road: 15, settlement: 5, city: 4 };
 export const BANK_EACH = 19;
+/** Commodities of each kind in a limited bank (SPEC 8.1). */
+export const COM_EACH = 12;
+/** An unlimited bank: more than any game can use. */
+export const UNLIMITED = 10000;
+
+/** How many of a card there are in all, bank and hands together (SPEC 8.1). */
+export function supplyOf(s: Pick<GameState, 'config'>, k: Card): number {
+  if (s.config.bank === 'unlimited') return UNLIMITED;
+  if (isResource(k)) return BANK_EACH;
+  return s.config.bank === 'limited' ? COM_EACH : UNLIMITED;
+}
 export const MAX_SEATS = 4;
 export const MIN_SEATS = 2;
 
@@ -219,6 +230,11 @@ export function piecesLeft(s: GameState, p: Seat): Partial<Record<SupplyKind, nu
   // board for a while (C&K D14); the supply just shows none left.
   for (const k of Object.keys(out) as SupplyKind[]) out[k] = Math.max(0, out[k]!);
   return out;
+}
+
+/** Keep playing (SPEC 8.9): the smallest new target, above the current one and everyone's score. */
+export function keepMinTarget(s: GameState): number {
+  return Math.max(s.config.winVP, ...s.players.map((_, q) => totalVP(s, q))) + 1;
 }
 
 export function totalVP(s: GameState, p: Seat): number {

@@ -71,6 +71,10 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('askUndo') }),
   z.strictObject({ type: z.literal('answerUndo'), yes: z.boolean() }),
   z.strictObject({ type: z.literal('cancelUndo') }),
+  // Keep playing after a win (SPEC 8.9).
+  z.strictObject({ type: z.literal('askKeep'), target: z.number().int().min(3).max(99) }),
+  z.strictObject({ type: z.literal('answerKeep'), yes: z.boolean() }),
+  z.strictObject({ type: z.literal('cancelKeep') }),
   z.strictObject({
     type: z.literal('setRule'),
     rule: z.enum([

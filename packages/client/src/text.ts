@@ -59,7 +59,7 @@ export function eventText(
       return { text: `${who(e.p)} rolled ${e.d[0] + e.d[1]}`, big: e.d[0] + e.d[1] === 7 };
     case 'produce': {
       const lines = Object.entries(e.gains).map(([p, g]) => `${who(Number(p))} got ${cardsText(g)}`);
-      const short = e.short.length ? ` The bank ran out of ${e.short.join(', ')}.` : '';
+      const short = e.short.length ? ` ${shortText(e.short, e.gains, who)}` : '';
       return { text: (lines.length ? lines.join('. ') + '.' : 'Nobody got anything.') + short };
     }
     case 'mustDiscard':
@@ -106,7 +106,12 @@ export function eventText(
     case 'largest':
       return { text: `${who(e.p)} took Largest Army (${e.n} knights)`, big: true };
     case 'win':
-      return { text: `${who(e.p)} won with ${e.vp} points!`, big: true };
+      return {
+        text: e.overtime
+          ? `${who(e.p)} won in overtime with ${e.vp} points!`
+          : `${who(e.p)} won with ${e.vp} points!`,
+        big: true,
+      };
     case 'respond':
     case 'cancelOffer':
       return null;
@@ -163,7 +168,8 @@ export function eventText(
       };
     case 'commodities': {
       const lines = Object.entries(e.gains).map(([p, g]) => `${who(Number(p))} got ${cardsText(g)}`);
-      return { text: lines.join('. ') + '.' };
+      const short = e.short?.length ? ` ${shortText(e.short, e.gains, who)}` : '';
+      return { text: (lines.length ? lines.join('. ') + '.' : '') + short };
     }
     case 'improve':
       return { text: `${who(e.p)} raised ${TRACK_LABEL[e.track].toLowerCase()} to level ${e.lvl}` };
@@ -258,7 +264,35 @@ export function eventText(
       return { text: `${who(e.p)}’s last move was undone`, big: true };
     case 'rule':
       return { text: `${who(e.p)} ${ruleText(e.rule, e.value)}`, big: true };
+    case 'askKeep':
+      return { text: `${who(e.p)} asked to keep playing, first to ${e.target} points` };
+    case 'answerKeep':
+      return { text: e.yes ? `${who(e.p)} wants to keep playing` : `${who(e.p)} would rather stop` };
+    case 'cancelKeep':
+      return { text: `${who(e.p)} withdrew the request to keep playing` };
+    case 'keepPlaying':
+      return { text: `Keep playing! First to ${e.target} points wins in overtime`, big: true };
   }
+}
+
+/**
+ * SPEC 8.1: a limited bank that couldn't pay a roll. Nobody gets that card, unless only one
+ * player was owed it: they get what was left.
+ */
+function shortText(
+  cards: readonly string[],
+  gains: Record<number, Partial<Record<string, number>>>,
+  who: (p: number) => string,
+): string {
+  return cards
+    .map((c) => {
+      const name = c[0]!.toUpperCase() + c.slice(1);
+      const got = Object.keys(gains).find((p) => gains[Number(p)]![c]);
+      return got != null
+        ? `The bank ran out of ${name}: ${who(Number(got))} got what was left.`
+        : `The bank is out of ${name}: nobody gets ${name} this roll.`;
+    })
+    .join(' ');
 }
 
 /** Names for game rules, as switches and in the log. */

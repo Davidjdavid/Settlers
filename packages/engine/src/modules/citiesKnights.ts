@@ -5,7 +5,7 @@
 
 import { checkWin, cleanCounts, continueRoll, gain, isInt, pay, stealRandom, transfer, updateLongest } from '../ops'; // prettier-ignore
 import {
-  geo, has, legalRoads, robberAwake, robberHexOK, robberVictims, roadOK, total, vertexOK,
+  geo, has, legalRoads, robberAwake, robberHexOK, robberVictims, roadOK, supplyOf, total, vertexOK,
 } from '../queries'; // prettier-ignore
 import { nextInt, shuffle } from '../rng';
 import {
@@ -314,7 +314,7 @@ export const citiesKnights: RuleModule = {
       then: null,
     };
     for (const pl of s.players) for (const c of COMS) pl.res[c] = 0;
-    for (const c of COMS) s.bank[c] = CK_BANK;
+    for (const c of COMS) s.bank[c] = supplyOf(s, c);
   },
 
   vertexTaken: (s, v) => ck(s).knights[v] != null,
@@ -405,12 +405,27 @@ export const citiesKnights: RuleModule = {
       for (const v of g.hexVerts[hi]!) {
         const b = s.verts[v];
         if (!b || b[1] !== 2) continue;
-        gain(s, b[0], com, 1);
         const gp = (gains[b[0]] ??= {});
         gp[com] = (gp[com] ?? 0) + 1;
       }
     });
-    if (Object.keys(gains).length) events.push({ k: 'commodities', gains });
+    // A limited bank (SPEC 8.1, our ruling for commodities): if it can't pay everyone owed a
+    // commodity, nobody gets it, unless only one player is owed it (they get what's left).
+    const short: Commodity[] = [];
+    for (const com of COMS) {
+      const who = Object.keys(gains).filter((p) => gains[Number(p)]![com]);
+      const need = who.reduce((a, p) => a + gains[Number(p)]![com]!, 0);
+      if (!need || need <= s.bank[com]!) continue;
+      short.push(com);
+      if (who.length === 1 && s.bank[com]! > 0) gains[Number(who[0])]![com] = s.bank[com]!;
+      else for (const p of who) delete gains[Number(p)]![com];
+    }
+    for (const [p, cards] of Object.entries(gains)) {
+      for (const [com, n] of Object.entries(cards) as [Card, number][]) gain(s, Number(p), com, n);
+      if (!Object.keys(cards).length) delete gains[Number(p)];
+    }
+    if (Object.keys(gains).length || short.length)
+      events.push({ k: 'commodities', gains, ...(short.length ? { short } : {}) });
     // Aqueduct: a roll that gave you nothing at all gives you a resource of your choice.
     const got = new Set<number>(Object.keys(gains).map(Number));
     for (const e of events) {
@@ -509,8 +524,8 @@ export const citiesKnights: RuleModule = {
     // Commodities are conserved (the bank is a large running count) and never negative.
     for (const k of COMS) {
       const held = s.players.reduce((a, pl) => a + (pl.res[k] ?? NaN), 0);
-      if (held + (s.bank[k] ?? NaN) !== CK_BANK)
-        bad.push(`${k}: bank ${s.bank[k]} + hands ${held} != ${CK_BANK}`);
+      if (held + (s.bank[k] ?? NaN) !== supplyOf(s, k))
+        bad.push(`${k}: bank ${s.bank[k]} + hands ${held} != ${supplyOf(s, k)}`);
       s.players.forEach((pl, p) => (pl.res[k] ?? 0) < 0 && bad.push(`player ${p} ${k} negative`));
     }
     // Progress cards: each deck's cards are all somewhere, exactly once.

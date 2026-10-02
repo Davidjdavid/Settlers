@@ -6,7 +6,7 @@
 
 import { mods } from './modules/api';
 import {
-  BANK_EACH,
+  supplyOf,
   DEV_COUNTS,
   PIECES,
   geo,
@@ -46,7 +46,8 @@ export function checkInvariants(s: GameState, prev?: GameState): string[] {
   // Resources are conserved and never negative.
   for (const r of RES) {
     const held = s.players.reduce((a, pl) => a + pl.res[r], 0);
-    if (held + s.bank[r] !== BANK_EACH) bad.push(`${r}: bank ${s.bank[r]} + hands ${held} != ${BANK_EACH}`);
+    const supply = supplyOf(s, r);
+    if (held + s.bank[r] !== supply) bad.push(`${r}: bank ${s.bank[r]} + hands ${held} != ${supply}`);
     if (s.bank[r] < 0) bad.push(`bank ${r} negative`);
     s.players.forEach((pl, p) => {
       if (pl.res[r] < 0) bad.push(`player ${p} ${r} negative`);

@@ -2,18 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   EVENT_FACES, applyAction, checkInvariants, eventsFor, geo, legalActions, newGame, rateFor, roadOK, routeLen,
   seedRng, nextInt, totalVP, trackOf, viewFor, type Action, type GameState, type HouseRules, type Knight,
-  type Progress, type Seat, type Track,
+  type Progress, type Seat, type Track, type GameConfig, UNLIMITED,
 } from '../src/index'; // prettier-ignore
 import { act, reject, setHand } from './helpers';
 import { seatsFor } from './simulate';
 
 /** A Cities & Knights game with no pieces placed, in the main phase, seat 0 to move. */
-function ckGame(n = 3, houseRules: HouseRules = {}): GameState {
+function ckGame(n = 3, houseRules: HouseRules = {}, bank?: GameConfig['bank']): GameState {
   const s = structuredClone(
     newGame('ck', seatsFor(n), {
       modules: ['citiesKnights'],
       winVP: 13,
       ...(Object.keys(houseRules).length ? { houseRules } : {}),
+      ...(bank ? { bank } : {}),
     }),
   );
   s.stage = 'main';
@@ -187,6 +188,64 @@ describe('Cities & Knights: setup and production', () => {
       if (com) expect(s.players[0]!.res[com]).toBe(want[com]);
       ok(s);
     }
+  });
+
+  describe('the bank (SPEC 8.1)', () => {
+    /** Cities on a pasture for `owners` (corners 0 and 3 of the hex); the bank has `left` cloth; roll it. */
+    function rollCloth(bank: GameConfig['bank'], owners: Seat[], left: number) {
+      let s = ckGame(3, {}, bank);
+      const h = s.board.hexes.findIndex((x, i) => x.t === 'sheep' && i !== s.board.robber);
+      const vs = [g(s).hexVerts[h]![0]!, g(s).hexVerts[h]![3]!];
+      owners.forEach((p, i) => put(s, p, { cities: [vs[i]!] }));
+      // Seat 2 holds the rest of the cloth, so the bank has `left`.
+      s = setHand(s, 2, { cloth: s.bank.cloth! - left });
+      expect(s.bank.cloth).toBe(left);
+      s.stage = 'preroll';
+      const roll = s.board.hexes[h]!.n;
+      const d1 = Math.min(6, roll - 1);
+      const r = act(rigRoll(s, d1, roll - d1, 'trade'), 0, { type: 'roll' });
+      ok(r.state);
+      const ev = r.events.find((e) => e.k === 'commodities');
+      return { s: r.state, ev: ev?.k === 'commodities' ? ev : null, vs };
+    }
+
+    it('limited: 12 of each commodity; if the bank can’t pay everyone, nobody gets it', () => {
+      expect(ckGame(3, {}, 'limited').bank).toMatchObject({ paper: 12, cloth: 12, coin: 12, wood: 19 });
+      const { s, ev } = rollCloth('limited', [0, 1], 1);
+      expect([s.players[0]!.res.cloth, s.players[1]!.res.cloth]).toEqual([0, 0]);
+      expect(s.bank.cloth).toBe(1);
+      expect(ev!.short).toEqual(['cloth']);
+    });
+
+    it('limited: one player owed more than is left gets what’s left', () => {
+      const { s, ev } = rollCloth('limited', [0, 0], 1);
+      expect(s.players[0]!.res.cloth).toBe(1);
+      expect(s.bank.cloth).toBe(0);
+      expect(ev!.short).toEqual(['cloth']);
+      expect(ev!.gains[0]).toMatchObject({ cloth: 1 });
+    });
+
+    it('limited: enough for everyone pays everyone', () => {
+      const { s, ev } = rollCloth('limited', [0, 1], 2);
+      expect([s.players[0]!.res.cloth, s.players[1]!.res.cloth]).toEqual([1, 1]);
+      expect(ev!.short).toBeUndefined();
+    });
+
+    it('unlimited: the bank never runs out of anything', () => {
+      const t = ckGame(3, {}, 'unlimited');
+      expect(t.bank).toMatchObject({ wood: UNLIMITED, ore: UNLIMITED, cloth: UNLIMITED });
+      const { s, ev } = rollCloth('unlimited', [0, 1], 1000);
+      expect([s.players[0]!.res.cloth, s.players[1]!.res.cloth]).toEqual([1, 1]);
+      expect(ev!.short).toBeUndefined();
+      expect(viewFor(s, 0).rules.bank).toBe('unlimited');
+    });
+
+    it('games from before Milestone 8: resources limited, commodities unlimited', () => {
+      const t = ckGame();
+      expect(t.config.bank).toBeUndefined();
+      expect(t.bank).toMatchObject({ wood: 19, cloth: UNLIMITED });
+      expect(viewFor(t, 0).rules.bank).toBeUndefined();
+    });
   });
 
   it('commodities are unlimited, trade 4:1, and count toward the hand', () => {

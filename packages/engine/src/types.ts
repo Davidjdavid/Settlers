@@ -200,6 +200,12 @@ export interface GameConfig {
    * docs/pregame.md 2.4). Without it the seats are shuffled from the seed, as older games were.
    */
   order?: 'given';
+  /**
+   * The bank's supply (SPEC 8.1). 'limited': 19 of each resource and 12 of each commodity;
+   * 'unlimited': it never runs out. Without it (games from before Milestone 8): resources
+   * limited, commodities unlimited.
+   */
+  bank?: 'limited' | 'unlimited';
 }
 
 /** Seafarers state. Only present when the seafarers module is on. */
@@ -303,6 +309,18 @@ export interface CKState {
   then: 'produce' | null;
 }
 
+/** Keep playing after a win (SPEC 8.9). */
+export interface KeepPlaying {
+  /** The first win as it stood: the game's result for stats. */
+  first: { p: Seat; vp: number; target: number; seq: number };
+  /** Play has resumed at least once. */
+  on: boolean;
+  /** A request waiting on answers: who asked, the new target, who has agreed (CPUs at once). */
+  ask?: { p: Seat; target: number; ok: Seat[] };
+  /** Wins after keep playing, in order. */
+  wins: { p: Seat; vp: number; target: number; seq: number }[];
+}
+
 export interface GameState {
   /** State schema version. */
   v: 1;
@@ -344,6 +362,8 @@ export interface GameState {
   back?: HandBack;
   /** The last move, while it can still be undone; absent otherwise. */
   undo?: UndoState;
+  /** Keep playing after a win (SPEC 8.9); absent until someone asks. Public. */
+  keep?: KeepPlaying;
 }
 
 /** Where a player's points come from (SPEC 5.8). */
@@ -416,6 +436,10 @@ export type Action =
   | { type: 'askUndo' }
   | { type: 'answerUndo'; yes: boolean }
   | { type: 'cancelUndo' }
+  /** After a win: ask everyone to keep playing to a new target, answer, or withdraw (SPEC 8.9). */
+  | { type: 'askKeep'; target: number }
+  | { type: 'answerKeep'; yes: boolean }
+  | { type: 'cancelKeep' }
   /** Change a game rule during your turn. */
   | { type: 'setRule'; rule: RuleKey; value: boolean | number }
   /* Cities & Knights */
@@ -484,7 +508,8 @@ export type GameEvent =
   | { k: 'trade'; a: Seat; b: Seat; give: Hand; want: Hand }
   | { k: 'longest'; p: Seat | null; n: number; from: Seat | null }
   | { k: 'largest'; p: Seat; n: number; from: Seat | null }
-  | { k: 'win'; p: Seat; vp: number }
+  /** `overtime`: a win after keep playing (SPEC 8.9). */
+  | { k: 'win'; p: Seat; vp: number; overtime?: true }
   /* Seafarers */
   | { k: 'moveShip'; p: Seat; from: number; to: number }
   | { k: 'pirate'; p: Seat; h: number; victim: Seat | null }
@@ -500,6 +525,11 @@ export type GameEvent =
   | { k: 'askUndo'; p: Seat }
   | { k: 'answerUndo'; p: Seat; yes: boolean }
   | { k: 'cancelUndo'; p: Seat }
+  | { k: 'askKeep'; p: Seat; target: number }
+  | { k: 'answerKeep'; p: Seat; yes: boolean }
+  | { k: 'cancelKeep'; p: Seat }
+  /** Everyone agreed: play resumes with a new target. */
+  | { k: 'keepPlaying'; target: number; from: number }
   | { k: 'undo'; p: Seat }
   | { k: 'rule'; p: Seat; rule: RuleKey; value: boolean | number }
   /* Cities & Knights */
@@ -519,7 +549,8 @@ export type GameEvent =
   | { k: 'cityLost'; p: Seat; v: number }
   /** A progress card drawn. `card` is null for others, except victory-point cards. */
   | { k: 'draw'; p: Seat; track: Track; card: Progress | null }
-  | { k: 'commodities'; gains: Record<number, Cards> }
+  /** `short`: commodities the bank couldn't pay (SPEC 8.1); only with a limited bank. */
+  | { k: 'commodities'; gains: Record<number, Cards>; short?: Commodity[] }
   | { k: 'improve'; p: Seat; track: Track; lvl: number }
   | { k: 'metropolis'; p: Seat; track: Track; v: number; from: Seat | null }
   | { k: 'wall'; p: Seat; v: number; free?: boolean }

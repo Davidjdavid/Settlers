@@ -36,12 +36,12 @@ interface Scenario {
 }
 const HFNS = SCENARIOS['heading-for-new-shores']!;
 const SIMS: Record<string, Scenario> = {
-  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb', 'hu', 'nH', 'u'] },
+  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb', 'hu', 'nH', 'u', 'I', 'O'] },
   'heading-for-new-shores': {
     map: HFNS,
     players: HFNS.players,
     maxTurns: 3000,
-    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH'],
+    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH', 'I'],
   },
   'heading-for-new-shores-3': {
     map: scenarioMap('heading-for-new-shores', 3),
@@ -56,7 +56,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 13,
     quickVP: 10,
     maxTurns: 3000,
-    rules: ['r', 'd', 'w', 'b', 'nrwu', 'bdw', 'hu', 'rH'],
+    rules: ['r', 'd', 'w', 'b', 'nrwu', 'bdw', 'hu', 'rH', 'I', 'O', 'bO'],
   },
   'ck-sea': {
     map: HFNS,
@@ -65,7 +65,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 17,
     quickVP: 13,
     maxTurns: 5000,
-    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'wHu'],
+    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'wHu', 'I', 'O'],
   },
 };
 for (const k of ['classic', 'heading-for-new-shores', 'ck', 'ck-sea'] as const) {
@@ -100,7 +100,8 @@ const CPU_KINDS: CpuBrain[] = [
 /**
  * Seed format: base.scenario.index.<n>p.<house rules or ->. House rules: n no 7s in round 1,
  * b 3:1 bank, f free ship moves, r re-roll 7s / d no discards until the barbarians attack,
- * w barbarians wait 2 rounds, h dice can be handed back (H: during setup too).
+ * w barbarians wait 2 rounds, h dice can be handed back (H: during setup too); the bank (SPEC 8.1):
+ * I unlimited, O as before Milestone 8 (commodities unlimited); otherwise limited, as new games.
  */
 function makeSeed(base: string, scenario: string, i: number): string {
   const sc = SIMS[scenario]!;
@@ -109,7 +110,12 @@ function makeSeed(base: string, scenario: string, i: number): string {
   return `${base}.${scenario}.${i}.${n}p.${hr}`;
 }
 
-function parseSeed(seed: string): { scenario: string; n: number; houseRules: HouseRules } {
+function parseSeed(seed: string): {
+  scenario: string;
+  n: number;
+  houseRules: HouseRules;
+  bank: 'limited' | 'unlimited' | undefined;
+} {
   const [, scenario, , np, hr] = seed.split('.');
   if (!scenario || !SIMS[scenario] || !np) throw new Error(`can't parse seed ${seed}`);
   const houseRules: HouseRules = {};
@@ -122,11 +128,12 @@ function parseSeed(seed: string): { scenario: string; n: number; houseRules: Hou
   if (hr?.includes('h')) houseRules.handBack = true;
   if (hr?.includes('u')) houseRules.undo = true;
   if (hr?.includes('H')) Object.assign(houseRules, { handBack: true, handBackSetup: true });
-  return { scenario, n: Number(np.replace('p', '')), houseRules };
+  const bank = hr?.includes('I') ? 'unlimited' : hr?.includes('O') ? undefined : 'limited';
+  return { scenario, n: Number(np.replace('p', '')), houseRules, bank };
 }
 
 function run(seed: string, deepCheckRate?: number): SimResult & { cpuWon?: boolean } {
-  const { scenario, n, houseRules } = parseSeed(seed);
+  const { scenario, n, houseRules, bank } = parseSeed(seed);
   const sc = SIMS[scenario]!;
   const index = Number(seed.split('.')[2]);
   const winVP = sc.quickVP && index % 2 ? sc.quickVP : sc.winVP;
@@ -143,6 +150,7 @@ function run(seed: string, deepCheckRate?: number): SimResult & { cpuWon?: boole
       ...(winVP ? { winVP } : {}),
       maxTurns: sc.maxTurns ?? 3000,
       houseRules,
+      ...(bank ? { bank } : {}),
       ...(deepCheckRate != null ? { hiddenRate: deepCheckRate } : {}),
     });
     return { ...r, winner: null, log: [] };
@@ -153,6 +161,7 @@ function run(seed: string, deepCheckRate?: number): SimResult & { cpuWon?: boole
     ...(winVP ? { winVP } : {}),
     ...(sc.maxTurns ? { maxTurns: sc.maxTurns } : {}),
     houseRules,
+    ...(bank ? { bank } : {}),
     ...(deepCheckRate != null ? { deepCheckRate } : {}),
   });
 }

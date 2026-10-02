@@ -113,7 +113,11 @@ export function checkWin(s: GameState, events: GameEvent[]) {
     s.phase = 'over';
     s.winner = p;
     s.offers = [];
-    events.push({ k: 'win', p, vp });
+    // A win after keep playing (SPEC 8.9) is an overtime win; the first one stays the result.
+    if (s.keep?.on) {
+      s.keep.wins.push({ p, vp, target: s.config.winVP, seq: s.seq + 1 });
+      events.push({ k: 'win', p, vp, overtime: true });
+    } else events.push({ k: 'win', p, vp });
   }
 }
 

@@ -69,7 +69,12 @@ export interface GameStats {
   pointsByTurn: number[][];
   players: PlayerStats[];
   turns: number;
+  /** The first win: the game's result, whatever happens in overtime (SPEC 8.9). */
   winner: Seat | null;
+  /** The turn of the first win, when the game went on after it. */
+  firstWinTurn?: number;
+  /** Wins after keep playing, in order. */
+  overtime?: { p: Seat; vp: number; target: number; turn: number }[];
 }
 
 const odds = (t: number) => (6 - Math.abs(t - 7)) / 36;
@@ -369,7 +374,12 @@ export class StatsFold {
           bump(st.events, e.face);
           break;
         case 'win':
-          st.winner = e.p;
+          if (e.overtime)
+            (st.overtime ??= []).push({ p: e.p, vp: e.vp, target: next.config.winVP, turn: next.turnN });
+          else st.winner = e.p;
+          break;
+        case 'keepPlaying':
+          st.firstWinTurn ??= next.turnN;
           break;
       }
     }
@@ -391,7 +401,7 @@ export class StatsFold {
     }
     st.turns = next.turnN;
     next.players.forEach((_, q) => (P[q]!.points = vpBreakdown(next, q, true)));
-    if (next.phase === 'over') st.winner = next.winner;
+    if (next.phase === 'over' && !next.keep?.on) st.winner = next.winner;
   }
 
   /** Credit production to the tiles that paid it (shortages: whatever the bank had, in tile order). */
