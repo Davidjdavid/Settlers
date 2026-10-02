@@ -36,8 +36,8 @@ This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the si
    - the normal building rules apply (a road joins your roads or buildings, a ship your ships or a coastal building, not next to the pirate);
    - only pieces you still have in supply;
    - **if there's no legal spot, the rest is lost.** It's also lost when you have no pieces left.
-2. **Found while placing free pieces** (from Road Building or from another treasure): you get **no more free pieces**; that treasure gives nothing. **(D3)**
-3. A free piece can find another treasure of another kind; that one happens straight away too.
+2. **Found while placing free pieces** (from Road Building or from another treasure): the new 2 are added to the ones still to place, so you place those as well as the rest of your Road Building. **(D3)**
+3. A free piece can find another treasure; that one happens straight away too.
 4. You can't do anything else until the free pieces are placed (or lost), the same as Road Building today.
 
 ### 4.2 Two resources of your choice
@@ -91,7 +91,7 @@ This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the si
 
 1. **D1 The deck:** one card per spot, the four kinds dealt round in turn, so the kinds are as even as the number of spots allows.
 2. **D2 Setup:** setup roads and ships can find treasures, straight away.
-3. **D3 Free pieces while placing free pieces:** no more free pieces; that treasure gives nothing.
+3. **D3 Free pieces while placing free pieces:** the new 2 are added to the ones still to place (you place them as well as your Road Building's).
 4. **D4 Resources when the bank is short:** you get what the bank has; the rest is lost. An Unlimited bank never runs short.
 5. **D5 No card to give:** the treasure is rerolled into one of the other three kinds.
 6. **D6 Which development card:** only the finder sees it, like a bought card.
