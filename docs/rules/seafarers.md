@@ -84,7 +84,7 @@ Random parts of a map (shuffled terrain, number tokens, harbors, fog stacks) are
 2. **Each placement** is a settlement plus one adjacent **road or ship**:
    - a road on a land or coast edge;
    - a ship on a coast or sea edge.
-3. **Where:** a starting settlement must be on a land vertex that touches at least one hex marked as a **starting area**, and must obey the distance rule. In *Heading for New Shores* every land hex is a starting area, so you may start on any island. **(D5)**
+3. **Where:** a starting settlement must be on a land vertex that touches at least one hex marked as a **starting area**, and must obey the distance rule. The starting area is in each scenario's data file (`start`). In *Heading for New Shores* it is **the main island only**, as in the official scenario. Starting anywhere else is refused, for people and CPUs alike, and only legal corners are highlighted. **(D5, D13)**
 4. **Second settlement payout:** one resource for each adjacent producing hex.
    - **Gold:** you choose one resource (any the bank has) for each adjacent gold hex. **(D6)**
    - Desert, sea and fog pay nothing.
@@ -250,7 +250,8 @@ Used by scenarios with fog, such as *The Fog Islands*.
 
 1. **Points to win:** the scenario's target by default (§18). The room creator can change it (§19).
 2. **Special VP, "settling a new island":**
-   - The first settlement you build on an island earns the scenario's bonus (usually 2 VP) if the island isn't one of your **home islands** and you haven't built on it before. **(D5)**
+   - The first settlement you build on an island earns the scenario's bonus (usually 2 VP) if the island has no hex of the scenario's **starting area** and you haven't built on it before. Starting settlements never earn it. The amount (`specialVP.newIsland`) and the starting area (`start`) are both in the scenario's data file. **(D5, D13)**
+   - A map whose starting area is "all" (custom maps, and games saved before D13) falls back to the old rule: the islands of your starting settlements are your home islands.
    - Each player can earn this once per island.
    - Other players building there doesn't affect you.
    - Upgrading to a city adds nothing more.
@@ -293,10 +294,11 @@ Everything from the base game, plus:
 7. **No ship touches the pirate's hex** unless it was already there when the pirate arrived. Checked as a rule about each move: no move builds or moves a ship onto or off an edge of the pirate's hex.
 8. **Ship moves:** at most one per turn, never a ship built that turn, and the moved ship was at an open end.
 9. **Fog accounting:** fog hexes left plus revealed fog hexes equals the scenario's fog count, and the stacks always hold enough to finish revealing.
-10. **Special VP:** each island bonus is held at most once per player per island, never for a home island, and matches the settlements on the board.
-11. **Longest trade route:** the holder matches a full recalculation, using the same tie rules as the base game.
-12. **Gold:** after the gold step, no one is owed gold unless the bank ran out.
-13. **Determinism:** replaying every Seafarers game from its seed and moves gives the identical state, as for the base game.
+10. **Special VP:** each island bonus is held at most once per player per island, never for a home island or the starting area, and matches the settlements on the board in both directions: every bonus has a settlement on its island, and every island outside the starting area that a player has built on earned them its bonus.
+11. **Starting area:** every starting settlement is in the scenario's starting area (checked on every setup move).
+12. **Longest trade route:** the holder matches a full recalculation, using the same tie rules as the base game.
+13. **Gold:** after the gold step, no one is owed gold unless the bank ran out.
+14. **Determinism:** replaying every Seafarers game from its seed and moves gives the identical state, as for the base game.
 
 The simulator will play **1,000+ random games across every scenario and player count** each run. The random agent learns to build ships, move them, choose the pirate, and pick gold.
 
@@ -310,8 +312,8 @@ The simulator will play **1,000+ random games across every scenario and player c
 |---|---|
 | Players | 3 or 4 (Seafarers is 3–4 players only) **(D4)** |
 | Points to win | 14 |
-| Special VP | 2 for the first settlement on each island that isn't one of your home islands **(D5)** |
-| Start | Anywhere on land (any island) **(D5)** |
+| Special VP | 2 for each player's first settlement on each small island **(D5, D13)** |
+| Start | The main island only **(D13)** |
 | Fog | none |
 | Robber | starts on the desert |
 | Pirate | starts off the board; it arrives the first time someone chooses it on a 7 or Knight |
@@ -450,3 +452,4 @@ Your answers to the questions in the first draft:
 10. **D10 Robber:** any revealed land hex, including unsettled islands.
 11. **D11 House rules:** no 7s in the first round; 3:1 bank trades for everyone; move ships freely. Planned for Cities & Knights: no 7s until the barbarians have attacked once.
 12. **D12 CPU player:** not in this milestone. When it comes, it must never target a human player.
+13. **D13 Starting area (fix, Milestone 5):** replaces the "start anywhere" part of D5. In Heading for New Shores starting settlements go on the main island only, as the rulebook says, and each player earns 2 VP for their first settlement on each small island. Both rules come from the scenario's data file (`start`, `specialVP.newIsland`). Games already saved keep the rule they were started with.
