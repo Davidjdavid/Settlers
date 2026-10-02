@@ -92,6 +92,39 @@ describe('saved maps', () => {
     expect(JSON.stringify(c.last('map').map)).toBe(file);
   });
 
+  it('Seafarers pieces and regions (SPEC 10.1, 10.4) save and load as they are', () => {
+    let m = edit(standardBlank(CLASSIC_MAP, 'new', 'Gold coast'), {
+      k: 'meta',
+      seafarers: true,
+      players: [3],
+    });
+    m = edit(m, { k: 'terrain', at: [2, -2], t: 'sea' });
+    m = edit(m, { k: 'terrain', at: [0, 2], t: 'fog' });
+    m = edit(m, { k: 'pirate', at: [2, -2] });
+    m = edit(m, { k: 'islandVP', n: 2 });
+    m = edit(m, { k: 'addRegion', name: 'East' });
+    for (const at of [
+      [2, -1],
+      [2, 0],
+      [1, 1],
+    ] as [number, number][])
+      m = edit(m, { k: 'region', at, region: 'r1' });
+    m = edit(m, { k: 'setTile', region: 'r1', t: 'gold', delta: 1 });
+    const c = new FakeConn();
+    send(c, { t: 'saveMap', map: m, by: 'Ann' });
+    const saved = c.last('map');
+    expect(saved.saved).toBe(true);
+    expect(saved.map.regions).toEqual(m.regions);
+    expect(saved.map.pirate).toEqual([2, -2]);
+    expect(saved.map.specialVP).toEqual({ newIsland: 2 });
+    expect(saved.info.seafarers).toBe(true);
+    // A board filled from it keeps the region's gold in the region.
+    const f = fillRest(saved.map, OUR_RULES, 'gold-coast', 3);
+    if (!f.ok) throw new Error(f.error);
+    const east = new Set(['2,-1', '2,0', '1,1']);
+    expect(f.map.hexes.filter((h) => h.t === 'gold').every((h) => east.has(`${h.q},${h.r}`))).toBe(true);
+  });
+
   it('editing a saved map keeps its id; a new map with a taken name is refused', () => {
     const c = new FakeConn();
     send(c, { t: 'saveMap', map: aMap(), by: 'Ann' });
