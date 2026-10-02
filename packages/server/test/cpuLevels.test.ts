@@ -235,6 +235,9 @@ describe('Medium and Hard in a game', () => {
     send(host, { t: 'start' });
     // Ann answers every offer (there should be none from CPUs) and offers trades herself.
     const rng = seedRng('offers');
+    // Once a turn, whenever she has 2 of something: the dice are the server's, so a rarer offer
+    // could miss a whole game.
+    let offered = -1;
     for (let step = 0; state(code).phase === 'play'; step++) {
       if (step > 60000) throw new Error('game did not finish');
       if (timers.length) {
@@ -243,11 +246,10 @@ describe('Medium and Hard in a game', () => {
       }
       const s = state(code);
       const me = s.players.findIndex((p) => !p.cpu);
-      if (s.turn === me && s.stage === 'main' && !s.offers.length && step % 3 === 0) {
-        const have = (['wood', 'brick', 'sheep', 'wheat', 'ore'] as const).find(
-          (r) => s.players[me]!.res[r] > 0,
-        );
+      if (s.turn === me && s.stage === 'main' && !s.offers.length && offered !== s.turnN) {
+        const have = (['wood', 'brick', 'sheep', 'wheat'] as const).find((r) => s.players[me]!.res[r] >= 2);
         if (have) {
+          offered = s.turnN;
           send(host, {
             t: 'act',
             id: `o${step}`,
