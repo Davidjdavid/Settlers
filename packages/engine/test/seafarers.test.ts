@@ -235,7 +235,8 @@ describe('robber and pirate', () => {
 
 describe('gold fields', () => {
   it('gold pays a resource of your choice; everyone owed chooses before play continues', () => {
-    let s = sea();
+    // The city is put straight onto a small island; a starting area of "all" makes that no new island.
+    let s = sea(3, { ...HFNS, start: 'all' });
     s.stage = 'preroll';
     const gold = s.board.hexes.findIndex((h) => h.t === 'gold');
     const n = s.board.hexes[gold]!.n;
