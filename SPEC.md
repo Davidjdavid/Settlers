@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–7 and the first part of Milestone 9 (9.1, 9.2, 9.6) done and live. Milestone 8 built and being tested; then the rest of Milestone 9 (sounds, pinned dice) and Milestone 10.**
+Status: **Milestones 1–7 and 9.1, 9.2, 9.6 done and live. Milestones 8 and 9 built and tested, going live with the next deploy. Milestone 10: Seafarers maps from the editor, the Fog Islands and regions built; treasures wait for their rules (docs/rules/treasures.md) to be agreed.**
 
 ## Milestone 1: base game
 
@@ -609,7 +609,7 @@ The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 
 ## Milestone 8: Bank, gates, warnings, trading, helpers, keep playing, the log
 
-**Status: built; being tested before deploying.** Your answers are in 8.11. Decided while building:
+**Status: built and tested (e2e/m8.spec.ts); going live with the next deploy.** Your answers are in 8.11. Decided while building:
 
 - **The log's robber line** ("The robber blocked 1 Brick from Joe") is a note the server works out from the board after each roll, not a new game event, so every saved game replays exactly as saved and old games get the line too.
 - **Laptops and desktops** (1180px wide and up at the display size): the game fits the window and the page never scrolls. The board shrinks a little to keep the prompt in view, the log fills the bottom of the left column, and a column with more than fits (four players in Knights on a 1366×768 screen) scrolls inside itself, keeping whoever's turn it is in view.
@@ -866,7 +866,7 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 
 ## Milestone 9: Sounds, dice on screen, and the barbarians
 
-**Status: 9.1, 9.2 and 9.6 done and live (deployed 2026-10-02); 9.3–9.5 built, being tested.** One choice made while building: the pinned dice panel can also be moved by its ⤧ button (a corner at a time), as well as dragged, so it works without a mouse. Your answers are in 9.7. Your requests of 2 October.
+**Status: 9.1, 9.2 and 9.6 done and live (deployed 2026-10-02); 9.3–9.5 built and tested (e2e/m9.spec.ts), going live with the next deploy.** One choice made while building: the pinned dice panel can also be moved by its ⤧ button (a corner at a time), as well as dragged, so it works without a mouse. Your answers are in 9.7. Your requests of 2 October.
 
 **Order (D1):**
 
@@ -971,7 +971,7 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
 
 ## Milestone 10: Seafarers maps you design, fog islands and treasures
 
-**Status: agreed (your answers are in 10.6). After Milestone 9.** Your requests of 2 October.
+**Status: agreed (your answers are in 10.6). 10.1, 10.2 and 10.4 built and tested (editor tests, 1,000 simulator games each on the Fog Islands in Seafarers and Full game mode, e2e/m10.spec.ts). 10.3 Treasures: rules drafted in docs/rules/treasures.md, waiting for answers to D1–D8.** Your requests of 2 October.
 
 ### 10.1 Seafarers maps from the editor, "broken" ones too
 

@@ -1320,6 +1320,7 @@ function RegionsPanel({
   );
 }
 
+const FOG_NUMBER_CYCLE = [5, 9, 4, 10, 6, 8, 3, 11, 2, 12];
 const FOG_KINDS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore', 'gold', 'desert', 'sea'];
 
 /**
@@ -1344,7 +1345,11 @@ function SeafarersPanel({
   const countOf = (t: Terrain) => stack.terrain.filter((x) => x === t).length;
   const setCount = (t: Terrain, n: number) => {
     const terrain = [...stack.terrain.filter((x) => x !== t), ...new Array<Terrain>(Math.max(0, n)).fill(t)];
-    edit({ k: 'fogStack', terrain, numbers: stack.numbers });
+    // Land and gold under the fog need a number each: more land brings a standard number.
+    const need = terrain.filter((x) => x !== 'sea' && x !== 'desert').length;
+    const numbers = stack.numbers.slice();
+    while (numbers.length < need) numbers.push(FOG_NUMBER_CYCLE[numbers.length % FOG_NUMBER_CYCLE.length]!);
+    edit({ k: 'fogStack', terrain, numbers });
   };
   const start = Array.isArray(map.start) ? map.start.length : 0;
   return (

@@ -1,0 +1,182 @@
+/*
+ * Milestone 10 so far (10.1, 10.2, 10.4) in browsers against the real server build:
+ * - The map editor's Seafarers pieces: sea and fog painted, the start area painted, points for a
+ *   new island, the pirate's start, the fog stack (gold added under the fog); and a region with
+ *   its own tile set (a gold tile swapped in), then "Fill the rest" and save.
+ * - Three browsers pick that map at the pre-game table in Seafarers mode and play it to the end:
+ *   the game starts on exactly the table's board, with the pirate, the fog and the region's gold
+ *   where the map put them.
+ * - The Fog Islands, picked in the lobby, played to the end.
+ * Treasures (10.3) come once their rules are agreed. SHOTS=<dir> saves screenshots.
+ */
+
+import { join } from 'node:path';
+import { expect, test, type Page } from '@playwright/test';
+import { TestServer, freePort } from './server';
+import { checkFrames, confirmPlace, playUntil, seatedTable, view, type Table } from './table';
+
+const SHOTS = process.env.SHOTS;
+const shot = async (p: Page, name: string) => {
+  if (SHOTS) await p.screenshot({ path: join(SHOTS, `m10-${name}.png`), fullPage: true });
+};
+
+test.use({ actionTimeout: 15_000 });
+test.setTimeout(20 * 60_000);
+
+let server: TestServer;
+test.beforeAll(async () => {
+  server = new TestServer(await freePort(), 'm10-pass');
+  await server.start();
+});
+test.afterAll(async () => server.stop());
+
+const hex = (p: Page, q: number, r: number) => p.locator(`[data-kind=hex][data-q="${q}"][data-r="${r}"]`);
+/** Click a hex away from its number token. */
+async function clickTile(p: Page, q: number, r: number) {
+  const b = (await hex(p, q, r).locator('polygon').last().boundingBox())!;
+  await p.mouse.click(b.x + b.width / 2, b.y + b.height * 0.22);
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test hook returns plain JSON
+const tableOf = (p: Page): Promise<any> => p.evaluate(() => (window as any).__settlers.state().room?.table);
+
+async function playToEnd(t: Table) {
+  await playUntil(t, async () => (await view(t.pages[0]!)).phase === 'over', {
+    maxSteps: 20000,
+    beforeStep: async (p) => {
+      await confirmPlace(p);
+      return false;
+    },
+  });
+}
+
+const EAST: [number, number][] = [
+  [1, -2],
+  [2, -2],
+  [2, -1],
+];
+const REGION: [number, number][] = [
+  [1, -1],
+  [1, 0],
+  [0, 1],
+];
+const START: [number, number][] = [
+  [-2, 0],
+  [-2, 1],
+  [-2, 2],
+  [-1, -1],
+  [-1, 0],
+  [-1, 1],
+  [-1, 2],
+  [0, -2],
+  [0, -1],
+  [0, 0],
+  [-0, 2],
+  [1, 1],
+];
+
+test('a Seafarers map from the editor, played to the end; then the Fog Islands', async ({ browser }) => {
+  /* ---------- The editor ---------- */
+  const maker = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  const errors: string[] = [];
+  maker.on('pageerror', (e) => errors.push(e.message));
+  await maker.goto(server.url);
+  await maker.fill('#pass', server.passphrase);
+  await maker.click('button:has-text("Enter")');
+  await maker.getByTestId('open-maps').click();
+  await maker.getByTestId('new-map').click();
+  await maker.getByTestId('seafarers').check();
+  await expect(maker.getByTestId('seafarers-panel')).toBeVisible();
+  // Sea along the east side, fog in the south.
+  await maker.getByTestId('tool-terrain-sea').click();
+  for (const [q, r] of EAST) await clickTile(maker, q, r);
+  await maker.getByTestId('tool-terrain-fog').click();
+  await clickTile(maker, 2, 0);
+  await clickTile(maker, 1, 1);
+  await expect(maker.getByTestId('fog-stack')).toBeVisible();
+  // Gold under the fog (it brings its own number).
+  await maker
+    .locator('[data-testid=fog-stack] .fogcount[data-t=gold] button[aria-label^="One more"]')
+    .click();
+  await expect(maker.getByTestId('fog-gold')).toHaveText('1');
+  // The start area, island points and the pirate.
+  await maker.getByTestId('tool-start').click();
+  for (const [q, r] of START.slice(0, -1)) await clickTile(maker, q, r);
+  await expect(maker.locator('[data-start]')).toHaveCount(11);
+  await maker.getByTestId('island-vp').selectOption('2');
+  await maker.getByTestId('tool-pirate').click();
+  await clickTile(maker, 2, -1);
+  await expect(maker.getByTestId('pirate-start')).toHaveCount(1);
+  // A region with gold in its own set.
+  await maker.getByTestId('region-add').click();
+  await expect(maker.getByTestId('region-r1')).toBeVisible();
+  for (const [q, r] of REGION) await clickTile(maker, q, r);
+  await expect(maker.locator('[data-region=r1]')).toHaveCount(3);
+  await maker.getByTestId('set-r1-gold-more').click();
+  await expect(maker.getByTestId('set-r1-gold')).toHaveText('1');
+  await maker.getByTestId('region-r1-name').fill('Gold coast');
+  await maker.getByTestId('region-r1-name').press('Tab');
+  await shot(maker, 'editor');
+  // Undo and redo step through it.
+  await maker.getByTestId('undo-edit').click();
+  await expect(maker.getByTestId('region-r1-name')).toHaveValue('Region A');
+  await maker.getByTestId('redo-edit').click();
+  await expect(maker.getByTestId('region-r1-name')).toHaveValue('Gold coast');
+  await maker.getByTestId('fill-rest').click();
+  await expect(maker.locator('[data-kind=hex][data-t=random]')).toHaveCount(0);
+  await maker.getByTestId('map-name').fill('Gold coast');
+  await maker.getByTestId('map-name').press('Enter');
+  await maker.getByTestId('save-map').click();
+  await expect(maker).toHaveURL(/\/maps\/m-/);
+  await shot(maker, 'editor-filled');
+
+  /* ---------- Played at the table ---------- */
+  const t = await seatedTable(browser, server, ['Ann', 'Ben', 'Cy']);
+  const [ann] = t.pages as [Page, Page, Page];
+  await ann.getByTestId('mode-seafarers').click();
+  await ann.getByTestId('board-kind').selectOption('saved');
+  await expect(ann.getByTestId('board-map')).toHaveValue(/^m-/);
+  for (const p of t.pages) await expect(p.getByTestId('board-source')).toContainText('Gold coast');
+  const board = (await tableOf(ann)).board.map;
+  const at = (q: number, r: number) =>
+    board.hexes.findIndex((h: { q: number; r: number }) => h.q === q && h.r === r);
+  // The region's gold landed in the region, and only there.
+  const golds = board.hexes.filter((h: { t: string }) => h.t === 'gold');
+  expect(golds.length).toBeGreaterThan(0);
+  for (const g of golds) expect(REGION.some(([q, r]) => q === g.q && r === g.r)).toBe(true);
+  await shot(ann, 'table');
+  await ann.getByTestId('start').click();
+  for (const p of t.pages) await expect(p.getByTestId('lobby')).toHaveCount(0);
+  const v = await view(ann);
+  expect(v.board.hexes.map((h: { t: string; n: number }) => `${h.t}${h.n}`)).toEqual(
+    board.hexes.map((h: { t: string; n?: number }) => `${h.t}${h.n ?? 0}`),
+  );
+  expect(v.board.pirate).toBe(at(2, -1));
+  expect(v.rules.newIslandVP).toBe(2);
+  expect(v.board.hexes.filter((h: { t: string }) => h.t === 'fog')).toHaveLength(2);
+  await shot(ann, 'game');
+  const seats = await Promise.all(t.pages.map(async (p) => (await view(p)).me));
+  await playToEnd(t);
+  checkFrames(t, seats, 50);
+  expect(t.errors).toEqual([]);
+
+  /* ---------- The Fog Islands from the lobby ---------- */
+  const f = await seatedTable(browser, server, ['Dee', 'Eve', 'Fay']);
+  const [dee] = f.pages as [Page, Page, Page];
+  await dee.getByTestId('mode-seafarers').click();
+  await dee.getByTestId('scenario-fog-islands').click();
+  for (const p of f.pages)
+    await expect(p.getByTestId('scenario-fog-islands')).toHaveAttribute('aria-checked', 'true');
+  await expect(f.pages[2]!.getByTestId('win-vp')).toHaveText('12');
+  await dee.getByTestId('start').click();
+  for (const p of f.pages) await expect(p.locator('#board')).toBeVisible();
+  const fv = await view(dee);
+  expect(fv.rules.mapId).toBe('fog-islands');
+  expect(fv.board.hexes.filter((h: { t: string }) => h.t === 'fog')).toHaveLength(15);
+  await shot(dee, 'fog-islands');
+  await playToEnd(f);
+  const end = await view(dee);
+  // Some fog was discovered on the way.
+  expect(end.board.hexes.filter((h: { t: string }) => h.t === 'fog').length).toBeLessThan(15);
+  expect(f.errors).toEqual([]);
+  expect(errors).toEqual([]);
+});
