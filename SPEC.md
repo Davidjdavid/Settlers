@@ -585,7 +585,7 @@ This replaces bot.md D6 ("the CPU never talks").
 
 ## Milestone 6: Custom maps, the generator and the pre-game table
 
-**Status: agreed. Being implemented.**
+**Status: built; deploying.** One decision added while building: D7 in docs/maps.md (spot rules are soft, your note of 2 October).
 
 The full design is in **[docs/maps.md](docs/maps.md)** (map format, editor, generator and its rules, with "touching" diagrams) and **[docs/pregame.md](docs/pregame.md)** (pre-game table and turn order, with the Joe/Alex/Sam example).
 

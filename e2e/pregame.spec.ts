@@ -193,6 +193,14 @@ test('a full game on a custom map', async ({ browser }) => {
   await t.pages[2]!.locator('[data-testid=chair][data-name=Cy]').click();
   for (const p of t.pages) await expect(p.getByTestId('order-line')).toContainText('① Cy');
   await shot(ann, 'pregame-3-custom');
+  // On a phone the table stacks above the room card and nothing spills sideways.
+  const phone = t.pages[1]!;
+  await phone.setViewportSize({ width: 390, height: 820 });
+  await expect(phone.getByTestId('table-board')).toBeVisible();
+  expect(
+    await phone.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+  ).toBeLessThanOrEqual(0);
+  await shot(phone, 'pregame-4-phone');
   await ann.getByTestId('start').click();
   for (const p of t.pages) await expect(p.getByTestId('lobby')).toHaveCount(0);
   await startsOnTableBoard(t, board);

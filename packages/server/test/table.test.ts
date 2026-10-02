@@ -398,4 +398,27 @@ describe('the table', () => {
     expect(after.first).toEqual(before.first);
     op(conns[0]!, { k: 'forward' });
   });
+
+  it('a game on a generated board rebuilds identically after a restart', () => {
+    const { code, conns } = seated(['Ann', 'Bob', 'Cat']);
+    op(conns[0]!, { k: 'source', source: 'generated', preset: 'builtin:our rules' });
+    op(conns[0]!, { k: 'shuffle' });
+    send(conns[0]!, { t: 'start' });
+    const rng = seedRng('restart');
+    for (let step = 0; step < 300; step++) {
+      const s = state(code);
+      if (s.phase !== 'play') break;
+      for (const c of conns) {
+        const me = s.players.findIndex((p) => p.pid === c.pid);
+        const a = botMove(viewFor(s, me), rng);
+        if (!a) continue;
+        send(c, { t: 'act', id: `r${s.seq}-${me}`, action: a });
+        break;
+      }
+    }
+    const before = JSON.stringify(state(code));
+    expect(state(code).seq).toBeGreaterThan(50);
+    restart();
+    expect(JSON.stringify(state(code))).toBe(before);
+  });
 });

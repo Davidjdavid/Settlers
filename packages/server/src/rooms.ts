@@ -1390,7 +1390,11 @@ export class Rooms {
         if (t.first.mode !== 'pick') return fail('Choose “Pick” first');
         if (!t.circle.includes(op.pid)) return fail('That seat isn’t at the table');
         t.first.pid = op.pid;
-        this.changed(room, who, `picked ${names.get(op.pid)} to go first`);
+        this.changed(
+          room,
+          who,
+          op.pid === seat.pid ? 'will go first' : `picked ${names.get(op.pid)} to go first`,
+        );
         break;
       }
       case 'roll': {
