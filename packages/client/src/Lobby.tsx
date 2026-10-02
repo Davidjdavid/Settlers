@@ -70,9 +70,12 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const allowed = playersFor(room.options);
   const fits = allowed.includes(room.seats.length);
   const mode = modeOf(room.options);
-  // A profile already at the table rejoins that seat (SPEC 4.6, 5.1).
-  const rejoining = !!profile && room.seats.some((s) => !s.cpu && !s.connected && s.profile === profile.id);
-  const seated = new Set(room.seats.flatMap((s) => (s.profile && s.connected ? [s.profile] : [])));
+  // A profile already at the table gets that seat back (SPEC 4.6, 5.1); if another screen still
+  // has it, it moves here.
+  const here = new Set(room.seats.flatMap((s) => (s.profile && !s.cpu ? [s.profile] : [])));
+  const back = profile ? room.seats.find((s) => !s.cpu && s.profile === profile.id) : undefined;
+  const rejoining = !!back;
+  const moving = !!back?.connected;
   const t = room.table;
   const canStart = fits && !!t && !t.problem && !!t.first.pid;
   return (
@@ -174,7 +177,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (profile && (pick || rejoining)) client.join(profile.id, pick ?? 'red');
+              if (profile && (pick || rejoining)) client.join(profile.id, pick ?? 'red', moving);
             }}
           >
             <Options room={room} editable={false} />
@@ -183,11 +186,16 @@ export function Lobby({ room }: { room: RoomInfo }) {
               <label>Who are you?</label>
               <ProfilePicker
                 value={profile?.id ?? null}
-                taken={seated}
+                here={here}
                 onPick={(p) => setProfile({ id: p.id, color: p.color })}
               />
             </div>
-            {rejoining ? (
+            {moving ? (
+              <p className="hint" data-testid="move-hint">
+                {back!.nick} is sitting here on another screen (another tab, or a page left open). Move the
+                seat to this screen? The other screen will just watch.
+              </p>
+            ) : rejoining ? (
               <p className="hint">You’re at this table: you’ll get your seat back.</p>
             ) : room.seats.length < 4 ? (
               <div className="field">
@@ -202,7 +210,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
               disabled={!profile || (!rejoining && (!pick || room.seats.length >= 4))}
               data-testid="sit"
             >
-              {rejoining ? 'Rejoin' : 'Take a seat'}
+              {moving ? 'Move my seat here' : rejoining ? 'Rejoin' : 'Take a seat'}
             </button>
           </form>
         )}

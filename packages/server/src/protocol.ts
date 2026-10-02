@@ -356,7 +356,13 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('hello'), room: roomCode, token: z.string().max(100).optional() }),
   z.strictObject({ t: z.literal('create') }),
   /** Sit down as one of the profiles (SPEC 5.1). Your own seat back if it's already at the table. */
-  z.strictObject({ t: z.literal('join'), profile: z.string().min(1).max(60), color: COLOR }),
+  /** `move`: your own seat is open on another screen; move it here (SPEC 4.6). */
+  z.strictObject({
+    t: z.literal('join'),
+    profile: z.string().min(1).max(60),
+    color: COLOR,
+    move: z.literal(true).optional(),
+  }),
   /** Profiles: the list, a new one, merging a typo into the right one. Allowed outside rooms. */
   z.strictObject({ t: z.literal('profiles') }),
   z.strictObject({ t: z.literal('newProfile'), name: nick, color: COLOR }),

@@ -1193,9 +1193,9 @@ export function Game({
           <div className="banner">
             <span>
               You’re watching.
-              {disconnected.length ? ' Left the game? Pick your name to get your seat back.' : ''}
+              {' Playing here? Pick your name to get your seat on this screen.'}
             </span>
-            {disconnected.length ? <RejoinForm room={room} /> : null}
+            <RejoinForm room={room} />
             <span className="acts">
               {disconnected.length ? <span className="hint">Or take over a seat:</span> : null}
               {disconnected.map((x) => (
@@ -1566,21 +1566,35 @@ export function Game({
 
 /** Rejoin by nickname (SPEC 4.6): the same name gets a disconnected seat straight back. */
 function RejoinForm({ room }: { room: RoomInfo }) {
-  // Rejoin by picking your name (SPEC 4.6, 5.1): only seats nobody is using.
-  const away = room.seats.filter((x) => !x.cpu && !x.connected && x.profile);
+  // Rejoin by picking your name (SPEC 4.6, 5.1). A seat another screen still has moves here, after
+  // a second tap to confirm.
+  const mine = room.seats.filter((x) => !x.cpu && x.profile);
+  const [moving, setMoving] = useState<string | null>(null);
   return (
     <span className="acts">
-      {away.map((x) => (
-        <button
-          key={x.pid}
-          className="btn small primary"
-          data-testid="rejoin"
-          data-name={x.nick}
-          onClick={() => client.join(x.profile!, x.color)}
-        >
-          I’m {x.nick}
-        </button>
-      ))}
+      {mine.map((x) =>
+        x.connected && moving !== x.pid ? (
+          <button
+            key={x.pid}
+            className="btn small"
+            data-testid="rejoin"
+            data-name={x.nick}
+            onClick={() => setMoving(x.pid)}
+          >
+            I’m {x.nick}
+          </button>
+        ) : (
+          <button
+            key={x.pid}
+            className="btn small primary"
+            data-testid={x.connected ? 'rejoin-move' : 'rejoin'}
+            data-name={x.nick}
+            onClick={() => client.join(x.profile!, x.color, x.connected)}
+          >
+            {x.connected ? `Move ${x.nick}’s seat to this screen` : `I’m ${x.nick}`}
+          </button>
+        ),
+      )}
     </span>
   );
 }

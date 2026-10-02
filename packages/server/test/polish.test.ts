@@ -126,6 +126,39 @@ describe('rejoining by name (SPEC 4.6)', () => {
   });
 });
 
+describe('moving your seat to another screen (SPEC 4.6)', () => {
+  it('your own name takes your seat from a screen still connected, after you confirm; the other screen watches', () => {
+    const { code, conns } = table(['Ann', 'Bob', 'Cat']);
+    const annPid = conns[0]!.pid;
+    // Ann opens the room again in a browser that doesn't know her seat (another tab, a phone's
+    // second browser), while her first screen is still connected.
+    const tab = new FakeConn();
+    send(tab, { t: 'hello', room: code });
+    expect(tab.last('sync').room.seats.find((x) => x.pid === annPid)!.connected).toBe(true);
+    send(tab, joinAs(store, 'Ann', 'red'));
+    expect(tab.last('error').text).toMatch(/another screen/);
+    expect(tab.pid).toBeNull();
+    send(tab, { ...joinAs(store, 'Ann', 'red'), move: true } as ClientMsg);
+    expect(tab.pid).toBe(annPid);
+    expect(tab.last('seat').pid).toBe(annPid);
+    // The first screen is told, and now only watches.
+    expect(conns[0]!.pid).toBeNull();
+    expect(conns[0]!.last('error').text).toMatch(/moved to another screen/);
+    expect(conns[0]!.last('update').room.me).toBeNull();
+    // In a game too, and the message passes the schema.
+    send(conns[1]!, { t: 'start' });
+    const bobPid = conns[1]!.pid;
+    const back = new FakeConn();
+    send(back, { t: 'hello', room: code });
+    const msg = { ...joinAs(store, 'Bob', 'blue'), move: true };
+    expect(ClientMsgSchema.safeParse(msg).success).toBe(true);
+    send(back, msg as ClientMsg);
+    expect(back.pid).toBe(bobPid);
+    expect(conns[1]!.pid).toBeNull();
+    expect(back.last('update').game!.me).toBe(state(code).players.findIndex((p) => p.pid === bobPid));
+  });
+});
+
 describe('colours', () => {
   it('gray is only for CPU players', () => {
     const { conns } = table(['Ann']);

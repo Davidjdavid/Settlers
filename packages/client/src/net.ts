@@ -411,9 +411,9 @@ export class Client {
   }
 
   /** Sit down as a profile (remembered as this browser's last pick). */
-  join(profile: string, color: Color) {
+  join(profile: string, color: Color, move = false) {
     setStored('settlers.profile', profile);
-    this.send({ t: 'join', profile, color });
+    this.send(move ? { t: 'join', profile, color, move } : { t: 'join', profile, color });
   }
   loadProfiles() {
     this.send({ t: 'profiles' });

@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–7 and 9.1, 9.2, 9.6 done and live. Milestones 8 and 9 built and tested, going live with the next deploy. Milestone 10: Seafarers maps from the editor, the Fog Islands and regions built; treasures wait for their rules (docs/rules/treasures.md) to be agreed.**
+Status: **Milestones 1–9 done and live (deployed 2026-10-02). Milestone 10: Seafarers maps from the editor, the Fog Islands and regions built; treasures wait for their rules (docs/rules/treasures.md) to be agreed.**
 
 ## Milestone 1: base game
 
@@ -229,7 +229,7 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
 ### 4.6 Rejoining by name
 
 - **How:** if you leave a game (or lose your device), open the room code and enter **the same nickname**. If that player's seat is disconnected, you get it straight back, with no takeover warning.
-- **If the seat is in use:** when someone using that nickname is still connected, you're told the seat is in use.
+- **If the seat is open on another screen** (another tab, a page left open, a phone that dropped off without saying): your name can still be picked. One more tap ("Move my seat here") moves the seat to this screen, and the other screen is told and just watches. Changed on 2 October after a player got stuck: their own seat was held by a second copy of the page.
 - **The game simply waits** while someone is away, and carries on once they're back.
 - **Taking over someone else's seat** keeps its two-step warning.
 
@@ -285,7 +285,7 @@ Reliability still comes first. In particular, every number on a stats screen is 
   - The browser remembers your last pick, so it's usually one tap.
   - Your favourite colour is picked for you if it's free.
 - **Names are unique,** ignoring capitals and extra spaces ("ann" is "Ann").
-- **A profile someone is using** (connected in a room right now) shows as in use, and can't be picked by a second person at the same time.
+- **A profile someone is using** (connected in a room right now) shows as in use, and can't be picked at another table at the same time. At its own table it can: that's how you move your seat to another screen (4.6).
 - **What hangs off a profile:**
   - your personal settings (moved over from your nickname);
   - your seat in every game, past and saved;
@@ -609,7 +609,7 @@ The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 
 ## Milestone 8: Bank, gates, warnings, trading, helpers, keep playing, the log
 
-**Status: built and tested (e2e/m8.spec.ts); going live with the next deploy.** Your answers are in 8.11. Decided while building:
+**Status: done and live (deployed 2026-10-02).** Your answers are in 8.11. Decided while building:
 
 - **The log's robber line** ("The robber blocked 1 Brick from Joe") is a note the server works out from the board after each roll, not a new game event, so every saved game replays exactly as saved and old games get the line too.
 - **Laptops and desktops** (1180px wide and up at the display size): the game fits the window and the page never scrolls. The board shrinks a little to keep the prompt in view, the log fills the bottom of the left column, and a column with more than fits (four players in Knights on a 1366×768 screen) scrolls inside itself, keeping whoever's turn it is in view.
@@ -866,7 +866,7 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 
 ## Milestone 9: Sounds, dice on screen, and the barbarians
 
-**Status: 9.1, 9.2 and 9.6 done and live (deployed 2026-10-02); 9.3–9.5 built and tested (e2e/m9.spec.ts), going live with the next deploy.** One choice made while building: the pinned dice panel can also be moved by its ⤧ button (a corner at a time), as well as dragged, so it works without a mouse. Your answers are in 9.7. Your requests of 2 October.
+**Status: 9.1, 9.2 and 9.6 done and live (deployed 2026-10-02); 9.3–9.5 done and live (deployed 2026-10-02, later the same day).** One choice made while building: the pinned dice panel can also be moved by its ⤧ button (a corner at a time), as well as dragged, so it works without a mouse. Your answers are in 9.7. Your requests of 2 October.
 
 **Order (D1):**
 

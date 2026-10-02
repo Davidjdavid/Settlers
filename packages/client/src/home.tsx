@@ -181,12 +181,15 @@ export function Home({ error }: { error: string | null }) {
 export function ProfilePicker({
   value,
   onPick,
-  taken,
+  here,
 }: {
   value: string | null;
   onPick: (p: ProfileInfo) => void;
-  /** Profiles already seated at this table (shown as in use). */
-  taken?: Set<string>;
+  /**
+   * Profiles seated at this table: always pickable, to get your seat back (even from a screen
+   * that still has it). Profiles in use at another table can't be picked.
+   */
+  here?: Set<string>;
 }) {
   const st = useClient();
   const [adding, setAdding] = useState(false);
@@ -210,14 +213,14 @@ export function ProfilePicker({
           key={p.id}
           className={`profile${value === p.id ? ' on' : ''}`}
           aria-pressed={value === p.id}
-          disabled={(p.inUse || !!taken?.has(p.id)) && value !== p.id}
+          disabled={p.inUse && !here?.has(p.id) && value !== p.id}
           data-testid="profile"
           data-name={p.name}
           onClick={() => onPick(p)}
         >
           <span className="dot" style={{ background: PCOL[p.color] }} />
           {p.name}
-          {p.inUse ? <small> in use</small> : null}
+          {here?.has(p.id) ? <small> at this table</small> : p.inUse ? <small> in use</small> : null}
         </button>
       ))}
       {adding ? (

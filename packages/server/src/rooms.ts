@@ -368,7 +368,7 @@ export class Rooms {
     if (!room) return conn.send({ t: 'error', text: 'Join a room first' });
     switch (msg.t) {
       case 'join':
-        return this.join(conn, room, msg.profile, msg.color);
+        return this.join(conn, room, msg.profile, msg.color, msg.move === true);
       case 'setCpuChat':
         return this.setCpuChat(conn, room, msg.on);
       case 'table':
@@ -456,20 +456,26 @@ export class Rooms {
     this.attach(conn, room, pid);
   }
 
-  private join(conn: Conn, room: Room, profileId: string, color: Color) {
+  private join(conn: Conn, room: Room, profileId: string, color: Color, move = false) {
     if (conn.pid) return conn.send({ t: 'error', text: 'You already have a seat' });
     const prof = this.store.profileById(profileId);
     if (!prof) return conn.send({ t: 'error', text: 'Pick your name from the list' });
-    // Your own seat back (SPEC 4.6, 5.1): the same profile gets its seat if nobody is using it.
+    // Your own seat back (SPEC 4.6, 5.1). If another screen still has it (a second tab, a page
+    // left open, a phone that dropped off without saying), it moves here once you confirm.
     const mine = room.seats.find((s) => !s.cpu && s.profileId === prof.id);
     if (mine) {
-      if (this.isConnected(room, mine.pid))
-        return conn.send({ t: 'error', text: `${mine.nick}’s seat is in use` });
+      const elsewhere = [...room.conns].filter((c) => c !== conn && c.pid === mine.pid);
+      if (elsewhere.length && !move)
+        return conn.send({ t: 'error', text: `${mine.nick}’s seat is in use on another screen` });
+      for (const c of elsewhere) {
+        c.pid = null;
+        c.send({ t: 'error', text: 'Your seat moved to another screen' });
+      }
       const token = randomBytes(24).toString('base64url');
       mine.tokenHash = hashToken(token);
       this.store.tx(() => {
         this.store.saveRoom(room.code, room.seats, room.game?.row.id ?? null);
-        this.sys(room, `${mine.nick} is back`);
+        this.sys(room, elsewhere.length ? `${mine.nick} moved to another screen` : `${mine.nick} is back`);
       });
       conn.pid = mine.pid;
       conn.send({ t: 'seat', room: room.code, pid: mine.pid, token });
