@@ -269,6 +269,13 @@ test('three players use the table polish features through a whole game', async (
 
     const endTurn = async (p: Page) => {
       const before = await view(p);
+      // Cards are bought rarely: until both card settings have been tried, play any playable
+      // Knight or Road Building before ending (the turn ends on a later step).
+      const dev = before.hand?.dev;
+      if (count.card.some((x) => x === 0) && !before.devPlayed && before.stage === 'main' && dev) {
+        if (dev.knight > 0) return playCard(p, 'playKnight');
+        if (dev.road > 0 && before.players[before.me].pieces.road > 0) return playCard(p, 'playRoads');
+      }
       if (!rulesDone) await changeRules(p);
       if (count.trade[0] + count.trade[1] < 2 && before.turnN > 6) await tryTrade(p);
       const kept = backStep === 1 ? await view(p) : null;

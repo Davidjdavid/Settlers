@@ -152,7 +152,35 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     }
     await expect(a.locator('[data-testid=corner-dice] svg.die')).toHaveCount(3);
     await expect(b.getByTestId('corner-dice')).toHaveCount(0);
+    // Once the tumble ends, the corner shows the same dice as the bar.
+    for (const id of ['dice', 'corner-dice'])
+      await expect(a.getByTestId(id)).toHaveAttribute('data-state', 'still');
+    const faces = await a.getByTestId('dice').getAttribute('data-faces');
+    await expect(a.getByTestId('corner-dice')).toHaveAttribute('data-faces', faces!);
+    await expect(a.locator('[data-testid=corner-dice] svg.eventdie')).toHaveAttribute(
+      'data-event',
+      (await a.locator('[data-testid=dice] svg.eventdie').getAttribute('data-event'))!,
+    );
     if (SHOTS) await a.screenshot({ path: `${SHOTS}/ck-dice.png` });
+    // On a phone all three dice still show, side by side.
+    const size = c.viewportSize()!;
+    await c.setViewportSize({ width: 390, height: 844 });
+    const dice = c.getByTestId('dice');
+    await dice.scrollIntoViewIfNeeded();
+    const boxes = await dice.locator('svg.die').evaluateAll((els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { x: r.x, y: r.y, w: r.width, right: r.right };
+      }),
+    );
+    expect(boxes).toHaveLength(3);
+    for (const [i, bx] of boxes.entries()) {
+      expect(bx.w).toBeGreaterThan(20);
+      expect(bx.right).toBeLessThanOrEqual(390);
+      if (i) expect(bx.x).toBeGreaterThan(boxes[i - 1]!.x);
+    }
+    if (SHOTS) await c.screenshot({ path: `${SHOTS}/ck-dice-phone.png` });
+    await c.setViewportSize(size);
     // SPEC 9.6: tracks in the order of the commodity cards (book, linen, coin).
     const order = await a
       .locator('[data-testid^=improve-]')
