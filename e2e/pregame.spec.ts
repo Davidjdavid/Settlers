@@ -34,11 +34,16 @@ const boardKey = async (p: Page) => {
     ? `${t.board.seed}|${JSON.stringify(t.board.map.hexes)}|${JSON.stringify(t.board.map.harbors)}`
     : '';
 };
-/** Every browser shows the same board as the first. */
+/** Every browser shows the same board (waiting for the latest change to reach them all). */
 async function sameBoard(t: Table) {
-  const want = await boardKey(t.pages[0]!);
-  for (const p of t.pages) await expect.poll(() => boardKey(p)).toBe(want);
-  return want;
+  let keys: string[] = [];
+  await expect
+    .poll(async () => {
+      keys = await Promise.all(t.pages.map(boardKey));
+      return new Set(keys).size;
+    })
+    .toBe(1);
+  return keys[0]!;
 }
 const lastLine = (p: Page) => p.getByTestId('board-last');
 const hexOn = (p: Page, q: number, r: number) =>
