@@ -460,6 +460,31 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
           +
         </button>
       </div>
+      <label>
+        Bank cards{' '}
+        <Help text="Limited: the official supply, 19 of each resource (and 12 of each commodity in Knights games). If the bank can’t pay everyone a card a roll produces, nobody gets it. Unlimited: the bank never runs out." />
+      </label>
+      <div
+        className="seg banksel"
+        role="radiogroup"
+        aria-label="Bank cards"
+        style={{ marginLeft: 0, marginBottom: 8 }}
+      >
+        {(['limited', 'unlimited'] as const).map((b) => (
+          <button
+            key={b}
+            type="button"
+            role="radio"
+            aria-checked={(o.bank ?? 'limited') === b}
+            className={`btn small${(o.bank ?? 'limited') === b ? ' on' : ''}`}
+            disabled={!editable}
+            data-testid={`bank-${b}`}
+            onClick={() => set({ ...o, bank: b })}
+          >
+            {b === 'limited' ? 'Limited' : 'Unlimited'}
+          </button>
+        ))}
+      </div>
       <label>House rules</label>
       <div style={{ display: 'grid', gap: 6 }}>
         {HOUSE_RULES.filter((h) => (!h.seafarers || sea) && (!h.ck || o.ck)).map((h) => (

@@ -496,6 +496,10 @@ export function StatsPage() {
                 <b>{r.avgPoints.toFixed(1)}</b>
               </div>
               <div>
+                <span className="eyebrow">Overtime wins</span>
+                <b data-testid="overtime-wins">{r.overtime ?? 0}</b>
+              </div>
+              <div>
                 <span className="eyebrow">Streak</span>
                 <b>
                   {r.streak.current} now · best {r.streak.best}
@@ -578,6 +582,11 @@ export function StatsPage() {
                         {p.won ? ' 🏆' : ''}
                       </span>
                     ))}
+                    {g.overtime?.length ? (
+                      <span className="who overtime">
+                        Overtime: {g.overtime.map((w) => `${w.name} to ${w.target}`).join(', ')}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               ))}

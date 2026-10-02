@@ -169,10 +169,18 @@ export function CountSheet(props: {
 
 /* ---------- Trade: players and bank ---------- */
 
-export function TradeSheet({ v, onClose }: { v: PlayerView; onClose: () => void }) {
+export function TradeSheet({
+  v,
+  onClose,
+  tab: start = 'players',
+}: {
+  v: PlayerView;
+  onClose: () => void;
+  tab?: 'players' | 'bank';
+}) {
   const me = v.me!;
   const myTurn = v.turn === me;
-  const [tab, setTab] = useState<'players' | 'bank'>('players');
+  const [tab, setTab] = useState<'players' | 'bank'>(myTurn ? start : 'players');
   const [give, setGive] = useState<Cards>({});
   const [want, setWant] = useState<Cards>({});
   const [bg, setBg] = useState<Card | null>(null);

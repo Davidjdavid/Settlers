@@ -2867,3 +2867,95 @@ button.vp {
     width: 90px;
   }
 }
+
+/* Trade and card buttons in the prompt bar (SPEC 8.6, 8.7): bigger, bolder, each its own colour. */
+.prompt .acts .actbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  border: 1.5px solid var(--act);
+  background: color-mix(in srgb, var(--act) 16%, transparent);
+  color: var(--ink);
+}
+.prompt .acts .actbtn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--act) 28%, transparent);
+}
+.prompt .acts .actbtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.actbtn .acticon {
+  display: inline-flex;
+  color: var(--act);
+}
+.tradebtn {
+  --act: #4fb3d9;
+}
+.bankbtn {
+  --act: #d9a24f;
+}
+.cardbtn {
+  --act: #b58cf0;
+}
+.actbtn .badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.goalchip {
+  gap: 6px;
+  padding: 5px 11px;
+}
+.goalchip svg {
+  color: #e9b94a;
+  flex: none;
+}
+
+/* Over the hand limit (SPEC 8.4). */
+.handcount.over {
+  color: #ff8a80;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.handcount.over b {
+  color: #ff8a80;
+}
+.handcount.calm {
+  text-decoration: underline dotted;
+  cursor: help;
+}
+.handcount.over svg {
+  color: #ff6b5e;
+}
+.endwarn {
+  margin-left: 6px;
+  font-size: 13px;
+}
+
+/* Keep playing (SPEC 8.9). */
+.keepbox {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  background: var(--panel-2);
+}
+.keepbox p {
+  margin: 0 0 8px;
+}
+.keepbtn {
+  margin: 10px 0;
+}

@@ -119,6 +119,39 @@ export const TRACK_COLOR: Record<Track, string> = {
   science: '#3fa34d',
 };
 /**
+ * A metropolis (SPEC 8.2): a small golden gate on the city's roof, an arch between two towers,
+ * with a banner in the track's colour carrying a tiny mark of its commodity (cloth, coin or
+ * paper), so it never relies on colour alone. (x, y) is the city's corner.
+ */
+export function gateSVG(x: number, y: number, track: Track): string {
+  const u = (n: number) => f1(n * K);
+  const X = (n: number) => f1(x + n * K);
+  const Y = (n: number) => f1(y + n * K);
+  const b = -0.22; // the roof line
+  const gold = '#dcae46';
+  const ink = '#0b1418';
+  const mark =
+    track === 'politics'
+      ? `<circle cx="${X(0)}" cy="${Y(b - 0.36)}" r="${u(0.04)}" fill="#f4ecd6" stroke="${ink}" stroke-width="1"/>`
+      : track === 'trade'
+        ? `<path d="M${X(-0.055)} ${Y(b - 0.385)}q${u(0.028)} ${u(-0.02)} ${u(0.055)} 0t${u(0.055)} 0M${X(-0.055)} ${Y(b - 0.345)}q${u(0.028)} ${u(-0.02)} ${u(0.055)} 0t${u(0.055)} 0" fill="none" stroke="${ink}" stroke-width="1.4" stroke-linecap="round"/>`
+        : `<rect x="${X(-0.045)}" y="${Y(b - 0.405)}" width="${u(0.09)}" height="${u(0.09)}" rx="1" fill="#f4ecd6" stroke="${ink}" stroke-width="1"/><path d="M${X(-0.025)} ${Y(b - 0.37)}h${u(0.05)}M${X(-0.025)} ${Y(b - 0.345)}h${u(0.05)}" stroke="${ink}" stroke-width="1"/>`;
+  return (
+    `<g class="gate" data-track="${track}">` +
+    // Two towers with battlements.
+    `<path d="M${X(-0.21)} ${Y(b)}V${Y(b - 0.3)}h${u(0.03)}v${u(0.04)}h${u(0.03)}v${u(-0.04)}h${u(0.03)}V${Y(b)}Z" fill="${gold}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M${X(0.12)} ${Y(b)}V${Y(b - 0.3)}h${u(0.03)}v${u(0.04)}h${u(0.03)}v${u(-0.04)}h${u(0.03)}V${Y(b)}Z" fill="${gold}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // The arch between them, open below.
+    `<path d="M${X(-0.12)} ${Y(b)}V${Y(b - 0.22)}H${X(0.12)}V${Y(b)}H${X(0.055)}V${Y(b - 0.09)}A${u(0.055)} ${u(0.055)} 0 0 0 ${X(-0.055)} ${Y(b - 0.09)}V${Y(b)}Z" fill="${gold}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // The banner on a short pole, in the track's colour, with its commodity's mark.
+    `<path d="M${X(0)} ${Y(b - 0.22)}V${Y(b - 0.3)}" stroke="${ink}" stroke-width="1.6"/>` +
+    `<rect x="${X(-0.09)}" y="${Y(b - 0.44)}" width="${u(0.18)}" height="${u(0.14)}" rx="2" fill="${TRACK_COLOR[track]}" stroke="${ink}" stroke-width="1.6"/>` +
+    mark +
+    `</g>`
+  );
+}
+
+/**
  * The order tracks are shown in everywhere: the same as their commodities in your hand
  * (book, linen, coin), SPEC 9.6. The rules engine keeps its own order, so saved games replay.
  */

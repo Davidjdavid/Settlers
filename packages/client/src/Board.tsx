@@ -1,7 +1,13 @@
 /* The board, drawn as SVG strings like the prototype, with click targets for legal spots. */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { geometryFor, type Board as BoardData, type Geometry, type PlayerView } from '@settlers/engine';
+import {
+  geometryFor,
+  type Board as BoardData,
+  type Geometry,
+  type PlayerView,
+  type Track,
+} from '@settlers/engine';
 import {
   GLYPH,
   K,
@@ -13,6 +19,7 @@ import {
   cityPath,
   edgeOf,
   f1,
+  gateSVG,
   hexPts,
   settlementPath,
 } from './art';
@@ -108,7 +115,7 @@ export function harborMarkSVG(t: string, p: { x: number; y: number }): string {
 
 export const DECOR = [[-90, 0.6], [-30, 0.6], [30, 0.6], [90, 0.62], [150, 0.6], [210, 0.6]] as const; // prettier-ignore
 
-function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
+function staticSVG(board: BoardData, g: Geometry, vb: number[], no3to1 = false): string {
   const out: string[] = [];
   out.push(seaSVG(vb));
   // Beaches under land only; sea hexes are open water.
@@ -117,7 +124,9 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[]): string {
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.1 * K)}" fill="#d9c69a"/>`);
   for (const h of landHexes)
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.035 * K)}" fill="#c9b382"/>`);
+  // With "3:1 bank trades for everyone", 3:1 harbors would give nothing extra: not drawn (SPEC 8.11 D5).
   for (const pt of board.ports) {
+    if (no3to1 && pt.t === 'any') continue;
     const e = g.edges[pt.e]!;
     // Point the harbor away from its land hex, towards the water.
     const land = e.hexes.find((x) => board.hexes[x]!.t !== 'sea') ?? e.hexes[0]!;
@@ -383,7 +392,11 @@ export function Board(props: {
   const zoom = useZoom(vb);
   // Hexes change when fog is discovered, so the key includes their terrain.
   const hexKey = view.board.hexes.map((h) => `${h.t}${h.n}`).join(',');
-  const staticHtml = useMemo(() => staticSVG(view.board, g, vb), [hexKey, view.board.ports, g, vb]);
+  const no3to1 = !!view.rules.houseRules.bank3to1;
+  const staticHtml = useMemo(
+    () => staticSVG(view.board, g, vb, no3to1),
+    [hexKey, view.board.ports, g, vb, no3to1],
+  );
   const seen = useRef<Set<string> | null>(null);
 
   const sum = view.dice ? view.dice[0] + view.dice[1] : 0;
@@ -434,14 +447,12 @@ export function Board(props: {
     );
   });
   if (ck) {
-    // Metropolises: a tower in the track's colour on top of the city.
+    // Metropolises: a golden gate on the city, its banner in the track's colour (SPEC 8.2).
     for (const [t, v] of Object.entries(ck.metro)) {
       if (v == null) continue;
       const V = g.verts[v]!;
-      const x = V.x * K;
-      const y = V.y * K;
       parts.push(
-        `<g class="piece" data-metro="${t}" data-at="${v}"><rect x="${f1(x - 0.24 * K)}" y="${f1(y - 0.52 * K)}" width="${f1(0.16 * K)}" height="${f1(0.32 * K)}" fill="${TRACK_COLOR[t as 'trade']}" stroke="#0b1418" stroke-width="2"/><path d="M${f1(x - 0.27 * K)} ${f1(y - 0.52 * K)}L${f1(x - 0.16 * K)} ${f1(y - 0.66 * K)}L${f1(x - 0.05 * K)} ${f1(y - 0.52 * K)}Z" fill="${TRACK_COLOR[t as 'trade']}" stroke="#0b1418" stroke-width="2" stroke-linejoin="round"/></g>`,
+        `<g class="piece" data-metro="${t}" data-at="${v}">${gateSVG(V.x * K, V.y * K, t as Track)}</g>`,
       );
     }
     ck.knights.forEach((k, v) => {

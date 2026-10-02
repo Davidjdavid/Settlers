@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  COMS, COST, DEV_PLAY, KNIGHT_COST, SHIP_COST, WALL_COST, goldDue, has, legalActions, piecesLeft, RES, stateFromView,
-  vpBreakdown, type Action, type DevPlayable, type GameStats, type PlayerView, type Progress, type Seat, type VPPart,
+  COMS, COST, DEV_PLAY, KEEP_MAX, KNIGHT_COST, SHIP_COST, WALL_COST, cardKinds, cardWarning, goldDue, handLimit, has,
+  keepMinTarget, legalActions,
+  piecesLeft, rateFor, RES, stateFromView, vpBreakdown, type Action, type Card, type DevPlayable, type GameStats, type PlayerView, type Progress, type Seat, type VPPart,
 } from '@settlers/engine'; // prettier-ignore
 import type { DiceInfo, LogItem, RoomInfo } from '@settlers/server/protocol';
 import {
@@ -30,6 +31,14 @@ import {
 } from './ck'; // prettier-ignore
 
 type Play = Extract<Action, { type: 'progress' }>;
+
+/** Icons for the trade and card buttons (SPEC 8.6). */
+const ACT_ICON: Record<'trade' | 'bank' | 'card', string> = {
+  trade:
+    '<svg viewBox="0 0 20 20" width="16" height="16"><path d="M3 7h12l-3-3M17 13H5l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  bank: '<svg viewBox="0 0 20 20" width="16" height="16"><path d="M10 2 2 6v2h16V6zM4 9v6M8 9v6M12 9v6M16 9v6M2 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  card: '<svg viewBox="0 0 20 20" width="16" height="16"><rect x="5" y="2" width="10" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h4M8 10h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+};
 type Mode =
   | null
   | 'road'
@@ -45,9 +54,21 @@ type Mode =
   | 'chase'
   | 'metro'
   | 'card';
+/** A button in the prompt bar: `off` greys it out and says why; `badge` counts things waiting. */
+type PromptButton = {
+  label: string;
+  on: () => void;
+  primary?: boolean;
+  testid?: string;
+  off?: string;
+  badge?: number;
+  /** A warning shown beside the button (it never blocks). */
+  warn?: string;
+  kind?: 'trade' | 'bank' | 'card';
+};
 type SheetState =
   | null
-  | { k: 'trade' }
+  | { k: 'trade'; tab?: 'players' | 'bank' }
   | { k: 'discard' }
   | { k: 'plenty' }
   | { k: 'mono' }
@@ -169,6 +190,8 @@ export function Game({
       if (settingOn(room.mySettings, 'gameSounds')) playSound('fanfare');
     }
     wasPlaying.current = v.phase === 'play';
+    // Keep playing (SPEC 8.9): the next win shows the end screen again.
+    if (v.phase === 'play') setHideOver(false);
   }, [v.phase]);
   // A piece waiting for Confirm (SPEC 4.3).
   const [placing, setPlacing] = useState<{ a: Action; ghosts: Ghost[]; after?: () => void } | null>(null);
@@ -477,11 +500,20 @@ export function Game({
         a.type === { knight: 'playKnight', road: 'playRoads', plenty: 'playPlenty', mono: 'playMono' }[c],
     );
   /** Start playing a progress card: at once, in a sheet, or by picking on the board. */
+  /**
+   * A card that wouldn't do anything right now always asks first, saying why (SPEC 8.11 D4);
+   * otherwise the card confirmation setting decides.
+   */
+  const askCard = (a: Action, q: { title: string; sub?: string; yes: string }, go: () => void) => {
+    const w = cardWarning(v, a);
+    if (w) setSheet({ k: 'ask', title: q.title, sub: `${w}.`, yes: 'Play it anyway', onYes: go });
+    else ask('confirmCard', q, go);
+  };
   const playProgress = (c: Progress, plays: Play[]) => {
     const kind = paramOf(plays);
     if (kind === 'none')
-      return ask(
-        'confirmCard',
+      return askCard(
+        plays[0]!,
         { title: `Play ${PROGRESS_LABEL[c]}?`, sub: PROGRESS_HELP[c], yes: 'Play it' },
         () => void client.act(plays[0]!),
       );
@@ -496,8 +528,8 @@ export function Game({
   };
   const play = (c: DevPlayable) => {
     const now = (a: Action) =>
-      ask(
-        'confirmCard',
+      askCard(
+        a,
         { title: `Play ${DEV_LABEL[c]}?`, sub: DEV_HELP[c], yes: 'Play it' },
         () => void client.act(a),
       );
@@ -511,14 +543,31 @@ export function Game({
   const rollRef = useRef<(() => void) | null>(null);
   const canRoll = mine && v.stage === 'preroll' && acts.some((a) => a.type === 'roll') && !busy;
 
+  // Ending your turn over the hand limit (SPEC 8.4): a warning by End turn, never a block.
+  const myRisk =
+    me != null && v.hand
+      ? handRisk(
+          v,
+          stateFromView(v),
+          me,
+          Object.values(v.hand.res).reduce((a, b) => a + b, 0),
+        )
+      : null;
+  const endWarn = myRisk && !myRisk.calm ? myRisk.text : undefined;
   const endTurn = () =>
     ask(
       'confirmEnd',
       {
         title: 'End your turn?',
-        sub: v.rules.houseRules.handBack
-          ? 'If you end too soon, you can ask for the dice back until the next player does anything.'
-          : undefined,
+        sub:
+          [
+            endWarn,
+            v.rules.houseRules.handBack
+              ? 'If you end too soon, you can ask for the dice back until the next player does anything.'
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined,
         yes: 'End turn',
       },
       () => void client.act({ type: 'end' }),
@@ -526,12 +575,64 @@ export function Game({
 
   /* ---------- Prompt ---------- */
   const cur = nameOf(v, v.turn);
+
+  // Trading (SPEC 8.6): two buttons, the bank's showing your best rate, from the rules engine.
+  const bankRate = (() => {
+    if (me == null || !v.hand) return 'Bank';
+    const st = stateFromView(v);
+    let best = Infinity;
+    let cards: Card[] = [];
+    for (const k of cardKinds(st)) {
+      const r = rateFor(st, me, k);
+      if (r < best) [best, cards] = [r, [k]];
+      else if (r === best) cards.push(k);
+    }
+    const all = cards.length === cardKinds(st).length;
+    return all || cards.length > 2
+      ? `Bank · ${best}:1`
+      : `Bank · ${best}:1 ${cards.map((k) => CARD_LABEL[k]).join(', ')}`;
+  })();
+  const waitingOffers =
+    me == null ? 0 : v.offers.filter((o) => o.from !== me && o.resp[me] == null && (o.from === v.turn || v.turn === me)).length; // prettier-ignore
+  const tradeButtons = (players: string | null, bank: string | null): PromptButton[] => [
+    {
+      label: 'Trade with players',
+      on: () => setSheet({ k: 'trade', tab: 'players' }),
+      testid: 'trade',
+      kind: 'trade',
+      ...(players ? { off: players } : {}),
+      ...(waitingOffers ? { badge: waitingOffers } : {}),
+    },
+    {
+      label: bankRate,
+      on: () => setSheet({ k: 'trade', tab: 'bank' }),
+      testid: 'trade-bank',
+      kind: 'bank',
+      ...(bank ? { off: bank } : {}),
+    },
+  ];
+  // Before the roll (SPEC 8.7): a reminder of cards you may play first.
+  const alchemist = (v.ck?.hand ?? []).includes('alchemist') && !v.ck?.alchemy;
+  const alchemistPlays = acts.filter((a): a is Play => a.type === 'progress' && a.card === 'alchemist');
+  const rollNow = () => {
+    if (alchemist && alchemistPlays.length)
+      return ask(
+        'confirmCard',
+        {
+          title: 'Roll without using your Alchemist?',
+          sub: 'You can play it now to choose both dice.',
+          yes: 'Roll',
+        },
+        () => rollRef.current?.(),
+      );
+    rollRef.current?.();
+  };
   const sum = v.dice ? v.dice[0] + v.dice[1] : 0;
   let pm: {
     title: string;
     sub: string;
     mine?: boolean;
-    buttons?: { label: string; on: () => void; primary?: boolean; testid?: string }[];
+    buttons?: PromptButton[];
   };
   if (v.phase === 'over') {
     pm = {
@@ -570,12 +671,33 @@ export function Game({
             : 'Tiles matching the roll produce cards.',
           mine: true,
           buttons: [
+            ...(alchemistPlays.length
+              ? [
+                  {
+                    label: 'Play Alchemist',
+                    on: () => playProgress('alchemist', alchemistPlays),
+                    testid: 'play-alchemist',
+                    kind: 'card' as const,
+                  },
+                ]
+              : []),
+            ...(canPlay('knight')
+              ? [
+                  {
+                    label: 'Play Knight',
+                    on: () => play('knight'),
+                    testid: 'preroll-knight',
+                    kind: 'card' as const,
+                  },
+                ]
+              : []),
             {
               label: 'Roll dice',
-              on: () => rollRef.current?.(),
+              on: rollNow,
               primary: true,
               testid: 'roll',
             },
+            ...tradeButtons('Roll the dice first', 'Roll the dice first'),
           ],
         }
       : { title: `${cur} is about to roll`, sub: '' };
@@ -621,7 +743,7 @@ export function Game({
       : { title: `${cur} is placing free roads`, sub: '' };
   } else if (v.stage === 'ck') {
     const op = owePrompt(v, owe);
-    const buttons: { label: string; on: () => void; primary?: boolean; testid?: string }[] = [];
+    const buttons: PromptButton[] = [];
     if (owe && !BOARD_OWES.has(owe.k))
       buttons.push({ label: 'Choose', on: () => setSheet({ k: 'owe' }), primary: true });
     if (owe && owed.some((a) => a.skip))
@@ -662,8 +784,14 @@ export function Game({
           sub: 'Build, trade, or play a card. End your turn when you’re done.',
           mine: true,
           buttons: [
-            { label: 'Trade', on: () => setSheet({ k: 'trade' }), testid: 'trade' },
-            { label: 'End turn', on: endTurn, primary: true, testid: 'end' },
+            ...tradeButtons(null, null),
+            {
+              label: 'End turn',
+              on: endTurn,
+              primary: true,
+              testid: 'end',
+              ...(endWarn ? { warn: endWarn } : {}),
+            },
           ],
         };
   } else {
@@ -673,10 +801,20 @@ export function Game({
       me != null &&
       (!v.players[v.turn]!.cpu ||
         ((turnSeat?.level ?? 'easy') !== 'easy' && room.options.cpuTrading !== false));
+    const why =
+      me == null
+        ? null
+        : v.stage !== 'main'
+          ? `Wait for ${cur} to roll`
+          : tradable
+            ? null
+            : room.options.cpuTrading === false
+              ? 'CPU trading is off'
+              : `${cur} doesn’t trade`;
     pm = {
       title: `${cur}’s turn`,
       sub: tradable ? `${cur} rolled ${sum}. You can offer them a trade.` : `${cur} rolled ${sum}.`,
-      buttons: tradable ? [{ label: 'Offer a trade', on: () => setSheet({ k: 'trade' }) }] : [],
+      buttons: me == null ? [] : tradeButtons(why, 'Only on your turn'),
     };
   }
 
@@ -857,6 +995,20 @@ export function Game({
           <span className="sub">Room</span>
           <span className="label">{room.code}</span>
         </button>
+        {/* SPEC 8.5: the target, always on screen (raised by Keep playing). */}
+        <span className="turnchip goalchip" data-testid="goal" title={`First to ${v.winVP} points wins`}>
+          <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+            <path
+              d="M3 13V1.5M3 2h8l-2 3 2 3H3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="sub">First to</span>
+          <span className="label">{v.winVP}</span>
+        </span>
         <div className="spacer" />
         <span
           className={`sync ${status === 'live' ? (busy ? 'busy' : 'live') : status === 'offline' ? 'off' : 'busy'}`}
@@ -1015,7 +1167,7 @@ export function Game({
           {celebrating ? (
             <Celebration
               color={PCOL[v.players[v.winner!]!.color]}
-              text={v.winner === me ? 'You win!' : `${nameOf(v, v.winner)} wins!`}
+              text={`${v.winner === me ? 'You win' : `${nameOf(v, v.winner)} wins`}${v.keep?.on ? ' in overtime' : ''}!`}
               onDone={() => setCelebrating(false)}
             />
           ) : v.phase === 'over' && !hideOver ? (
@@ -1042,12 +1194,35 @@ export function Game({
               {pm.buttons.map((b) => (
                 <button
                   key={b.label}
-                  className={`btn${b.primary ? ' primary' : ''}`}
-                  disabled={busy}
+                  className={`btn${b.primary ? ' primary' : ''}${b.kind ? ` actbtn ${b.kind}btn` : ''}`}
+                  disabled={busy || b.off != null}
+                  title={b.off}
                   onClick={b.on}
                   data-testid={b.testid}
                 >
+                  {b.kind ? (
+                    <span
+                      className="acticon"
+                      aria-hidden="true"
+                      dangerouslySetInnerHTML={{ __html: ACT_ICON[b.kind] }}
+                    />
+                  ) : null}
                   {b.label}
+                  {b.warn ? (
+                    <span
+                      className="endwarn"
+                      title={b.warn}
+                      data-testid={`${b.testid}-warn`}
+                      aria-label={b.warn}
+                    >
+                      ⚠
+                    </span>
+                  ) : null}
+                  {b.badge ? (
+                    <span className="badge" data-testid={`${b.testid}-badge`}>
+                      {b.badge}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -1114,9 +1289,7 @@ export function Game({
                 <Score v={v} s={s} p={i} always={settingOn(my, 'showBreakdown')} />
                 <PiecesLeft s={s} p={i} color={p.color} />
                 <span className="stats">
-                  <span>
-                    <b data-testid={`cards-${i}`}>{p.resCount}</b> cards
-                  </span>
+                  <HandCount v={v} s={s} p={i} n={p.resCount} testid={`cards-${i}`} />
                   {v.ck ? null : (
                     <>
                       <span>
@@ -1158,20 +1331,26 @@ export function Game({
           </div>
           <div className="bankline" data-bank>
             <span>Bank:</span>
-            {RES.map((r) => (
-              <span key={r} title={RES_LABEL[r]}>
-                <i
-                  style={{
-                    display: 'inline-block',
-                    width: 9,
-                    height: 13,
-                    borderRadius: 2,
-                    background: TILE_COLOR[r],
-                  }}
-                />{' '}
-                {v.bank[r]}
-              </span>
-            ))}
+            {/* SPEC 8.1: every resource and commodity in play; ∞ when it never runs out. */}
+            {[...RES, ...(v.ck ? COMS : [])].map((r) => {
+              const unlimited =
+                v.rules.bank === 'unlimited' ||
+                (!RES.includes(r as (typeof RES)[number]) && v.rules.bank !== 'limited');
+              return (
+                <span key={r} title={CARD_LABEL[r]} data-testid={`bank-${r}`}>
+                  <i
+                    style={{
+                      display: 'inline-block',
+                      width: 9,
+                      height: 13,
+                      borderRadius: 2,
+                      background: CARD_COLOR[r],
+                    }}
+                  />{' '}
+                  {unlimited ? '∞' : v.bank[r]}
+                </span>
+              );
+            })}
             {v.ck ? null : <span>Dev deck {v.deckCount}</span>}
           </div>
         </section>
@@ -1182,7 +1361,9 @@ export function Game({
         </section>
       </aside>
 
-      {sheet?.k === 'trade' ? <TradeSheet v={v} onClose={() => setSheet(null)} /> : null}
+      {sheet?.k === 'trade' ? (
+        <TradeSheet v={v} tab={sheet.tab ?? 'players'} onClose={() => setSheet(null)} />
+      ) : null}
       {sheet?.k === 'discard' && owes ? <DiscardSheet v={v} onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'plenty' ? <PlentySheet v={v} onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'gold' && goldOwed ? (
@@ -1330,8 +1511,15 @@ function GameOver({ v, stats, onHide }: { v: PlayerView; stats: GameStats | null
   const order = v.players.map((_, i) => i).sort((a, b) => total(b) - total(a));
   return (
     <div className="card endcard" role="dialog" aria-label="Game over" data-testid="game-over">
-      <h2>{v.me === v.winner ? 'You win!' : `${nameOf(v, v.winner)} wins!`}</h2>
-      <p className="lede">Final scores, hidden victory cards included.</p>
+      <h2>
+        {v.me === v.winner ? 'You win' : `${nameOf(v, v.winner)} wins`}
+        {v.keep?.on ? ' in overtime!' : '!'}
+      </h2>
+      <p className="lede">
+        {v.keep?.on
+          ? `First to ${v.winVP} in overtime. The game’s result stays ${nameOf(v, v.keep.first.p)}’s first win to ${v.keep.first.target}.`
+          : 'Final scores, hidden victory cards included.'}
+      </p>
       <div className="seats" style={{ gridTemplateColumns: '1fr' }}>
         {order.map((i) => (
           <div className="seat" key={i}>
@@ -1342,6 +1530,7 @@ function GameOver({ v, stats, onHide }: { v: PlayerView; stats: GameStats | null
           </div>
         ))}
       </div>
+      <KeepPlaying v={v} />
       <div className="row">
         {v.me != null ? (
           <button className="btn primary" onClick={() => client.rematch()} data-testid="rematch">
@@ -1360,6 +1549,105 @@ function GameOver({ v, stats, onHide }: { v: PlayerView; stats: GameStats | null
           hexes={v.board.hexes}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Keep playing (SPEC 8.9): pick a new target and ask; everyone else says yes or no (CPUs agree
+ * on their own). One "no" ends the game normally.
+ */
+function KeepPlaying({ v }: { v: PlayerView }) {
+  const min = keepMinTarget(stateFromView(v));
+  const [target, setTarget] = useState(Math.max(v.winVP + 2, min));
+  const [picking, setPicking] = useState(false);
+  const me = v.me;
+  if (me == null) return null;
+  const ask = v.keep?.ask;
+  if (ask) {
+    const waiting = v.players.map((_, i) => i).filter((i) => !ask.ok.includes(i));
+    const mine = !ask.ok.includes(me);
+    return (
+      <div className="keepbox" data-testid="keep-ask">
+        <p>
+          <b>{nameOf(v, ask.p)}</b> {ask.p === me ? 'asked' : 'asks'} to keep playing: first to{' '}
+          <b>{ask.target}</b> wins in overtime. Waiting for {listNames(v, waiting)}.
+        </p>
+        <div className="row">
+          {mine ? (
+            <>
+              <button
+                className="btn primary"
+                onClick={() => void client.act({ type: 'answerKeep', yes: true })}
+                data-testid="keep-yes"
+              >
+                Keep playing
+              </button>
+              <button
+                className="btn"
+                onClick={() => void client.act({ type: 'answerKeep', yes: false })}
+                data-testid="keep-no"
+              >
+                No, we’re done
+              </button>
+            </>
+          ) : ask.p === me ? (
+            <button
+              className="btn"
+              onClick={() => void client.act({ type: 'cancelKeep' })}
+              data-testid="keep-cancel"
+            >
+              Withdraw
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+  if (!picking)
+    return (
+      <button className="btn keepbtn" onClick={() => setPicking(true)} data-testid="keep-playing">
+        Keep playing
+      </button>
+    );
+  return (
+    <div className="keepbox" data-testid="keep-pick">
+      <p>Play on to a new target. Everyone has to agree; the first win still counts as the result.</p>
+      <div className="row" style={{ alignItems: 'center' }}>
+        <span>First to</span>
+        <div className="ctl">
+          <button
+            type="button"
+            aria-label="Lower target"
+            disabled={target <= min}
+            onClick={() => setTarget(target - 1)}
+          >
+            −
+          </button>
+          <output data-testid="keep-target">{target}</output>
+          <button
+            type="button"
+            aria-label="Higher target"
+            disabled={target >= KEEP_MAX}
+            onClick={() => setTarget(target + 1)}
+          >
+            +
+          </button>
+        </div>
+        <button
+          className="btn primary"
+          onClick={() => {
+            void client.act({ type: 'askKeep', target });
+            setPicking(false);
+          }}
+          data-testid="keep-ask-go"
+        >
+          Ask everyone
+        </button>
+        <button className="btn ghost" onClick={() => setPicking(false)}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -1418,7 +1706,7 @@ function Score({
         data-score={shown}
       >
         {shown}
-        <small>VP</small>
+        <small>/ {v.winVP}</small>
       </button>
       {open || always ? (
         <span className="breakdown" data-testid={`breakdown-${p}`}>
@@ -1632,6 +1920,60 @@ function Offers({
   );
 }
 
+/** Over the hand limit (SPEC 8.4): who would discard how many on a 7, and why that limit. */
+export function handRisk(
+  v: PlayerView,
+  s: ReturnType<typeof stateFromView>,
+  p: Seat,
+  n: number,
+): { text: string; calm: boolean } | null {
+  const limit = handLimit(s, p);
+  if (n <= limit) return null;
+  const lose = Math.floor(n / 2);
+  const you = p === v.me;
+  const walls = (limit - 7) / 2;
+  // With "no discards before the first attack", nobody discards yet (D2): a calm note instead.
+  if (v.rules.houseRules.noDiscardBeforeAttack && v.ck && v.ck.attacks === 0)
+    return {
+      calm: true,
+      text: `${n} cards: a 7 would cost ${you ? 'you' : nameOf(v, p)} ${lose}, but nobody discards until the barbarians have attacked`,
+    };
+  const why = walls
+    ? `: 7, plus ${2 * walls} for ${you ? 'your' : 'their'} city wall${walls > 1 ? 's' : ''}`
+    : '';
+  return {
+    calm: false,
+    text: `${n} cards. If a 7 is rolled, ${you ? 'you’ll' : `${nameOf(v, p)} will`} discard ${lose} (half, rounded down). ${you ? 'Your' : 'Their'} limit is ${limit}${why}.`,
+  };
+}
+
+/** A card count that turns red, with a warning, over the hand limit; hover explains it. */
+function HandCount(props: {
+  v: PlayerView;
+  s: ReturnType<typeof stateFromView>;
+  p: Seat;
+  n: number;
+  testid: string;
+}) {
+  const risk = handRisk(props.v, props.s, props.p, props.n);
+  return (
+    <span
+      className={`handcount${risk ? (risk.calm ? ' calm' : ' over') : ''}`}
+      title={risk?.text}
+      data-testid={props.testid}
+      data-over={risk && !risk.calm ? 1 : undefined}
+    >
+      {risk && !risk.calm ? (
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-label="Over the hand limit" role="img">
+          <path d="M8 1.5 15 14H1z" fill="currentColor" />
+          <path d="M8 6v4M8 11.6v.4" stroke="#1a0d0d" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      ) : null}
+      <b>{props.n}</b> cards
+    </span>
+  );
+}
+
 function Tray(props: {
   v: PlayerView;
   mine: boolean;
@@ -1685,7 +2027,14 @@ function Tray(props: {
       <div className="traytitle">
         <span className="eyebrow">Your hand</span>
         <span className="handmeta">
-          {Object.values(hand.res).reduce((a, b) => a + b, 0)} cards · {hand.totalVP} points
+          <HandCount
+            v={v}
+            s={stateFromView(v)}
+            p={v.me!}
+            n={Object.values(hand.res).reduce((a, b) => a + b, 0)}
+            testid="hand-count"
+          />{' '}
+          · {hand.totalVP} points
         </span>
       </div>
       <div className="hand" data-testid="hand">
