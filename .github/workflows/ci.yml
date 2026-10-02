@@ -6,7 +6,8 @@ on:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The full check takes 35-45 minutes on GitHub's runners.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -16,7 +17,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check
-      - if: failure()
+      - if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces

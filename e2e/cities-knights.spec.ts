@@ -69,15 +69,22 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
         raids.seen++;
         const mine = p.getByTestId('raid-mine');
         if (await mine.isVisible().catch(() => false)) {
+          // Your own loss stays until you close it.
           await expect(mine).toContainText(/pillaged your (city|cities) on/);
           raids.mine.add(v.me);
           if (SHOTS) await p.screenshot({ path: `${SHOTS}/ck-raid-${v.me}.png` });
           // Improvements without a city say why.
           const hasCity = v.verts.some((x: [number, number] | null) => x && x[0] === v.me && x[1] === 2);
           if (!hasCity) await expect(p.getByTestId('ibtn-why-science')).toHaveText('needs a city');
+          await p.getByTestId('raid-ok').click();
+        } else {
+          // Anyone else's notice closes itself after 7 s, so it may already be gone.
+          await p
+            .getByTestId('raid-ok')
+            .click({ timeout: 2000 })
+            .catch(() => {});
         }
-        await p.getByTestId('raid-ok').click();
-        await expect(raid).toHaveCount(0);
+        await expect(raid).toHaveCount(0, { timeout: 10_000 });
         return true;
       }
       // Choices owed: answer them in their sheet (or on the board).

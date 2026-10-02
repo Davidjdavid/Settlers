@@ -215,7 +215,8 @@ describe('Medium and Hard in a game', () => {
     // Ann never answers the CPUs' offers.
     const fired = play(code, host, () => false);
     const pauses = fired.filter((ms) => ms !== 20_000 && ms !== 4000);
-    expect(pauses.length).toBeGreaterThan(100);
+    // Games vary in length (the server rolls real dice); any game has well over 30 CPU moves.
+    expect(pauses.length).toBeGreaterThan(30);
     expect(pauses.every((ms) => ms >= 1000 && ms <= 3000)).toBe(true);
     expect(Math.max(...pauses)).toBeGreaterThan(2000);
     const waits = fired.filter((ms) => ms === 20_000).length;

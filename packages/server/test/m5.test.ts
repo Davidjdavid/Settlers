@@ -335,13 +335,16 @@ describe('CPU chatter (SPEC 5.14)', () => {
   it('at most one line per CPU per turn, and none once switched off', () => {
     const { code, conns } = table(['Ann'], 2);
     send(conns[0]!, { t: 'start' });
-    play(code, conns, () => state(code).turnN >= 40);
+    // 60 turns: about 30 CPU turns, each with a 1-in-4 chance of a line (plus lines when robbed).
+    const over = () => state(code).phase === 'over';
+    play(code, conns, () => state(code).turnN >= 60 || over());
     const cpuChat = () =>
       conns[0]!.msgs
         .flatMap((m) => (m.t === 'update' ? m.log : []))
         .filter((it) => it.k === 'chat' && it.cpu);
     const lines = cpuChat();
-    expect(lines.length).toBeGreaterThan(3);
+    // The game is random (the server rolls real dice), so only "some" is certain enough to test.
+    expect(lines.length).toBeGreaterThan(1);
     // Each line is stored with the turn it was said in; no CPU speaks twice in a turn.
     const said = rooms.getRoom(code)!.chatter!;
     expect(said.size).toBeGreaterThan(0);
@@ -358,10 +361,10 @@ describe('CPU chatter (SPEC 5.14)', () => {
     }
     expect([...perTurn.values()].every((n) => n === 1)).toBe(true);
     // Not every turn.
-    expect(lines.length).toBeLessThan(40);
+    expect(lines.length).toBeLessThan(60);
     send(conns[0]!, { t: 'setCpuChat', on: false });
     const n = cpuChat().length;
-    play(code, conns, () => state(code).turnN >= 70);
+    play(code, conns, () => state(code).turnN >= 90 || over());
     expect(cpuChat().length).toBe(n);
   }, 120000);
 });

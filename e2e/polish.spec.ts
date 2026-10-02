@@ -267,14 +267,25 @@ test('three players use the table polish features through a whole game', async (
       }
     };
 
+    let boughtOn = -1;
     const endTurn = async (p: Page) => {
       const before = await view(p);
-      // Cards are bought rarely: until both card settings have been tried, play any playable
-      // Knight or Road Building before ending (the turn ends on a later step).
+      // The bots rarely buy cards (one game played none in 119 turns): until both card settings
+      // have been tried, play any playable Knight or Road Building before ending, and otherwise
+      // buy a card by clicking, once a turn. The turn then ends on a later step.
       const dev = before.hand?.dev;
-      if (count.card.some((x) => x === 0) && !before.devPlayed && before.stage === 'main' && dev) {
-        if (dev.knight > 0) return playCard(p, 'playKnight');
-        if (dev.road > 0 && before.players[before.me].pieces.road > 0) return playCard(p, 'playRoads');
+      if (count.card.some((x) => x === 0) && before.stage === 'main' && dev) {
+        if (!before.devPlayed && dev.knight > 0) return playCard(p, 'playKnight');
+        if (!before.devPlayed && dev.road > 0 && before.players[before.me].pieces.road > 0)
+          return playCard(p, 'playRoads');
+        const res = before.hand.res;
+        if (boughtOn !== before.turnN && before.deckCount > 0 && res.sheep && res.wheat && res.ore) {
+          boughtOn = before.turnN;
+          const seq = before.seq;
+          await p.getByTestId('build-dev').click();
+          await seqUp(p, seq);
+          return;
+        }
       }
       if (!rulesDone) await changeRules(p);
       if (count.trade[0] + count.trade[1] < 2 && before.turnN > 6) await tryTrade(p);

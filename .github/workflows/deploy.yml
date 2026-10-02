@@ -13,7 +13,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    # The full check takes 35-45 minutes on GitHub's runners.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
