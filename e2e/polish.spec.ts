@@ -59,9 +59,9 @@ test('three players use the table polish features through a whole game', async (
     /* ---------- Lobby ---------- */
     await a.click('[data-testid=create]');
     const code = (await a.getByTestId('room-code').textContent())!.trim();
-    // Eight colours, each with a road, settlement and city preview; gray is for CPUs only.
-    await expect(a.locator('.colorbtn')).toHaveCount(8);
-    await expect(a.locator('.colorbtn svg')).toHaveCount(8);
+    // Fourteen colours, each with a road, settlement and city preview; gray is for CPUs only.
+    await expect(a.locator('.colorbtn')).toHaveCount(14);
+    await expect(a.locator('.colorbtn svg')).toHaveCount(14);
     await expect(a.locator('.colorbtn[data-color=gray]')).toHaveCount(0);
     const colors = ['pink', 'yellow', 'black'];
     await sitAs(a, nicks[0]!, 'pink');

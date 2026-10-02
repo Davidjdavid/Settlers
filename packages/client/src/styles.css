@@ -3975,3 +3975,17 @@ button.vp {
     flex: 3 0 380px;
   }
 }
+
+/* The top bar when it's crowded (a tablet at the largest size, Knights): the room, the target and
+   the barbarians never shrink; their small words go first. */
+.roomchip,
+.goalchip,
+.barbchip {
+  flex: none;
+}
+@container app (max-width: 1000px) {
+  .goalchip .sub,
+  .barbchip .sub {
+    display: none;
+  }
+}
