@@ -52,7 +52,7 @@ test('your seat moves to the screen you pick your name on, in the lobby and mid-
 
   /* ---------- Mid-game ---------- */
   await tab.getByTestId('start').click();
-  await expect.poll(async () => (await view(tab))?.me).not.toBeNull();
+  await expect.poll(async () => (await view(tab))?.me).toEqual(expect.any(Number));
   const seat = (await view(tab)).me;
   const phone = await freshBrowser(browser, t.code);
   await expect(phone.locator('#board')).toBeVisible();
