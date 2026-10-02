@@ -863,13 +863,19 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 
 ## Milestone 9: Sounds, dice on screen, and the barbarians
 
-**Status: draft, waiting for your answers (9.7).** Your requests of 2 October.
+**Status: agreed (your answers are in 9.7).** Your requests of 2 October.
+
+**Order (D1):**
+
+- 9.1 (the event die), 9.2 (losing a city) and 9.6 (track order) come **right after Milestone 6**, before the CPUs, because without them the game looks broken.
+- 9.3–9.5 (sounds and pinned dice) come after Milestone 8.
 
 ### 9.1 The event die beside the big dice
 
-- In Knights games, the **event die** (the barbarian ship, or a gate colour) shows next to the two number dice, the same size.
+- In Knights games, the **event die** (the barbarian ship, or a gate colour) shows next to the two number dice, the same size. **You always see all three: both number dice, then the event die.**
 - It tumbles with them and lands on the server's face, like the number dice.
 - It shows on every screen, and stays until the next roll.
+- **A setting** also shows the dice in the top-right corner of the board (D5).
 
 ### 9.2 Losing a city to the barbarians
 
@@ -888,7 +894,7 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
 
 ### 9.3 Bad-news music
 
-- A short sad tune ("wah-wah-waaah") when the barbarians take one of your cities.
+- A short sad tune ("wah-wah-waaah") for each player whose city the barbarians take. Everyone else hears the barbarian horn (D3).
 - It's made in the browser like the other sounds, with no files.
 
 ### 9.4 Sound effects for everything
@@ -896,7 +902,7 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
 **Each of these gets a sound:**
 
 - dice rolled;
-- cards dealt (production, a soft tick per card);
+- cards dealt (production, a soft tick per card; on but quiet, with its own switch) (D4);
 - card stolen;
 - road, ship, settlement and city built;
 - ship moved;
@@ -908,7 +914,7 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
 - barbarian ship moves, and barbarians attack (won / lost);
 - Longest Road or Largest Army taken;
 - your turn;
-- chat message;
+- chat message (on but quiet, with its own switch) (D4);
 - win fanfare.
 
 **A Sounds page in Settings:**
@@ -928,7 +934,7 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
   - the 2–12 bar chart (rolled vs expected);
   - the last roll;
   - the event die faces (Knights).
-- You can drag it to another corner, shrink it to a strip, or unpin it.
+- It starts in the top-left corner (the top-right one is for the dice, 9.1). You can drag it to another corner, shrink it to a strip, or unpin it.
 - It's a personal setting, remembered on your profile.
 - On a phone, it's a thin strip above the hand.
 
@@ -936,15 +942,33 @@ Today it's easy to miss, and afterwards things just stop working ("why can't I b
 
 - The commodity cards show in your hand as **book, linen, coin** (science, trade, politics).
 - The tracks are listed **trade, politics, science**.
-- They'll be put in the same order everywhere: the track list, the improvement buttons, the progress decks, the barbarian bar.
+- From now on, **Science, Trade, Politics** everywhere, matching the cards: the track list, the improvement buttons, the progress decks, the barbarian bar (D2).
 
-### 9.7 Questions
+### 9.7 Decisions
 
-See the list in the message; answers will be recorded here.
+1. **D1 Order:** the fixes that make the game look broken (9.1, 9.2, 9.6) come right after Milestone 6. Sounds and pinned dice come after Milestone 8, then Milestone 10.
+2. **D2 Track order:** Science, Trade, Politics, the same as book, linen, coin.
+3. **D3 Losing a city:** the sad tune plays for whoever lost a city; everyone else hears the barbarian horn.
+4. **D4 Card ticks and chat:** on by default but quiet, each with its own switch.
+5. **D5 The dice:**
+   - You always see both number dice and then the event die.
+   - A setting also shows them in the top-right corner of the board.
+
+### 9.8 Done means
+
+1. **The event die:** screenshots of all three dice after a Knights roll, on a laptop and a phone, and with the corner setting on.
+2. **Losing a city:** a full Knights game in browsers where the barbarians win and take a city. The player who lost it gets the banner, the tune and the log line. A blocked improvement says why.
+3. **Track order:** every place tracks are listed shows Science, Trade, Politics.
+4. **Sounds:**
+   - Every sound plays at its event.
+   - Each one's switch and volume work, and are saved on the profile.
+   - Turning a sound off on one screen doesn't change anyone else's.
+5. **Pinned dice:** the panel stays put through a whole game, survives a reload, and works on a phone.
+6. **`npm run check` green, then deploy.**
 
 ## Milestone 10: Seafarers maps you design, fog islands and treasures
 
-**Status: draft, waiting for your answers (10.6).** Your requests of 2 October.
+**Status: agreed (your answers are in 10.6). After Milestone 9.** Your requests of 2 October.
 
 ### 10.1 Seafarers maps from the editor, "broken" ones too
 
@@ -967,19 +991,30 @@ The editor already has sea, gold and fog tiles with Seafarers on. To make maps l
 - **Fog tiles in the editor**, with a fog stack: what can turn up under the fog (land, gold, sea, and numbers).
   - You can set the stack yourself, or leave it standard.
   - The rules for discovering fog are already in the engine (docs/rules/seafarers.md §11).
-- **A built-in Fog Islands scenario** for Seafarers and Full game mode: a home island, with fog hiding islands and gold across the water.
+- **A built-in Fog Islands map** for Seafarers and Full game mode: a home island, with fog hiding islands and gold across the water.
+  - The layout is our own.
+  - The rules are the official fog rules, as already written in docs/rules/seafarers.md §11 (D2).
 
 ### 10.3 Treasures
 
-Treasure chits, placed in the map maker (as in Catan Universe). The first player to reach one takes it. Possible treasures:
+Treasure spots, placed in the map maker (as in Catan Universe). The rules (D3):
 
-- 2 free ships and/or roads;
-- 2 resources of your choice;
-- 1 sheep, 1 brick and 1 wheat;
-- a free development card (a progress card in Knights games);
-- others you'd like (10.6).
+- **Where:** a treasure sits on a **path**, where a road or ship can go.
+- **Finding it:** the first player to **build a road or ship on it, or move a ship onto it**, finds it.
+- **Face down:** the finder draws the top card of a shuffled **treasure deck**.
+  - Everyone sees what it is.
+  - It happens straight away, for the finder only.
+- **The treasures:**
+  - **Free roads and ships:** 2 placed straight away, in any mix (2 roads, 2 ships, or 1 of each), like a Road Building card played at once.
+    - The normal building rules apply.
+    - You can't go beyond your pieces in supply.
+    - If there's no legal spot, the rest is lost.
+  - **2 resources of your choice:** resources only, never commodities.
+  - **1 sheep, 1 brick and 1 wheat.**
+  - **A free development card:** in Knights games, a progress card from the deck you pick.
+- **No other kinds** of treasure.
 
-The exact rules get written in docs/rules/treasures.md first, then agreed, as for the expansions.
+The exact rules, including what happens when the bank or a deck runs out, get written in docs/rules/treasures.md first, then agreed, as for the expansions.
 
 ### 10.4 Your layout, random tiles and numbers
 
@@ -987,15 +1022,29 @@ The exact rules get written in docs/rules/treasures.md first, then agreed, as fo
 - **New: regions.** Tiles can be grouped into regions, each with its own tile set, shuffled only within that region. For example:
   - the home island gets the standard tiles;
   - the far islands get gold and the rest.
-- This works for **every mode**, not only Seafarers: a base-game map can have blanks too.
+- This works for **every mode**, not only Seafarers: a base-game map can have blanks too (D5).
 
 ### 10.5 Tests ("done means")
 
-To be filled in with your answers: each scenario and treasure gets rules tests and simulator runs (1,000 games each), as for Heading for New Shores.
+1. **Rules tests** for every treasure:
+   - finding one by building a road, building a ship, and moving a ship;
+   - piece limits and no legal spot for free roads and ships;
+   - the bank or a deck running out.
+2. **The simulator**, 1,000 games each in Seafarers and Full game mode:
+   - on the Fog Islands;
+   - on a test map with treasures.
+   - **New invariants:** the treasure deck plus the treasures found always make the whole deck, and no treasure is found twice.
+3. **Editor tests:** the start area, island bonus, pirate start, fog stack, treasure spots and regions, each with undo and redo.
+4. **A full 3-player game in browsers** on a custom Seafarers map with fog and treasures, with a gold island across the water.
+5. **`npm run check` green, then deploy.**
 
-### 10.6 Questions
+### 10.6 Decisions
 
-See the list in the message; answers will be recorded here.
+1. **D1 Start area:** one shared start area per map, as on Heading for New Shores.
+2. **D2 Fog Islands:** our own layout, played with the official fog rules.
+3. **D3 Treasures:** as in 10.3.
+4. **D4 Free roads and ships from a treasure:** placed right away, with normal rules and piece limits; any mix of two.
+5. **D5 Regions:** in every mode.
 
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
