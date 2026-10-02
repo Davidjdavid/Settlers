@@ -27,6 +27,8 @@ export interface MapHex {
   pool?: string;
   /** A number token, 'random' (from the pool's numbers), or absent for none. */
   n?: number | 'random';
+  /** Kept as they are when the generator fills the board (docs/maps.md 4.2). */
+  lock?: { t?: boolean; n?: boolean };
 }
 
 export interface MapHarbor {
@@ -36,6 +38,25 @@ export interface MapHarbor {
   side: number;
   /** A harbor type, or 'random' to draw from `harborPool`. */
   t: PortType | 'random';
+  /** Kept where it is, with its type, when the generator fills the board. */
+  lock?: boolean;
+}
+
+/** Every tile, number token and harbor a board is made of, placed or still blank (docs/maps.md 3). */
+export interface TileSet {
+  terrain: Partial<Record<Terrain, number>>;
+  /** Keyed by the token's number. */
+  numbers: Record<string, number>;
+  harbors: Partial<Record<PortType, number>>;
+}
+
+/** Where a map came from. Shown in the map list; never used by the rules. */
+export interface MapMade {
+  by?: string;
+  at?: number;
+  generator?: { preset: string; seed: string };
+  /** Who edited it after it was generated. */
+  edited?: string[];
 }
 
 export interface MapData {
@@ -65,6 +86,9 @@ export interface MapData {
   robber: 'desert' | [number, number] | null;
   /** Seafarers: a sea hex, or null = off the board. */
   pirate?: [number, number] | null;
+  /** Editor maps: the tile set blanks are filled from (blanks get what's left after what's placed). */
+  set?: TileSet;
+  made?: MapMade;
 }
 
 /** The hex index at q,r, or -1. */

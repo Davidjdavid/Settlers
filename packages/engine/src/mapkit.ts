@@ -1,0 +1,543 @@
+/*
+ * Map editing (docs/maps.md 3-4): pure functions over map files, shared by the editor, the
+ * pre-game table and the tests. Every edit returns a new map, or a short reason it's refused.
+ *
+ * An editor map keeps its tile set in `set` (what the board is made of, placed or blank). Blank
+ * tiles, numbers and harbors are 'random' entries drawn from the pool "auto", which is always the
+ * set minus everything already placed: place a third ore by hand and there's one fewer to fill.
+ */
+
+import { cornerPip, DEFAULT_PIPS, modelOf } from './mapcheck';
+import { validateMap, type MapData, type MapHex, type TileSet } from './map';
+import { isLand, type PortType, type Terrain } from './types';
+
+/** The standard board's set: 19 tiles, 18 number tokens, 9 harbors. */
+export const STANDARD_TERRAIN: Readonly<Partial<Record<Terrain, number>>> = {
+  wood: 4, brick: 3, sheep: 4, wheat: 4, ore: 3, desert: 1,
+}; // prettier-ignore
+export const STANDARD_NUMBERS: Readonly<Record<string, number>> = {
+  2: 1, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2, 9: 2, 10: 2, 11: 2, 12: 1,
+}; // prettier-ignore
+export const STANDARD_HARBORS: Readonly<Partial<Record<PortType, number>>> = {
+  any: 4, wood: 1, brick: 1, sheep: 1, wheat: 1, ore: 1,
+}; // prettier-ignore
+
+/** Terrains that take a number token. Blanks always become land that might. */
+export const producing = (t: Terrain | 'random') => t === 'random' || (isLand(t) && t !== 'desert');
+/** Land for the tile set: blanks and every land terrain (fog has its own stack). */
+const setLand = (t: Terrain | 'random') => t === 'random' || isLand(t);
+
+type Counts = Record<string, number>;
+const sum = (c: Counts) => Object.values(c).reduce((a, b) => a + b, 0);
+const bag = (xs: readonly (string | number)[]): Counts => {
+  const out: Counts = {};
+  for (const x of xs) out[x] = (out[x] ?? 0) + 1;
+  return out;
+};
+const unbag = (c: Counts): string[] => Object.entries(c).flatMap(([k, n]) => new Array<string>(n).fill(k));
+
+/**
+ * Spread `counts` over `n` items in proportion (largest remainder; ties to the earlier key),
+ * e.g. the standard 19-tile mix for a 25-hex island.
+ */
+export function scaled(counts: Readonly<Counts>, n: number): Counts {
+  const keys = Object.keys(counts);
+  const total = sum(counts as Counts);
+  const out: Counts = {};
+  if (!total || n <= 0) return out;
+  const exact = keys.map((k) => (counts[k]! * n) / total);
+  let left = n;
+  keys.forEach((k, i) => {
+    out[k] = Math.floor(exact[i]!);
+    left -= out[k]!;
+  });
+  const order = keys
+    .map((k, i) => ({ k, frac: exact[i]! - Math.floor(exact[i]!), i }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (let j = 0; left > 0; j = (j + 1) % order.length, left--) out[order[j]!.k]!++;
+  for (const k of keys) if (!out[k]) delete out[k];
+  return out;
+}
+
+/** Add one item, keeping close to the standard proportions. */
+function growOne(c: Counts, std: Readonly<Counts>) {
+  const want = scaled(std, sum(c) + 1);
+  const k = Object.keys(std).find((x) => (want[x] ?? 0) > (c[x] ?? 0)) ?? Object.keys(std)[0]!;
+  c[k] = (c[k] ?? 0) + 1;
+}
+
+/** Remove one item: the one with the most still unplaced, then the most over its standard share. */
+function shrinkOne(c: Counts, placed: Counts, std: Readonly<Counts>) {
+  const want = scaled(std, Math.max(0, sum(c) - 1));
+  const keys = Object.keys(c).filter((k) => c[k]! > 0);
+  if (!keys.length) return;
+  keys.sort(
+    (a, b) =>
+      c[b]! - (placed[b] ?? 0) - (c[a]! - (placed[a] ?? 0)) ||
+      c[b]! - (want[b] ?? 0) - (c[a]! - (want[a] ?? 0)),
+  );
+  const k = keys[0]!;
+  c[k]!--;
+  if (!c[k]) delete c[k];
+}
+
+const ORDER = ['wood', 'brick', 'sheep', 'wheat', 'ore', 'gold', 'desert', 'sea', 'any'];
+const order = (a: string, b: string) =>
+  /^\d+$/.test(a) && /^\d+$/.test(b) ? Number(a) - Number(b) : ORDER.indexOf(a) - ORDER.indexOf(b);
+
+/** `want` minus what's placed (never below 0), made exactly `n` long, in a stable order. */
+function fit(want: Counts, placed: Counts, n: number, std: Readonly<Counts>): string[] {
+  const left: Counts = {};
+  for (const [k, v] of Object.entries(want)) if (v - (placed[k] ?? 0) > 0) left[k] = v - (placed[k] ?? 0);
+  while (sum(left) > n) shrinkOne(left, {}, std);
+  while (sum(left) < n) growOne(left, std);
+  return Object.keys(left)
+    .sort(order)
+    .flatMap((k) => new Array<string>(left[k]!).fill(k));
+}
+
+/** What's placed on the board (blanks left out). */
+export function placedOf(m: MapData): TileSet {
+  return {
+    terrain: bag(m.hexes.flatMap((h) => (h.t !== 'random' && isLand(h.t) ? [h.t] : []))),
+    numbers: bag(m.hexes.flatMap((h) => (typeof h.n === 'number' ? [h.n] : []))),
+    harbors: bag(m.harbors.flatMap((h) => (h.t !== 'random' ? [h.t] : []))),
+  };
+}
+
+/** The tile set a map stands for: its `set`, or what's placed plus what its pools hold. */
+export function setOf(m: MapData): TileSet {
+  if (m.set) return structuredClone(m.set);
+  const p = placedOf(m);
+  const pools = Object.values(m.pools ?? {});
+  return {
+    terrain: bag([...unbag(p.terrain as Counts), ...pools.flatMap((x) => x.terrain.filter(isLand))]),
+    numbers: bag([...unbag(p.numbers), ...pools.flatMap((x) => x.numbers)]),
+    harbors: bag([...unbag(p.harbors as Counts), ...(m.harborPool ?? [])]),
+  };
+}
+
+/** The standard set scaled to a board with this much land and this many harbors. */
+export function standardSet(land: number, harbors: number): TileSet {
+  const terrain = scaled(STANDARD_TERRAIN as Counts, land);
+  return {
+    terrain,
+    numbers: scaled(STANDARD_NUMBERS, land - (terrain.desert ?? 0)),
+    harbors: scaled(STANDARD_HARBORS as Counts, harbors),
+  };
+}
+
+const FOG_TERRAIN: Terrain[] = ['sea', 'wood', 'sheep', 'wheat', 'brick', 'ore', 'sea', 'gold'];
+const FOG_NUMBERS = [5, 9, 4, 10, 6, 8, 3, 11, 2, 12];
+
+/**
+ * Bring an editor map back in line after any change: the set follows the board's size, blanks
+ * draw from the pool "auto" (the set minus what's placed), and stray references are cleared.
+ * Loading any map file through this turns its pools into the one editor pool.
+ */
+export function normalize(m0: MapData): MapData {
+  const m = structuredClone(m0);
+  const set = setOf(m);
+  delete m.set;
+  for (const h of m.hexes) {
+    if (h.t !== 'random' && !producing(h.t)) delete h.n;
+    if (h.t === 'random' && !(typeof h.n === 'number' && h.lock?.n)) h.n = 'random';
+    if (producing(h.t) && h.n === undefined) h.n = 'random';
+    if (h.t === 'random' || h.n === 'random') h.pool = 'auto';
+    else delete h.pool;
+    if (h.lock && !h.lock.t && !h.lock.n) delete h.lock;
+  }
+
+  // The set follows the board: one tile per land hex, one token per producing tile, one per harbor.
+  const placed = placedOf(m);
+  const terrain = set.terrain as Counts;
+  const land = m.hexes.filter((h) => setLand(h.t)).length;
+  while (sum(terrain) < land) growOne(terrain, STANDARD_TERRAIN as Counts);
+  while (sum(terrain) > land) shrinkOne(terrain, placed.terrain as Counts, STANDARD_TERRAIN as Counts);
+  const prod = land - (terrain.desert ?? 0);
+  while (sum(set.numbers) < prod) growOne(set.numbers, STANDARD_NUMBERS);
+  while (sum(set.numbers) > prod) shrinkOne(set.numbers, placed.numbers, STANDARD_NUMBERS);
+  const harbors = set.harbors as Counts;
+  while (sum(harbors) < m.harbors.length) growOne(harbors, STANDARD_HARBORS as Counts);
+  while (sum(harbors) > m.harbors.length)
+    shrinkOne(harbors, placed.harbors as Counts, STANDARD_HARBORS as Counts);
+
+  const blanks = m.hexes.filter((h) => h.t === 'random').length;
+  const poolT = fit(terrain, placed.terrain as Counts, blanks, STANDARD_TERRAIN as Counts) as Terrain[];
+  const numbered = m.hexes.filter((h) => h.n === 'random').length;
+  const deserts = poolT.filter((t) => !producing(t)).length;
+  const poolN = fit(set.numbers, placed.numbers, Math.max(0, numbered - deserts), STANDARD_NUMBERS).map(
+    Number,
+  );
+  delete m.pools;
+  if (blanks || numbered) m.pools = { auto: { terrain: poolT, numbers: poolN } };
+  const randomH = m.harbors.filter((h) => h.t === 'random').length;
+  delete m.harborPool;
+  if (randomH)
+    m.harborPool = fit(harbors, placed.harbors as Counts, randomH, STANDARD_HARBORS as Counts) as PortType[];
+
+  // Fog stacks hold at least one card per fog hex.
+  const fogHexes = m.hexes.filter((h) => h.t === 'fog').length;
+  if (!fogHexes) delete m.fog;
+  else {
+    const fog = m.fog ?? { terrain: [], numbers: [] };
+    while (fog.terrain.length < fogHexes)
+      fog.terrain.push(FOG_TERRAIN[fog.terrain.length % FOG_TERRAIN.length]!);
+    const need = fog.terrain.filter((t) => isLand(t) && t !== 'desert').length;
+    while (fog.numbers.length < need) fog.numbers.push(FOG_NUMBERS[fog.numbers.length % FOG_NUMBERS.length]!);
+    m.fog = fog;
+  }
+
+  const has = (q: number, r: number, ok: (t: MapHex['t']) => boolean) =>
+    m.hexes.some((h) => h.q === q && h.r === r && ok(h.t));
+  if (Array.isArray(m.robber) && !has(m.robber[0], m.robber[1], (t) => t !== 'sea' && t !== 'fog'))
+    m.robber = 'desert';
+  if (m.pirate && !has(m.pirate[0], m.pirate[1], (t) => t === 'sea')) m.pirate = null;
+  if (Array.isArray(m.start)) m.start = m.start.filter(([q, r]) => has(q, r, () => true));
+  m.set = set;
+  return m;
+}
+
+/** A new map: the standard board's 19 hexes and 9 harbor spots, all blank. */
+export function standardBlank(base: MapData, id: string, name: string): MapData {
+  return normalize({
+    format: 1,
+    id,
+    name,
+    modules: [],
+    players: [2, 3, 4],
+    winVP: 10,
+    hexes: base.hexes.map((h) => ({ q: h.q, r: h.r, t: 'random', n: 'random', pool: 'auto' })),
+    harbors: base.harbors.map((h) => ({ q: h.q, r: h.r, side: h.side, t: 'random' })),
+    robber: 'desert',
+    set: standardSet(base.hexes.length, base.harbors.length),
+  });
+}
+
+/** A new map with nothing on it. */
+export function emptyMap(id: string, name: string): MapData {
+  return normalize({
+    format: 1,
+    id,
+    name,
+    modules: [],
+    players: [2, 3, 4],
+    winVP: 10,
+    hexes: [],
+    harbors: [],
+    robber: 'desert',
+  });
+}
+
+/* ---------- Edits ---------- */
+
+export type At = [number, number];
+export type Side = { at: At; side: number };
+
+export type EditOp =
+  /** Set a hex's terrain ('random' = blank). Its number goes if the terrain can't hold one. */
+  | { k: 'terrain'; at: At; t: Terrain | 'random' }
+  /** Set a hex's number token ('random' = blank). */
+  | { k: 'number'; at: At; n: number | 'random' }
+  /** Put a harbor on a coastal side ('random' = blank type), or take it away (null). */
+  | { k: 'harbor'; at: At; side: number; t: PortType | 'random' | null }
+  /** Drag a tile (terrain and number) onto another hex: they swap. */
+  | { k: 'swapTile'; a: At; b: At }
+  /** Drag a number token onto another hex: they swap. */
+  | { k: 'swapNumber'; a: At; b: At }
+  /** Drag a harbor to another coastal side, swapping with a harbor there. */
+  | { k: 'moveHarbor'; from: Side; to: Side }
+  /** Reshape: add a hex next to the board (always at the end of the list), or remove one. */
+  | { k: 'addHex'; at: At; t: Terrain | 'random' }
+  | { k: 'removeHex'; at: At }
+  /** Lock a placed terrain or number, or a harbor, so filling and rerolling keep it. */
+  | { k: 'lock'; at: At; what: 't' | 'n'; on: boolean }
+  | { k: 'lockHarbor'; at: At; side: number; on: boolean }
+  /** Turn everything that isn't locked back to blank. */
+  | { k: 'clear' }
+  /** Name, player counts, points to win, Seafarers. */
+  | { k: 'meta'; name?: string; players?: number[]; winVP?: number; seafarers?: boolean }
+  /** Replace the whole map (a fill, or a generated board). */
+  | { k: 'replace'; map: MapData };
+
+export type EditResult = { ok: true; map: MapData } | { ok: false; error: string };
+
+/** Neighbouring positions across sides 0 (east) to 5 (north-east). */
+export const SIDE_DIR: readonly At[] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; // prettier-ignore
+const SIDES = [0, 1, 2, 3, 4, 5];
+const SEAFARERS_ONLY: readonly string[] = ['sea', 'gold', 'fog'];
+export const MAX_HEXES = 120;
+
+const sameAt = (h: { q: number; r: number }, at: At) => h.q === at[0] && h.r === at[1];
+export const across = (at: At, side: number): At => [at[0] + SIDE_DIR[side]![0], at[1] + SIDE_DIR[side]![1]];
+
+/** Side `side` of hex `at` faces the sea or the edge of the board, and the hex is land (or blank). */
+export function coastal(m: MapData, at: At, side: number): boolean {
+  const h = m.hexes.find((x) => sameAt(x, at));
+  if (!h || h.t === 'sea' || h.t === 'fog') return false;
+  const o = m.hexes.find((x) => sameAt(x, across(at, side)));
+  return !o || o.t === 'sea';
+}
+
+/** Every coastal side (where a harbor could go). */
+export function coastalSides(m: MapData): Side[] {
+  return m.hexes.flatMap((h) =>
+    SIDES.filter((s) => coastal(m, [h.q, h.r], s)).map((side) => ({ at: [h.q, h.r] as At, side })),
+  );
+}
+
+/** The two corners of a side, as keys that every hex sharing the corner agrees on. */
+export function cornerKeys(at: At, side: number): [string, string] {
+  const key = (xs: At[]) =>
+    xs
+      .map((x) => x.join(','))
+      .sort()
+      .join('|');
+  return [
+    key([at, across(at, (side + 5) % 6), across(at, side)]),
+    key([at, across(at, side), across(at, (side + 1) % 6)]),
+  ];
+}
+
+/** Harbors that share a corner with another, as pairs of indexes. */
+export function sharedCorners(m: MapData): [number, number][] {
+  const seen = new Map<string, number>();
+  const out: [number, number][] = [];
+  m.harbors.forEach((h, i) => {
+    for (const k of cornerKeys([h.q, h.r], h.side)) {
+      const j = seen.get(k);
+      if (j !== undefined && j !== i) out.push([j, i]);
+      seen.set(k, i);
+    }
+  });
+  return out;
+}
+
+/** A sea hex with hexes on all six sides (inside the board) is Seafarers play. */
+const innerSea = (m: MapData, h: MapHex) =>
+  h.t === 'sea' && SIDES.every((s) => m.hexes.some((x) => sameAt(x, across([h.q, h.r], s))));
+
+/** Everything that stops a map being saved (docs/maps.md 3.1). Rule warnings are separate. */
+export function mapProblems(m: MapData): string[] {
+  const bad = validateMap(m);
+  if (!m.hexes.length) bad.push('the map has no hexes');
+  if (sharedCorners(m).length) bad.push('two harbors share a corner');
+  if (
+    !m.modules.includes('seafarers') &&
+    m.hexes.some((h) => h.t === 'gold' || h.t === 'fog' || innerSea(m, h))
+  )
+    bad.push('sea, gold and fog tiles need Seafarers');
+  if (m.players.some((n) => n > 4)) bad.push('maps are for 2 to 4 players');
+  if (m.hexes.length > MAX_HEXES) bad.push('the map is too big');
+  return bad;
+}
+
+/** Apply one edit. */
+export function applyEdit(m0: MapData, op: EditOp): EditResult {
+  if (op.k === 'replace') return { ok: true, map: normalize(op.map) };
+  const m = structuredClone(m0);
+  const hex = (at: At) => m.hexes.find((h) => sameAt(h, at));
+  const harborAt = (at: At, side: number) => m.harbors.findIndex((x) => sameAt(x, at) && x.side === side);
+  const fail = (error: string): EditResult => ({ ok: false, error });
+  const dropStrandedHarbors = () => (m.harbors = m.harbors.filter((x) => coastal(m, [x.q, x.r], x.side)));
+  switch (op.k) {
+    case 'terrain': {
+      const h = hex(op.at);
+      if (!h) return fail('There’s no hex there');
+      if (h.lock?.t) return fail('That tile is locked');
+      if (SEAFARERS_ONLY.includes(op.t) && !m.modules.includes('seafarers'))
+        return fail('Sea, gold and fog need Seafarers');
+      if (op.t !== 'random' && !producing(op.t) && h.lock?.n) return fail('Its number is locked');
+      h.t = op.t;
+      if (op.t === 'random' && !h.lock?.n) h.n = 'random';
+      dropStrandedHarbors();
+      break;
+    }
+    case 'number': {
+      const h = hex(op.at);
+      if (!h) return fail('There’s no hex there');
+      if (h.lock?.n) return fail('That number is locked');
+      if (op.n !== 'random' && !(Number.isInteger(op.n) && op.n >= 2 && op.n <= 12 && op.n !== 7))
+        return fail('Numbers go from 2 to 12, without 7');
+      if (h.t === 'random') return fail('Place a tile there first');
+      if (!producing(h.t))
+        return fail(
+          h.t === 'desert' ? 'The desert doesn’t take a number' : 'That tile doesn’t take a number',
+        );
+      h.n = op.n;
+      break;
+    }
+    case 'harbor': {
+      const i = harborAt(op.at, op.side);
+      if (i >= 0 && m.harbors[i]!.lock) return fail('That harbor is locked');
+      if (op.t === null) {
+        if (i < 0) return fail('There’s no harbor there');
+        m.harbors.splice(i, 1);
+        break;
+      }
+      if (!coastal(m, op.at, op.side)) return fail('Harbors go on the coast');
+      if (i >= 0) m.harbors[i]!.t = op.t;
+      else m.harbors.push({ q: op.at[0], r: op.at[1], side: op.side, t: op.t });
+      if (sharedCorners(m).length) return fail('Two harbors can’t share a corner');
+      break;
+    }
+    case 'swapTile': {
+      const a = hex(op.a);
+      const b = hex(op.b);
+      if (!a || !b) return fail('There’s no hex there');
+      if (a.lock || b.lock) return fail('That tile is locked');
+      [a.t, b.t] = [b.t, a.t];
+      [a.n, b.n] = [b.n, a.n];
+      for (const h of [a, b]) if (h.n === undefined) delete h.n;
+      dropStrandedHarbors();
+      break;
+    }
+    case 'swapNumber': {
+      const a = hex(op.a);
+      const b = hex(op.b);
+      if (!a || !b) return fail('There’s no hex there');
+      if (a.lock?.n || b.lock?.n) return fail('That number is locked');
+      if (a.t === 'random' || b.t === 'random') return fail('Place a tile there first');
+      if (!producing(a.t) || !producing(b.t)) return fail('Numbers only go on tiles that produce');
+      [a.n, b.n] = [b.n, a.n];
+      break;
+    }
+    case 'moveHarbor': {
+      const i = harborAt(op.from.at, op.from.side);
+      if (i < 0) return fail('There’s no harbor there');
+      const j = harborAt(op.to.at, op.to.side);
+      if (m.harbors[i]!.lock || (j >= 0 && m.harbors[j]!.lock)) return fail('That harbor is locked');
+      if (!coastal(m, op.to.at, op.to.side)) return fail('Harbors go on the coast');
+      const h = m.harbors[i]!;
+      if (j >= 0) [h.t, m.harbors[j]!.t] = [m.harbors[j]!.t, h.t];
+      else Object.assign(h, { q: op.to.at[0], r: op.to.at[1], side: op.to.side });
+      if (sharedCorners(m).length) return fail('Two harbors can’t share a corner');
+      break;
+    }
+    case 'addHex': {
+      if (hex(op.at)) return fail('There’s already a hex there');
+      if (m.hexes.length && !SIDES.some((s) => hex(across(op.at, s))))
+        return fail('New hexes go next to the board');
+      if (m.hexes.length >= MAX_HEXES) return fail('That’s as big as a board can get');
+      if (SEAFARERS_ONLY.includes(op.t) && !m.modules.includes('seafarers'))
+        return fail('Sea, gold and fog need Seafarers');
+      // Board ids come from the hex order, so new hexes always go at the end (3.1).
+      m.hexes.push({ q: op.at[0], r: op.at[1], t: op.t });
+      dropStrandedHarbors();
+      break;
+    }
+    case 'removeHex': {
+      const i = m.hexes.findIndex((h) => sameAt(h, op.at));
+      if (i < 0) return fail('There’s no hex there');
+      if (m.hexes[i]!.lock) return fail('That tile is locked');
+      m.hexes.splice(i, 1);
+      m.harbors = m.harbors.filter((x) => !sameAt(x, op.at));
+      dropStrandedHarbors();
+      break;
+    }
+    case 'lock': {
+      const h = hex(op.at);
+      if (!h) return fail('There’s no hex there');
+      if (op.on && op.what === 't' && h.t === 'random') return fail('Place a tile there first');
+      if (op.on && op.what === 'n' && typeof h.n !== 'number') return fail('Place a number there first');
+      const lock = { ...h.lock };
+      if (op.on) lock[op.what] = true;
+      else delete lock[op.what];
+      h.lock = lock;
+      break;
+    }
+    case 'lockHarbor': {
+      const i = harborAt(op.at, op.side);
+      if (i < 0) return fail('There’s no harbor there');
+      if (op.on) m.harbors[i]!.lock = true;
+      else delete m.harbors[i]!.lock;
+      break;
+    }
+    case 'clear': {
+      for (const h of m.hexes) {
+        if (h.t === 'sea' || h.t === 'fog') continue;
+        if (!h.lock?.t) h.t = 'random';
+        if (!h.lock?.n && producing(h.t)) h.n = 'random';
+      }
+      for (const h of m.harbors) if (!h.lock) h.t = 'random';
+      break;
+    }
+    case 'meta': {
+      if (op.name !== undefined) {
+        const name = op.name.trim().slice(0, 40);
+        if (!name) return fail('Give the map a name');
+        m.name = name;
+      }
+      if (op.players) {
+        if (!op.players.length || op.players.some((n) => !(n >= 2 && n <= 4)))
+          return fail('Maps are for 2 to 4 players');
+        m.players = [...new Set(op.players)].sort();
+      }
+      if (op.winVP !== undefined) {
+        if (!(Number.isInteger(op.winVP) && op.winVP >= 3 && op.winVP <= 30))
+          return fail('Points to win go from 3 to 30');
+        m.winVP = op.winVP;
+      }
+      if (op.seafarers !== undefined) {
+        if (!op.seafarers && m.hexes.some((h) => SEAFARERS_ONLY.includes(h.t)))
+          return fail('Take away the sea, gold and fog first');
+        m.modules = op.seafarers ? ['seafarers'] : [];
+        if (!op.seafarers) {
+          delete m.specialVP;
+          delete m.pirate;
+        }
+      }
+      break;
+    }
+  }
+  return { ok: true, map: normalize(m) };
+}
+
+/* ---------- Reading a board ---------- */
+
+/** Pip total at every corner (the heat map), by corner id; unknown numbers count 0. */
+export function cornerPips(m: MapData, pips: Record<number, number> = DEFAULT_PIPS): number[] {
+  const b = modelOf(m);
+  return b.g.verts.map((_, v) => cornerPip(b, v, pips));
+}
+
+/** What's on the board against the set, for the editor's counts line. */
+export function counts(m: MapData): { placed: TileSet; set: TileSet } {
+  return { placed: placedOf(m), set: setOf(m) };
+}
+
+/** The editor's undo and redo: every edit is one step. */
+export class EditHistory {
+  private past: MapData[] = [];
+  private future: MapData[] = [];
+  constructor(public map: MapData) {}
+  apply(op: EditOp): EditResult {
+    const r = applyEdit(this.map, op);
+    if (r.ok) {
+      this.past.push(this.map);
+      this.future = [];
+      this.map = r.map;
+    }
+    return r;
+  }
+  get canUndo() {
+    return this.past.length > 0;
+  }
+  get canRedo() {
+    return this.future.length > 0;
+  }
+  undo(): boolean {
+    const m = this.past.pop();
+    if (!m) return false;
+    this.future.push(this.map);
+    this.map = m;
+    return true;
+  }
+  redo(): boolean {
+    const m = this.future.pop();
+    if (!m) return false;
+    this.past.push(this.map);
+    this.map = m;
+    return true;
+  }
+}

@@ -19,3 +19,6 @@ export * from './scenarios';
 export * from './clone';
 export * from './stats';
 export * from './chatter';
+export * from './mapcheck';
+export * from './mapkit';
+export * from './mapgen';

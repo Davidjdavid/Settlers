@@ -170,7 +170,8 @@ The editor is reached from the start screen ("Maps") and from the pre-game table
   - Lock a hex's terrain, its number, or a harbor.
   - Locked things show a small padlock.
   - "Fill the rest randomly" and the generator never change them.
-- **Fill the rest randomly:** runs the generator (section 5) on everything that isn't locked, using the chosen preset. If the rules can't be met around the locks, it says which rule (5.13).
+- **Fill the rest randomly:** runs the generator (section 5) on every blank tile, number and harbor, using the chosen preset. Everything already placed stays, locked or not. If the rules can't be met around what's placed, it says which rule (5.13). Rules that only placed pieces break (two 6s you put side by side, say) are left alone: they show as warnings.
+- **Clear unlocked:** turns everything that isn't locked back to blank (one step). "Clear unlocked" then "Fill the rest" regenerates everything but the locks.
 - **Undo / Redo:** every change is one step (Ctrl+Z / Ctrl+Shift+Z, or buttons). A fill is one step. The history covers the whole editing session.
 
 ### 4.3 What the editor shows as you work
@@ -270,6 +271,15 @@ This "greedy draft" is a deliberately simple model of real picks. It catches boa
 - A clock limit of 1 second is only a safety net. If it ever fires, it's reported as an error, never quietly turned into a different board.
 - The aim is under 200 ms for "Our rules" on the standard board, and under a second for anything.
 
+**Easing the spot rules (D7):**
+
+- The spot rules are the best-spot limit (5.5), the bad-spot limit (5.6) and no clusters of 2, 3, 11, 12 (5.8).
+- The search first uses half its step budget with every rule as set. Nearly every board is found this way.
+- If that runs out, the second half eases only the spot rules by one step: the best-spot limit +1, the bad-spot limit −1, and at most one pair of 2/3/11/12 touching.
+- An eased board shows its warning like any other, so it's never hidden.
+- Every other rule is never eased.
+- If the eased search fails too, the generator says why, as below, using the rules as set.
+
 **When it can't find a board, it says why:**
 
 - It retries with each rule switched off in turn, to find which rules are blocking. Each retry has a small step budget.
@@ -319,7 +329,8 @@ Shown under every board: in the editor, the pre-game table and the end screen.
 ## 6. Tests ("done means" for this part)
 
 1. **The checker:**
-   - 10,000 generated boards per preset (every built-in one, and the test presets) are checked with **zero violations**.
+   - 10,000 generated boards per preset (every built-in one, and the test presets) are checked with **zero violations** of every rule except the spot rules.
+   - The spot rules are also never broken, except on eased boards (D7). Those stay rare (under 1% per preset), and each breaks them by at most one step. The rate is reported per preset.
    - The same seed always gives the same board.
    - Each preset generates in under a second.
 2. **Impossible settings fail fast** (under 2 seconds) with a message naming the blocking rule. There's a list of known-impossible settings, each with its expected message.
@@ -343,3 +354,4 @@ Shown under every board: in the editor, the pre-game table and the end screen.
 4. **D4 Resource balance:** ±25% of fair share by default, with its own on/off switch.
 5. **D5 Starting fairness:** a gap of at most 4 pips by default, with its own on/off switch.
 6. **D6 Player counts:** generated boards for 2, 3 and 4 players.
+7. **D7 Spot rules are soft:** a board may now and then have a spot a little too good or too bad, as long as that's rare (your note, 2 October). The generator eases only the spot rules, and only when the strict search runs long (5.13).
