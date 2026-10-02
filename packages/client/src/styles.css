@@ -3065,3 +3065,90 @@ button.vp {
 .keepbtn {
   margin: 10px 0;
 }
+
+/* ---------- The game fits the window on laptops and desktops (SPEC 8.10) ----------
+   From 1180px wide the page itself doesn't scroll: the board shrinks to leave the prompt in
+   view, the log fills the bottom of the left column at a steady height, and anything taller
+   than its column (many players, the end-screen stats) scrolls inside that column. */
+@container app (min-width: 1180px) {
+  .app {
+    height: calc(100dvh / var(--zoom, 1));
+    grid-template-rows: auto minmax(0, 1fr);
+    padding-block-end: 12px;
+    box-sizing: border-box;
+  }
+  .app > .main,
+  .app > .side,
+  .app > .dock-wrap {
+    align-self: stretch;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .app > .main > * {
+    flex: none;
+  }
+  .app > .main > .board-wrap:not(.carded) {
+    flex: 1 1 0;
+    min-height: 260px;
+  }
+  .app > .main > .board-wrap:not(.carded) #board {
+    height: 100%;
+    max-height: none;
+  }
+  .app > .side {
+    display: flex;
+    flex-direction: column;
+  }
+  .app > .side > .box {
+    flex: none;
+  }
+  .app > .side > .box.players-box {
+    flex: 0 1 auto;
+    min-height: 150px;
+    overflow-y: auto;
+  }
+  .app > .side > .box.talk {
+    flex: 1 0 220px;
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+  }
+  .app > .side > .box.talk .logwrap {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .app > .side > .box.talk .log {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 0;
+  }
+  .app > .dock-wrap {
+    align-content: start;
+  }
+  /* Tighter player cards so four players and the log share the column. */
+  .app > .side .player {
+    padding-block: 6px;
+  }
+  .app > .side .piecesleft {
+    gap: 2px 5px;
+    font-size: 11px;
+  }
+  .app > .side > .box {
+    padding-block: 10px;
+  }
+  .app > .side .ckbox .track {
+    margin: 4px 0;
+  }
+  .app > .side .ckbox .step {
+    height: 20px;
+    font-size: 12px;
+  }
+  .app > .side .ckline {
+    gap: 1px 10px;
+    font-size: 11.5px;
+    margin-top: 2px;
+  }
+}

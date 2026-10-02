@@ -2,7 +2,7 @@
 
 A private web Catan-style game for three friends, replacing Catan Universe. **Reliability comes first.** No lost games, no desyncs, no rule bugs.
 
-Status: **Milestones 1–4 (base game, Seafarers, Cities & Knights, table polish) and the CPU player done and live. Milestone 5 (stats, saved games, game-night extras) agreed and being built.**
+Status: **Milestones 1–7 and the first part of Milestone 9 (9.1, 9.2, 9.6) done and live. Milestone 8 built and being tested; then the rest of Milestone 9 (sounds, pinned dice) and Milestone 10.**
 
 ## Milestone 1: base game
 
@@ -273,7 +273,7 @@ The rules are written down, with your decisions, in **docs/bot.md**.
 
 ## Milestone 5: Stats, saved games and game-night extras
 
-**Status: agreed (your answers are in 5.15). Being implemented.**
+**Status: done and live (deployed 2026-10-01).** Your answers are in 5.15.
 
 Reliability still comes first. In particular, every number on a stats screen is worked out from the saved move history, so it can always be rebuilt and always agrees with what happened.
 
@@ -585,7 +585,7 @@ This replaces bot.md D6 ("the CPU never talks").
 
 ## Milestone 6: Custom maps, the generator and the pre-game table
 
-**Status: built; deploying.** One decision added while building: D7 in docs/maps.md (spot rules are soft, your note of 2 October).
+**Status: done and live (deployed 2026-10-02).** One decision added while building: D7 in docs/maps.md (spot rules are soft, your note of 2 October).
 
 The full design is in **[docs/maps.md](docs/maps.md)** (map format, editor, generator and its rules, with "touching" diagrams) and **[docs/pregame.md](docs/pregame.md)** (pre-game table and turn order, with the Joe/Alex/Sam example).
 
@@ -598,7 +598,7 @@ The full design is in **[docs/maps.md](docs/maps.md)** (map format, editor, gene
 
 ## Milestone 7: Medium and Hard CPUs
 
-**Status: built; deploying.** Also: custom CPUs and a page explaining the difficulties (docs/bot-medium-hard.md §5). Tournament targets as changed on 2 October (D2): Hard clearly above its fair share against Mediums, Medium at least 60% against Easys.
+**Status: done and live (deployed 2026-10-02, with 9.1, 9.2 and 9.6).** Also: custom CPUs and a page explaining the difficulties (docs/bot-medium-hard.md §5). Tournament targets as changed on 2 October (D2): Hard clearly above its fair share against Mediums, Medium at least 60% against Easys.
 
 The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 
@@ -609,7 +609,10 @@ The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 
 ## Milestone 8: Bank, gates, warnings, trading, helpers, keep playing, the log
 
-**Status: agreed (your answers are in 8.11). Being implemented (after Milestone 7).**
+**Status: built; being tested before deploying.** Your answers are in 8.11. Decided while building:
+
+- **The log's robber line** ("The robber blocked 1 Brick from Joe") is a note the server works out from the board after each roll, not a new game event, so every saved game replays exactly as saved and old games get the line too.
+- **Laptops and desktops** (1180px wide and up at the display size): the game fits the window and the page never scrolls. The board shrinks a little to keep the prompt in view, the log fills the bottom of the left column, and a column with more than fits (four players in Knights on a 1366×768 screen) scrolls inside itself, keeping whoever's turn it is in view.
 
 ### 8.1 Bank supply
 
@@ -863,7 +866,7 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 
 ## Milestone 9: Sounds, dice on screen, and the barbarians
 
-**Status: agreed (your answers are in 9.7).** Your requests of 2 October.
+**Status: 9.1, 9.2 and 9.6 done and live (deployed 2026-10-02); 9.3–9.5 after Milestone 8.** Your answers are in 9.7. Your requests of 2 October.
 
 **Order (D1):**
 

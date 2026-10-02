@@ -26,6 +26,7 @@ import {
 } from './Sheets'; // prettier-ignore
 import { listNames, nameOf, routeName } from './text';
 import { Log } from './log';
+import { handRisk } from './handrisk';
 import {
   BOARD_OWES, BarbarianBox, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
   myOwe, owePrompt, paramOf,
@@ -194,6 +195,18 @@ export function Game({
   const [card, setCard] = useState<{ card: Progress; plays: Play[]; picks: number[] } | null>(null);
   const [metroOpts, setMetroOpts] = useState<Action[]>([]);
   const [hideOver, setHideOver] = useState(false);
+  // On a laptop the players list may scroll inside its box: keep whoever's turn it is in view.
+  // Only that box scrolls, never the page.
+  const playersBox = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const box = playersBox.current;
+    const el = box?.querySelector('.player.turn');
+    if (!box || !el || box.scrollHeight <= box.clientHeight + 1) return;
+    const b = box.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.top < b.top) box.scrollTop += r.top - b.top - 4;
+    else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 4;
+  }, [v.turn]);
   // The win celebration plays once, when the game ends while you're watching (SPEC 5.13).
   const [celebrating, setCelebrating] = useState(false);
   const wasPlaying = useRef(v.phase === 'play');
@@ -1306,7 +1319,7 @@ export function Game({
 
       <aside className="side">
         {v.ck ? <BarbarianBox v={v} /> : null}
-        <section className="box" aria-label="Players">
+        <section className="box players-box" aria-label="Players" ref={playersBox}>
           <span className="eyebrow">
             Players · first to <b data-testid="win-target">{v.winVP}</b> points
           </span>
@@ -1409,7 +1422,7 @@ export function Game({
             {v.ck ? null : <span>Dev deck {v.deckCount}</span>}
           </div>
         </section>
-        <section className="box" aria-label="Table talk">
+        <section className="box talk" aria-label="Table talk">
           <span className="eyebrow">Table talk</span>
           <Log v={v} log={log} />
           <ChatForm />
@@ -1572,7 +1585,7 @@ function GameOver({ v, stats, onHide }: { v: PlayerView; stats: GameStats | null
       </h2>
       <p className="lede">
         {v.keep?.on
-          ? `First to ${v.winVP} in overtime. The game’s result stays ${nameOf(v, v.keep.first.p)}’s first win to ${v.keep.first.target}.`
+          ? `First to ${v.winVP} in overtime. The game’s result stays ${v.keep.first.p === v.me ? 'your' : `${nameOf(v, v.keep.first.p)}’s`} first win to ${v.keep.first.target}.`
           : 'Final scores, hidden victory cards included.'}
       </p>
       <div className="seats" style={{ gridTemplateColumns: '1fr' }}>
@@ -1973,33 +1986,6 @@ function Offers({
       })}
     </div>
   );
-}
-
-/** Over the hand limit (SPEC 8.4): who would discard how many on a 7, and why that limit. */
-export function handRisk(
-  v: PlayerView,
-  s: ReturnType<typeof stateFromView>,
-  p: Seat,
-  n: number,
-): { text: string; calm: boolean } | null {
-  const limit = handLimit(s, p);
-  if (n <= limit) return null;
-  const lose = Math.floor(n / 2);
-  const you = p === v.me;
-  const walls = (limit - 7) / 2;
-  // With "no discards before the first attack", nobody discards yet (D2): a calm note instead.
-  if (v.rules.houseRules.noDiscardBeforeAttack && v.ck && v.ck.attacks === 0)
-    return {
-      calm: true,
-      text: `${n} cards: a 7 would cost ${you ? 'you' : nameOf(v, p)} ${lose}, but nobody discards until the barbarians have attacked`,
-    };
-  const why = walls
-    ? `: 7, plus ${2 * walls} for ${you ? 'your' : 'their'} city wall${walls > 1 ? 's' : ''}`
-    : '';
-  return {
-    calm: false,
-    text: `${n} cards. If a 7 is rolled, ${you ? 'you’ll' : `${nameOf(v, p)} will`} discard ${lose} (half, rounded down). ${you ? 'Your' : 'Their'} limit is ${limit}${why}.`,
-  };
 }
 
 /** A card count that turns red, with a warning, over the hand limit; hover explains it. */

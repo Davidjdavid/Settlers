@@ -131,13 +131,13 @@ export function Log({ v, log }: { v: PlayerView; log: LogItem[] }) {
   const known = useRef<Set<string> | null>(null);
   const fresh = new Set<string>();
   if (known.current) for (const r of rows) if (!known.current.has(r.key)) fresh.add(r.key);
-  const before = useRef(0);
 
   useLayoutEffect(() => {
     const el = box.current;
+    const prev = known.current;
     known.current = new Set(rows.map((r) => r.key));
-    const added = Math.max(0, rows.length - before.current);
-    before.current = rows.length;
+    // Counted by key: the log keeps its newest 800 items, so its length can stay the same.
+    const added = prev ? rows.filter((r) => !prev.has(r.key)).length : 0;
     if (!el) return;
     if (follow) el.scrollTop = el.scrollHeight;
     else if (added) setUnseen((n) => n + added);

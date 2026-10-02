@@ -23,5 +23,7 @@ export function currentSize(): Size {
 export function applySize(size: Size = currentSize()) {
   setStored('settlers.size', size);
   document.documentElement.style.setProperty('zoom', String(SIZES[size]));
+  // Window-height units grow with the zoom; layouts that fit the window divide by it.
+  document.documentElement.style.setProperty('--zoom', String(SIZES[size]));
   document.documentElement.dataset.size = size;
 }

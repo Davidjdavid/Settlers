@@ -286,7 +286,7 @@ export class Client {
         this.set({
           roomCode: m.room.code,
           room: m.room,
-          game: m.game,
+          game: this.staged ? this.state.game : m.game,
           log: m.log,
           roomError: null,
           dice: m.dice ?? null,
@@ -306,7 +306,7 @@ export class Client {
         const items = m.log.filter((it) => !seen.has(itemKey(it)));
         this.set({
           room: m.room,
-          game: m.game,
+          game: this.staged ? this.state.game : m.game,
           log: [...this.state.log, ...items].slice(-800),
           dice: m.dice ?? null,
           stats: m.stats ?? null,
@@ -549,7 +549,26 @@ export class Client {
   }
 
   /** Send a move. Resolves when the server accepts or rejects it. */
+  /** Moves recorded instead of sent while a made-up view is shown (see stage). */
+  private staged: Action[] | null = null;
+  /**
+   * Test hook for screens a real game rarely reaches (e2e/m8.spec.ts, the Smith): show a
+   * made-up game view in this browser only. Until the page reloads, the server's views are
+   * ignored here and moves are recorded instead of sent, so the server never sees any of it.
+   */
+  stage(game: PlayerView) {
+    this.staged = [];
+    this.set({ game });
+  }
+  stagedMoves(): Action[] {
+    return this.staged?.slice() ?? [];
+  }
+
   act(action: Action): Promise<{ ok: boolean; error?: string }> {
+    if (this.staged) {
+      this.staged.push(action);
+      return Promise.resolve({ ok: true });
+    }
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     return new Promise((resolve) => {
       this.waiting.set(id, { action, resolve });

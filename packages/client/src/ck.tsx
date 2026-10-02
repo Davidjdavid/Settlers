@@ -217,7 +217,11 @@ export function ImproveRow({
               {L >= 3 ? ' ★' : ''}
             </span>
             <span className="cost" data-testid={`ibtn-why-${t}`}>
-              {L >= 5 ? 'complete' : !hasCity ? 'needs a city' : `next: ${cost} ${TRACK_COM[t]}`}
+              {L >= 5
+                ? 'complete'
+                : !hasCity
+                  ? 'needs a city'
+                  : `next: ${cost} ${CARD_LABEL[TRACK_COM[t]].toLowerCase()}`}
             </span>
           </button>
         );

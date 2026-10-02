@@ -152,6 +152,35 @@ describe('Keep playing through the server (SPEC 8.9)', () => {
     }
   }, 120000);
 
+  it('overtime survives a restart and plays on to its win', () => {
+    const { code, conns } = table(['Ann', 'Bob']);
+    send(conns[0]!, { t: 'start' });
+    play(code, conns, () => false);
+    const [ann, bob] = conns as [FakeConn, FakeConn];
+    const target = keepMinTarget(state(code));
+    send(ann, { t: 'act', id: 'ask', action: { type: 'askKeep', target } });
+    send(bob, { t: 'act', id: 'yes', action: { type: 'answerKeep', yes: true } });
+    expect(state(code).phase).toBe('play');
+    const before = JSON.stringify(state(code));
+    const tokens = conns.map((c) => c.last('seat').token);
+
+    rooms.stop();
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    open();
+    expect(JSON.stringify(state(code))).toBe(before);
+    const back = tokens.map((token) => {
+      const c = new FakeConn();
+      send(c, { t: 'hello', room: code, token });
+      return c;
+    });
+    expect(back[0]!.last('sync').game!.keep).toMatchObject({ on: true, wins: [] });
+    expect(back[0]!.last('sync').game!.winVP).toBe(target);
+    play(code, back, () => false);
+    expect(state(code).phase).toBe('over');
+    expect(state(code).keep!.wins).toHaveLength(1);
+  }, 120000);
+
   it('one "no" leaves the game finished', () => {
     const { code, conns } = table(['Ann', 'Bob']);
     send(conns[0]!, { t: 'start' });

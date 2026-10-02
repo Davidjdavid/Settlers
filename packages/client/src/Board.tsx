@@ -126,15 +126,15 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[], no3to1 = false):
   for (const h of landHexes)
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.035 * K)}" fill="#c9b382"/>`);
   // With "3:1 bank trades for everyone", 3:1 harbors would give nothing extra: not drawn (SPEC 8.11 D5).
-  for (const pt of board.ports) {
-    if (no3to1 && pt.t === 'any') continue;
+  board.ports.forEach((pt, i) => {
+    if (no3to1 && pt.t === 'any') return;
     const e = g.edges[pt.e]!;
     // Point the harbor away from its land hex, towards the water.
     const land = e.hexes.find((x) => board.hexes[x]!.t !== 'sea') ?? e.hexes[0]!;
     const p = harborPoint(g, pt.e, land);
     out.push(harborPiersSVG(g, pt.e, p));
-    out.push(harborMarkSVG(pt.t, p));
-  }
+    out.push(`<g data-port="${i}">${harborMarkSVG(pt.t, p)}</g>`);
+  });
   board.hexes.forEach((hx, i) => {
     const h = g.hexes[i]!;
     const cx = h.x * K;

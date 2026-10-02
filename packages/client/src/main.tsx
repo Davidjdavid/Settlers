@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { botMove, seedRng } from '@settlers/engine';
+import { botMove, seedRng, type PlayerView } from '@settlers/engine';
 import { App } from './App';
 import { client } from './net';
 import '@fontsource/figtree/latin-400.css';
@@ -22,6 +22,8 @@ const rng = seedRng(String(Math.random()));
 Object.assign(window, {
   __settlers: {
     state: () => client.state,
+    stage: (game: PlayerView) => client.stage(game),
+    staged: () => client.stagedMoves(),
     sounds: () => played.slice(),
     // `byHand`: move types the test will make through the UI instead (returned as 'skip:<type>').
     botStep: async (byHand: string[] = []) => {
