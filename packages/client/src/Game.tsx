@@ -1586,7 +1586,7 @@ export function Game({
         <EventDie v={v} />
         {me != null ? (
           <button
-            className={`btn small ghost${editing ? ' on' : ''}`}
+            className={`btn small ghost wide-only${editing ? ' on' : ''}`}
             onClick={() => setEditing((x) => !x)}
             data-testid="open-layout"
             title="Move, float or hide the boxes on this screen"

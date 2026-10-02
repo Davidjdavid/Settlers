@@ -294,6 +294,29 @@ describe('the table', () => {
     expect(s.config.map!.made?.generator).toMatchObject({ preset: 'Our rules', seed: t.board.seed });
   });
 
+  it('a Seafarers or Full game starts on exactly the table’s tiles, gold included', () => {
+    for (const ck of [false, true])
+      for (let k = 0; k < 6; k++) {
+        const { code, conns } = seated(['Ann', 'Bob', 'Cat']);
+        send(conns[0]!, {
+          t: 'setOptions',
+          options: {
+            scenario: 'heading-for-new-shores',
+            ...(ck ? { ck: true } : {}),
+            winVP: 14,
+            houseRules: {},
+          },
+        });
+        for (let i = 0; i < k; i++) op(conns[0]!, { k: 'reroll' });
+        const t = info(conns[0]!);
+        send(conns[0]!, { t: 'start' });
+        const s = state(code);
+        const tiles = (hs: { q: number; r: number; t: string; n?: unknown }[]) =>
+          hs.map((h) => `${h.q},${h.r}:${h.t}:${h.n ?? 0}`);
+        expect(tiles(s.board.hexes), `ck ${ck}, reroll ${k}`).toEqual(tiles(t.board.map.hexes));
+      }
+  });
+
   it('reroll, back and forward, typed seeds, edits and locks', () => {
     const { conns, host } = seated(['Ann', 'Bob']);
     const first = info(host);

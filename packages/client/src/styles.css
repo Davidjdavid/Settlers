@@ -1121,7 +1121,7 @@ input:focus-visible,
 }
 .sheet {
   width: min(470px, 100%);
-  max-height: min(86vh, 720px);
+  max-height: min(calc(86dvh / var(--zoom, 1)), 720px);
   overflow: auto;
   box-sizing: border-box;
   background: var(--panel);
@@ -3424,7 +3424,7 @@ button.vp {
 .ly-top > .lyp,
 .ly-bottom > .lyp {
   flex: 1 1 300px;
-  max-height: 34vh;
+  max-height: calc(34dvh / var(--zoom, 1));
   overflow-y: auto;
 }
 .ly-left {
@@ -3987,5 +3987,30 @@ button.vp {
   .goalchip .sub,
   .barbchip .sub {
     display: none;
+  }
+}
+
+/* At the table, the start area is only an outline: a tint washed the tiles out (brick looked a
+   faded brown), so the board there looks like the game's. The map editor keeps the tint. */
+.tbmap .mapboard .startarea {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-opacity: 0.75;
+}
+/* Phones: the Layout button lives in the menu only (it pushed the menu off a phone at Extra large). */
+@container app (max-width: 520px) {
+  .top .btn.wide-only {
+    display: none;
+  }
+}
+/* Phones at a large size: a tighter top bar so the menu stays on screen. */
+@container app (max-width: 520px) {
+  .top {
+    gap: 7px;
+  }
+  .top .goalchip,
+  .top .barbchip {
+    padding-inline: 8px;
+    gap: 4px;
   }
 }
