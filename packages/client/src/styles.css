@@ -3152,3 +3152,145 @@ button.vp {
     margin-top: 2px;
   }
 }
+
+/* ---------- The Sounds page (SPEC 9.4) ---------- */
+.soundgroup {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+.soundrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.soundrow.master {
+  grid-template-columns: auto minmax(0, 1fr) 3ch;
+  font-weight: 650;
+}
+.soundrow .nm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.soundrow.off .nm span {
+  color: var(--ink-3);
+}
+.soundrow input[type='range'] {
+  width: 100%;
+  min-width: 0;
+}
+.soundrow select {
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 4px;
+  font: inherit;
+  font-size: 12px;
+  max-width: 96px;
+}
+@container app (max-width: 440px) {
+  .soundrow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .soundrow .nm {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- Dice statistics pinned on screen (SPEC 9.5) ---------- */
+.dicepin {
+  position: absolute;
+  z-index: 4;
+  width: 196px;
+  padding: 6px 8px 7px;
+  border-radius: 10px;
+  background: rgba(10, 27, 35, 0.86);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.dicepin.tl {
+  top: 8px;
+  left: 8px;
+}
+.dicepin.tr {
+  top: 8px;
+  right: 8px;
+}
+.dicepin.bl {
+  bottom: 8px;
+  left: 8px;
+}
+/* Clear of the zoom buttons. */
+.dicepin.br {
+  bottom: 8px;
+  right: 56px;
+}
+.dicepin.dragging {
+  opacity: 0.85;
+  cursor: grabbing;
+}
+.dicepin .pinbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  margin-bottom: 3px;
+}
+.dicepin .pinbar .t {
+  font-weight: 700;
+  color: var(--ink);
+}
+.dicepin .pinbar .last {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dicepin .pinbar .last b {
+  color: var(--ink);
+}
+.dicepin .warn {
+  color: var(--alarm);
+  font-weight: 650;
+}
+.dicepin .pinbtn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+.dicepin .minichart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.dicepin .faces {
+  margin-top: 3px;
+  font-size: 11px;
+}
+.dicepin.phone {
+  position: static;
+  width: auto;
+  box-shadow: none;
+  padding: 5px 10px;
+}
+.dicepin.phone .minichart {
+  max-height: 22px;
+}

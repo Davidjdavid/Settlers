@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { dieSVG, eventDieSVG } from './art';
 import type { Track } from '@settlers/engine';
 import { client } from './net';
-import { play } from './sound';
+import { hear } from './sound';
 
 export const TUMBLE_MS = 500;
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -72,7 +72,7 @@ export function RollDice({
       client.onFresh(({ items }) => {
         if (!items.some((it) => it.k === 'ev' && it.e.k === 'roll')) return;
         if (!mine.current) {
-          if (soundRef.current && !corner) play('dice');
+          if (soundRef.current && !corner) hear('dice', client.state.room?.mySettings);
           start();
         }
         mine.current = false;
@@ -93,7 +93,7 @@ export function RollDice({
   const roll = () => {
     if (!canRoll) return;
     mine.current = true;
-    if (sound) play('dice');
+    if (sound) hear('dice', client.state.room?.mySettings);
     start();
     // If the server refuses the roll, stop tumbling; the dice never show a made-up result.
     void Promise.resolve(onRoll()).then((r) => {

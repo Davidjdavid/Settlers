@@ -866,7 +866,7 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 
 ## Milestone 9: Sounds, dice on screen, and the barbarians
 
-**Status: 9.1, 9.2 and 9.6 done and live (deployed 2026-10-02); 9.3–9.5 after Milestone 8.** Your answers are in 9.7. Your requests of 2 October.
+**Status: 9.1, 9.2 and 9.6 done and live (deployed 2026-10-02); 9.3–9.5 built, being tested.** One choice made while building: the pinned dice panel can also be moved by its ⤧ button (a corner at a time), as well as dragged, so it works without a mouse. Your answers are in 9.7. Your requests of 2 October.
 
 **Order (D1):**
 

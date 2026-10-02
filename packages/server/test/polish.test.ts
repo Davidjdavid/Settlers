@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { legalActions, type GameState } from '@settlers/engine';
-import type { ClientMsg, ServerMsg } from '../src/protocol';
+import { ClientMsgSchema, type ClientMsg, type ServerMsg } from '../src/protocol';
 import { Rooms, type Conn } from '../src/rooms';
 import { Store } from '../src/store';
 import { joinAs, moves } from './util';
@@ -74,6 +74,35 @@ describe('personal settings follow the nickname', () => {
     send(watcher, { t: 'hello', room: again[0]!.last('update').room.code });
     send(watcher, { t: 'saveSettings', settings: {} });
     expect(watcher.last('error').text).toMatch(/seat/);
+  });
+});
+
+describe('sounds and the pinned dice are personal settings (SPEC 9.4, 9.5)', () => {
+  it('saved on the profile, back after a restart, nobody else changed', () => {
+    const { conns } = table(['Ann', 'Bob']);
+    const mine = {
+      gameSounds: true,
+      sounds: { master: 0.6, each: { dice: { on: false }, steal: { vol: 0.3, style: 2 } } },
+      dicePin: { corner: 'br' as const, small: true },
+    };
+    send(conns[0]!, { t: 'saveSettings', settings: mine });
+    expect(conns[0]!.last('update').room.mySettings).toEqual(mine);
+    expect(conns[1]!.last('update').room.mySettings).toEqual({});
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    rooms = new Rooms(store, { log: () => {} });
+    const { conns: again } = table(['ann']);
+    expect(again[0]!.last('update').room.mySettings).toEqual(mine);
+  });
+
+  it('anything else is refused', () => {
+    const bad = (settings: unknown) => ClientMsgSchema.safeParse({ t: 'saveSettings', settings }).success;
+    expect(bad({ sounds: { each: { dice: { on: true } } } })).toBe(true);
+    expect(bad({ sounds: { each: { kazoo: { on: true } } } })).toBe(false);
+    expect(bad({ sounds: { master: 2 } })).toBe(false);
+    expect(bad({ sounds: { each: { dice: { style: 9 } } } })).toBe(false);
+    expect(bad({ dicePin: { corner: 'middle' } })).toBe(false);
+    expect(bad({ dicePin: { corner: 'tl', extra: 1 } })).toBe(false);
   });
 });
 

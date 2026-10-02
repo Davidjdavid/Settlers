@@ -19,6 +19,7 @@ import { CARD_LABEL, DEV_LABEL, PCOL, PROGRESS_LABEL, TILE_COLOR } from './art';
 import { Brand, MODE_NAME, MapPreview } from './home';
 import { client, useClient } from './net';
 import { Sheet } from './Sheets';
+import { savePin } from './dicepin';
 
 const WAYS = (t: number) => 6 - Math.abs(t - 7);
 const ODDS = (t: number) => WAYS(t) / 36;
@@ -113,10 +114,13 @@ export function DicePanel({
   dice,
   names,
   onClose,
+  pinned,
 }: {
   dice: DiceInfo;
   names: string[];
   onClose: () => void;
+  /** Whether the dice are pinned on screen (SPEC 9.5). */
+  pinned?: boolean;
 }) {
   const sevens = dice.dice[7] ?? 0;
   const dry = [...Array(11)]
@@ -129,9 +133,21 @@ export function DicePanel({
       sub="This game so far."
       onClose={onClose}
       foot={
-        <button className="btn" onClick={onClose}>
-          Done
-        </button>
+        <>
+          <button
+            className="btn"
+            data-testid={pinned ? 'dice-unpin' : 'dice-pin-on'}
+            onClick={() => {
+              savePin(pinned ? null : { corner: 'tl' });
+              onClose();
+            }}
+          >
+            {pinned ? 'Unpin' : 'Pin on screen'}
+          </button>
+          <button className="btn" onClick={onClose}>
+            Done
+          </button>
+        </>
       }
     >
       <DiceChart dice={dice.dice} />

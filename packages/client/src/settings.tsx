@@ -1,10 +1,10 @@
 /* "My settings" (per person) and "Table rules" (per game) sheets, SPEC 4.3 and 4.5. */
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PlayerView, RuleKey } from '@settlers/engine';
-import type { PlayerSettings, RoomInfo } from '@settlers/server/protocol';
+import type { PlayerSettings, RoomInfo, SoundId, SoundPrefs } from '@settlers/server/protocol';
 import { SIZE_LABEL, applySize, currentSize, type Size } from './display';
-import { askNotifyPermission } from './sound';
+import { SOUNDS, askNotifyPermission, masterVolume, preview, soundPref } from './sound';
 import { Help, RULE_HELP, SETTING_HELP, SETTING_LABEL, settingOn, type SettingKey } from './help';
 import { client } from './net';
 import { Sheet } from './Sheets';
@@ -49,6 +49,8 @@ function Switch(props: {
 
 /** Your own confirmation switches, saved under your nickname. */
 export function SettingsSheet({ mine, onClose }: { mine: PlayerSettings | null; onClose: () => void }) {
+  const [page, setPage] = useState<'main' | 'sounds'>('main');
+  if (page === 'sounds') return <SoundsSheet mine={mine} onBack={() => setPage('main')} />;
   return (
     <Sheet
       title="My settings"
@@ -82,6 +84,125 @@ export function SettingsSheet({ mine, onClose }: { mine: PlayerSettings | null; 
         ))}
       </div>
       <DisplaySize />
+      <div className="switchrow">
+        <span>Sounds: each one’s switch, volume and style</span>
+        <button className="btn small" onClick={() => setPage('sounds')} data-testid="sounds-open">
+          Sounds…
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * The Sounds page (SPEC 9.4): a master volume, and for every sound its switch, volume, style
+ * and a ▶ to hear it. Saved on your profile, so it follows you; it only changes what you hear.
+ * Sliders save a moment after you stop moving them.
+ */
+function SoundsSheet({ mine, onBack }: { mine: PlayerSettings | null; onBack: () => void }) {
+  const [prefs, setPrefs] = useState<SoundPrefs>(mine?.sounds ?? {});
+  const saved = useRef(JSON.stringify(mine?.sounds ?? {}));
+  const latest = useRef(prefs);
+  latest.current = prefs;
+  const flush = () => {
+    const next = JSON.stringify(latest.current);
+    if (next === saved.current) return;
+    saved.current = next;
+    client.saveSettings({ ...(client.state.room?.mySettings ?? mine ?? {}), sounds: latest.current });
+  };
+  useEffect(() => {
+    const t = setTimeout(flush, 350);
+    return () => clearTimeout(t);
+  }, [prefs]);
+  // Closing the page right after a change still saves it.
+  useEffect(() => () => flush(), []);
+  const set = (id: SoundId, patch: { on?: boolean; vol?: number; style?: number }) =>
+    setPrefs((p) => ({ ...p, each: { ...p.each, [id]: { ...p.each?.[id], ...patch } } }));
+  const master = masterVolume(prefs);
+  const groups = [...new Set(Object.values(SOUNDS).map((x) => x.group))];
+  return (
+    <Sheet
+      title="Sounds"
+      sub="Saved on your profile, for every device. Only you hear the difference."
+      onClose={onBack}
+      foot={
+        <button className="btn" onClick={onBack} data-testid="sounds-back">
+          Done
+        </button>
+      }
+    >
+      <label className="soundrow master">
+        <span>Master volume</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(master * 100)}
+          aria-label="Master volume"
+          data-testid="sound-master"
+          onChange={(e) => setPrefs((p) => ({ ...p, master: Number(e.target.value) / 100 }))}
+        />
+        <output>{Math.round(master * 100)}</output>
+      </label>
+      {groups.map((g) => (
+        <section key={g} className="soundgroup">
+          <span className="eyebrow">{g}</span>
+          {(Object.keys(SOUNDS) as SoundId[])
+            .filter((id) => SOUNDS[id].group === g)
+            .map((id) => {
+              const p = soundPref(prefs, id);
+              return (
+                <div key={id} className={`soundrow${p.on ? '' : ' off'}`} data-testid={`sound-${id}`}>
+                  <label className="nm">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={p.on}
+                      data-testid={`sound-${id}-on`}
+                      onChange={(e) => set(id, { on: e.target.checked })}
+                    />
+                    <span>{SOUNDS[id].label}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(p.vol * 100)}
+                    disabled={!p.on}
+                    aria-label={`${SOUNDS[id].label}: volume`}
+                    data-testid={`sound-${id}-vol`}
+                    onChange={(e) => set(id, { vol: Number(e.target.value) / 100 })}
+                  />
+                  <select
+                    value={p.style}
+                    disabled={!p.on}
+                    aria-label={`${SOUNDS[id].label}: style`}
+                    data-testid={`sound-${id}-style`}
+                    onChange={(e) => {
+                      set(id, { style: Number(e.target.value) });
+                      preview(id, Number(e.target.value), master * p.vol);
+                    }}
+                  >
+                    {SOUNDS[id].styles.map(([name], i) => (
+                      <option key={name} value={i}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="iconbtn"
+                    aria-label={`Play ${SOUNDS[id].label}`}
+                    data-testid={`sound-${id}-play`}
+                    onClick={() => preview(id, p.style, master * (p.vol || 0.5))}
+                  >
+                    ▶
+                  </button>
+                </div>
+              );
+            })}
+        </section>
+      ))}
     </Sheet>
   );
 }

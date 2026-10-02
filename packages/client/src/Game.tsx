@@ -17,7 +17,7 @@ import { AskSheet, RulesSheet, SettingsSheet } from './settings';
 import { RollDice } from './dice';
 import { RaidNotice, type Raid } from './raid';
 import { DicePanel, GameStatsView } from './stats';
-import { play as playSound, notify } from './sound';
+import { hear, notify, soundsFor } from './sound';
 import { Celebration } from './celebrate';
 import { client, getStored, type Status } from './net';
 import {
@@ -26,6 +26,7 @@ import {
 } from './Sheets'; // prettier-ignore
 import { listNames, nameOf, routeName } from './text';
 import { Log } from './log';
+import { DicePin, useLayoutWidth } from './dicepin';
 import { handRisk } from './handrisk';
 import {
   BOARD_OWES, BarbarianBox, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
@@ -195,6 +196,8 @@ export function Game({
   const [card, setCard] = useState<{ card: Progress; plays: Play[]; picks: number[] } | null>(null);
   const [metroOpts, setMetroOpts] = useState<Action[]>([]);
   const [hideOver, setHideOver] = useState(false);
+  // A phone (SPEC 9.5): the pinned dice are a strip above the hand, not on the board.
+  const phone = useLayoutWidth() <= 560;
   // On a laptop the players list may scroll inside its box: keep whoever's turn it is in view.
   // Only that box scrolls, never the page.
   const playersBox = useRef<HTMLElement | null>(null);
@@ -213,7 +216,7 @@ export function Game({
   useEffect(() => {
     if (v.phase === 'over' && wasPlaying.current) {
       setCelebrating(true);
-      if (settingOn(room.mySettings, 'gameSounds')) playSound('fanfare');
+      hear('fanfare', room.mySettings);
     }
     wasPlaying.current = v.phase === 'play';
     // Keep playing (SPEC 8.9): the next win shows the end screen again.
@@ -963,7 +966,7 @@ export function Game({
     const fresh = needs.filter(([k]) => !heard.current!.has(k));
     for (const [k] of fresh) heard.current.add(k);
     if (!fresh.length) return;
-    if (settingOn(my, 'turnSound')) playSound('turn');
+    hear('turn', my);
     if (settingOn(my, 'browserNotify')) notify(fresh[0]![1]);
   }, [needKey]);
   // The barbarians' attack (SPEC 9.2): a notice everyone sees, the sad tune for whoever lost a
@@ -979,8 +982,6 @@ export function Game({
         if (attack) {
           lastAttack.current = attack;
           setRaid({ attack, lost });
-          if (settingOn(client.state.room?.mySettings, 'gameSounds'))
-            playSound(after?.me != null && attack.losers.includes(after.me) ? 'sad' : 'horn');
         } else if (lost.length && lastAttack.current) {
           const at = lastAttack.current;
           setRaid((r) => ({ attack: at, lost: [...(r?.lost ?? []), ...lost] }));
@@ -988,13 +989,16 @@ export function Game({
       }),
     [],
   );
-  // Building sounds for everyone (game sounds switch).
+  // Sounds for what just happened (SPEC 9.4), each by this player's own switches and volumes;
+  // the dice, the turn chime and the fanfare play from their own places.
   useEffect(
     () =>
-      client.onFresh(({ items }) => {
-        if (!settingOn(client.state.room?.mySettings, 'gameSounds')) return;
-        if (items.some((it) => it.k === 'ev' && ['build', 'knight', 'wall', 'setup'].includes(it.e.k)))
-          playSound('build');
+      client.onFresh(({ items, after }) => {
+        const settings = client.state.room?.mySettings;
+        const evs = items.flatMap((it) => (it.k === 'ev' ? [it.e] : []));
+        for (const [id, n] of soundsFor(evs, after?.me ?? null)) hear(id, settings, n);
+        const me = client.state.room?.me;
+        if (items.some((it) => it.k === 'chat' && it.pid !== me)) hear('chat', settings);
       }),
     [],
   );
@@ -1222,6 +1226,7 @@ export function Game({
           {raid && !(me != null && raid.attack.losers.includes(me) && !raid.lost.some((l) => l.p === me)) ? (
             <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
           ) : null}
+          {my?.dicePin && !phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} /> : null}
           {settingOn(my, 'diceCorner') ? (
             <RollDice
               dice={v.dice}
@@ -1299,6 +1304,7 @@ export function Game({
       </main>
 
       <section className="dock-wrap" aria-label="Your cards and actions">
+        {my?.dicePin && phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} phone /> : null}
         <Offers v={v} busy={busy} ask={(q, go) => ask('confirmTrade', q, go)} />
         {me != null && v.hand ? (
           <Tray
@@ -1506,7 +1512,12 @@ export function Game({
       ) : null}
       {sheet?.k === 'rules' ? <RulesSheet v={v} room={room} onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'dice' && dice ? (
-        <DicePanel dice={dice} names={v.players.map((_, i) => nameOf(v, i))} onClose={() => setSheet(null)} />
+        <DicePanel
+          dice={dice}
+          names={v.players.map((_, i) => nameOf(v, i))}
+          onClose={() => setSheet(null)}
+          pinned={!!my?.dicePin}
+        />
       ) : null}
       {sheet?.k === 'quit' ? (
         <ConfirmTwice

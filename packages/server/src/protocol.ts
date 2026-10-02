@@ -146,6 +146,24 @@ export const OptionsSchema = z.strictObject({
 });
 
 /** Personal confirmation settings (SPEC 4.3), saved under your nickname. Missing means on. */
+/** Every sound the game makes (SPEC 9.4), each with its own switch, volume and style. */
+export const SOUND_IDS = [
+  'turn', 'dice', 'cards', 'steal', 'road', 'settlement', 'city', 'shipMove', 'robber', 'buyCard',
+  'playCard', 'trade', 'discard', 'knight', 'barbarians', 'horn', 'sad', 'defended', 'award', 'chat',
+  'fanfare',
+] as const; // prettier-ignore
+export type SoundId = (typeof SOUND_IDS)[number];
+const SoundPrefSchema = z.strictObject({
+  on: z.boolean().optional(),
+  vol: z.number().min(0).max(1).optional(),
+  style: z.number().int().min(0).max(4).optional(),
+});
+export const SoundsSchema = z.strictObject({
+  master: z.number().min(0).max(1).optional(),
+  each: z.partialRecord(z.enum(SOUND_IDS), SoundPrefSchema).optional(),
+});
+export type SoundPrefs = z.infer<typeof SoundsSchema>;
+
 export const SettingsSchema = z.strictObject({
   confirmPlace: z.boolean().optional(),
   confirmPlaceTouch: z.boolean().optional(),
@@ -160,6 +178,12 @@ export const SettingsSchema = z.strictObject({
   showBreakdown: z.boolean().optional(),
   /** SPEC 9.1: also show the dice in the board's top-right corner (off unless true). */
   diceCorner: z.boolean().optional(),
+  /** SPEC 9.4: master volume, and each sound's switch, volume and style. */
+  sounds: SoundsSchema.optional(),
+  /** SPEC 9.5: the dice statistics pinned to a corner of the board, full or as a strip. */
+  dicePin: z
+    .strictObject({ corner: z.enum(['tl', 'tr', 'bl', 'br']), small: z.boolean().optional() })
+    .optional(),
 });
 export type PlayerSettings = z.infer<typeof SettingsSchema>;
 export type RoomOptions = z.infer<typeof OptionsSchema>;
