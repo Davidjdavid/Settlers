@@ -1468,6 +1468,16 @@ export function Game({
           </button>
         ) : null}
         <EventDie v={v} />
+        {me != null ? (
+          <button
+            className={`btn small ghost${editing ? ' on' : ''}`}
+            onClick={() => setEditing((x) => !x)}
+            data-testid="open-layout"
+            title="Move, float or hide the boxes on this screen"
+          >
+            Layout
+          </button>
+        ) : null}
         <button className="iconbtn" type="button" aria-label="Menu" onClick={() => setSheet({ k: 'menu' })}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

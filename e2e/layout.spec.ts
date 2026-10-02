@@ -52,8 +52,13 @@ test('your own layout on a laptop, a tablet and a phone', async ({ browser }) =>
   /* ---------- The laptop ---------- */
   await openEditor(lap);
   await expect(lap.locator('[data-edge=left] [data-panel=players]')).toBeVisible();
-  // Table talk to the right, then above the hand.
-  await lap.getByTestId('ly-talk-right').click();
+  // Table talk dragged by its bar to the right edge, then moved above the hand.
+  const talkBar = (await lap.getByTestId('ly-bar-talk').boundingBox())!;
+  await lap.mouse.move(talkBar.x + 30, talkBar.y + talkBar.height / 2);
+  await lap.mouse.down();
+  await lap.mouse.move(1300, 400, { steps: 10 });
+  await expect(lap.locator('.lyzone.z-right.on')).toBeVisible();
+  await lap.mouse.up();
   await expect(lap.locator('[data-edge=right] [data-panel=talk]')).toBeVisible();
   const order = () =>
     lap
@@ -101,8 +106,9 @@ test('your own layout on a laptop, a tablet and a phone', async ({ browser }) =>
   await expect(lap.getByTestId('ly-tab-talk')).toBeVisible();
   expect(await noSideScroll(lap)).toBe(true);
 
-  /* ---------- The tablet: left-handed ---------- */
-  await openEditor(tab);
+  /* ---------- The tablet: left-handed (the Layout button in the top bar) ---------- */
+  await tab.getByTestId('open-layout').click();
+  await expect(tab.getByTestId('layout-edit')).toBeVisible();
   await tab.getByTestId('ly-preset-leftHanded').click();
   await expect(tab.locator('[data-edge=left] [data-panel=hand]')).toBeVisible();
   await tab.getByTestId('ly-done').click();

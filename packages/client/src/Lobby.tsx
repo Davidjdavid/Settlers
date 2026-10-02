@@ -9,6 +9,7 @@ import { RULE_LABEL } from './text';
 import { client, useClient } from './net';
 import { Brand, ProfilePicker } from './home';
 import { TableBoardPanel, TurnOrderPanel } from './table';
+import { CpusPage } from './cpus';
 
 export function Login() {
   const [pass, setPass] = useState('');
@@ -58,6 +59,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const taken = new Set(room.seats.map((s) => s.color));
   const [profile, setProfile] = useState<{ id: string; color: Color } | null>(null);
   const [color, setColor] = useState<Color | null>(null);
+  const [cpus, setCpus] = useState(false);
   const free = PLAYER_COLORS.filter((c) => !taken.has(c));
   // Your favourite colour if it's free, else the first free one.
   const pick =
@@ -80,6 +82,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const canStart = fits && !!t && !t.problem && !!t.first.pid;
   return (
     <div className={`lobbywrap${t ? ' withtable' : ''}`}>
+      {cpus ? <CpusPage onBack={() => setCpus(false)} /> : null}
       {t ? <TableBoardPanel room={room} /> : null}
       <div className="card" data-testid="lobby">
         <Brand />
@@ -139,15 +142,9 @@ export function Lobby({ room }: { room: RoomInfo }) {
                   Add CPU player
                 </button>
               ) : null}
-              <a
-                className="btn small ghost"
-                href="/cpus"
-                target="_blank"
-                rel="noreferrer"
-                data-testid="cpu-page-link"
-              >
+              <button className="btn small ghost" onClick={() => setCpus(true)} data-testid="cpu-page-link">
                 How CPUs play
-              </a>
+              </button>
             </div>
             {t ? <TurnOrderPanel room={room} /> : null}
             <div className="row">

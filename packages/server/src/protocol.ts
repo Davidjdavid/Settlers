@@ -24,7 +24,10 @@ const PROGRESS = z.enum([
   'alchemist', 'crane', 'engineer', 'inventor', 'irrigation', 'medicine', 'mining', 'printer', 'roadBuilding', 'smith',
   'bishop', 'constitution', 'deserter', 'diplomat', 'intrigue', 'saboteur', 'spy', 'warlord', 'wedding',
 ]); // prettier-ignore
-const COLOR = z.enum(['red', 'blue', 'white', 'orange', 'purple', 'black', 'pink', 'yellow', 'gray']);
+const COLOR = z.enum([
+  'red', 'blue', 'white', 'orange', 'purple', 'black', 'pink', 'yellow', 'gray',
+  'teal', 'cyan', 'brown', 'magenta', 'lavender', 'mint',
+]); // prettier-ignore
 const count = z.number().int().min(0).max(95);
 /** Card counts. Commodities only mean something in Cities & Knights; the engine checks. */
 const cards = z.strictObject({
@@ -396,6 +399,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('profiles') }),
   z.strictObject({ t: z.literal('newProfile'), name: nick, color: COLOR }),
   z.strictObject({ t: z.literal('mergeProfiles'), from: z.string().max(60), into: z.string().max(60) }),
+  /** Delete a profile from the list (the Stats page). Not while it's at a table. */
+  z.strictObject({ t: z.literal('deleteProfile'), id: z.string().max(60) }),
   /** Saved games (SPEC 5.7). */
   z.strictObject({ t: z.literal('saved') }),
   z.strictObject({ t: z.literal('resume'), game: z.string().max(60) }),

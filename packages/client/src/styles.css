@@ -3597,3 +3597,111 @@ button.vp {
     max-height: none;
   }
 }
+
+/* The CPU page over the lobby: you never leave the room to read it. */
+.cpuspage.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  background: var(--abyss);
+  align-items: flex-start;
+  padding: 16px;
+}
+/* Dragging a box: where it would land (an edge, or floating over the board). */
+.ly {
+  position: relative;
+}
+.lyzones {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+.lyzone {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  color: var(--ink-2);
+  font-size: 13px;
+  background: rgba(10, 27, 35, 0.35);
+}
+.lyzone.on {
+  border-color: var(--lantern-2);
+  color: var(--lantern-2);
+  background: rgba(240, 180, 60, 0.12);
+}
+.lyzone.z-left {
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 15%;
+}
+.lyzone.z-right {
+  right: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 15%;
+}
+.lyzone.z-top {
+  left: 15%;
+  right: 15%;
+  top: 0;
+  height: 12%;
+}
+.lyzone.z-bottom {
+  left: 15%;
+  right: 15%;
+  bottom: 0;
+  height: 12%;
+}
+.lyzone.z-float {
+  left: 16%;
+  right: 16%;
+  top: 13%;
+  bottom: 13%;
+  border-style: dotted;
+}
+.ly:not(.phone) .lybar {
+  cursor: grab;
+  touch-action: none;
+}
+/* Wide screens: the game uses the whole window, so the board can grow. */
+@container app (min-width: 1180px) {
+  .app {
+    max-width: 2400px;
+  }
+}
+
+/* The table's header keeps one height whatever it says (a new seed, who changed what), so the
+   board and everything under it never jump. */
+.tbhead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.tbsource {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tbsource > b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.tbsource .seed {
+  flex: none;
+}
+.tbsource code {
+  display: inline-block;
+  min-width: 9ch;
+}
+.tblast {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 1.4em;
+}

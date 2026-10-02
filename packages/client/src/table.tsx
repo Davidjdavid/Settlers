@@ -105,11 +105,10 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
             </button>
           </span>
         </div>
-        {t.last ? (
-          <div className="tblast" data-testid="board-last">
-            {t.last.who} {t.last.what} · {ago(t.last.at)}
-          </div>
-        ) : null}
+        {/* Always there (empty until something changes), so nothing below moves when it fills. */}
+        <div className="tblast" data-testid={t.last ? 'board-last' : undefined}>
+          {t.last ? `${t.last.who} ${t.last.what} · ${ago(t.last.at)}` : '\u00a0'}
+        </div>
       </div>
       <div className="tbmap">
         <MapBoard map={map} tool={editing ? tool : null} onEdit={edit} heat={heat} highlight={hover} />

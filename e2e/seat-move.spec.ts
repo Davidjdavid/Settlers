@@ -68,3 +68,35 @@ test('your seat moves to the screen you pick your name on, in the lobby and mid-
   await expect.poll(async () => (await view(tab))?.me).toBe(seat);
   expect(t.errors).toEqual([]);
 });
+
+test('the Stats page lists people, not CPUs, and a person can be deleted', async ({ browser }) => {
+  const p = await freshBrowser(browser, (await seatedTable(browser, server, ['Gus', 'Hal'])).code);
+  // A name made here but never seated.
+  await p.getByTestId('new-profile').click();
+  await p.getByTestId('new-name').fill('Typo');
+  await p.getByTestId('new-save').click();
+  await expect(p.locator('[data-testid=profile][data-name=Typo]')).toHaveCount(1);
+  await p.goto(`${server.url}/stats`);
+  await expect(p.locator('[data-testid=stats-who][data-name=Gus]')).toBeVisible();
+  await expect(p.locator('[data-testid=stats-who][data-name*=CPU]')).toHaveCount(0);
+  await p.locator('[data-testid=stats-who][data-name=Typo]').click();
+  await p.getByTestId('delete-profile').click();
+  await p
+    .getByRole('dialog')
+    .getByRole('button', { name: /^(Next|Continue|Yes|Delete)/ })
+    .first()
+    .click();
+  await p.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(p.locator('[data-testid=stats-who][data-name=Typo]')).toHaveCount(0);
+  // Someone at a table can't be.
+  await p.locator('[data-testid=stats-who][data-name=Gus]').click();
+  await p.getByTestId('delete-profile').click();
+  await p
+    .getByRole('dialog')
+    .getByRole('button', { name: /^(Next|Continue|Yes|Delete)/ })
+    .first()
+    .click();
+  await p.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(p.getByText('Gus is at a table in room')).toBeVisible();
+  await expect(p.locator('[data-testid=stats-who][data-name=Gus]')).toBeVisible();
+});

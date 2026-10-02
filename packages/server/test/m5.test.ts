@@ -114,6 +114,25 @@ function play(code: string, conns: FakeConn[], until: () => boolean, rng: RngSta
 }
 
 describe('profiles (SPEC 5.1)', () => {
+  it('a profile can be deleted from the Stats page, but not while it is at a table', () => {
+    const c = new FakeConn();
+    send(c, { t: 'newProfile', name: 'Zed', color: 'red' });
+    const zed = c.last('profile').profile;
+    table(['Ann', 'Bob']);
+    const ann = store.profileByName('Ann')!;
+    send(c, { t: 'deleteProfile', id: ann.id });
+    expect(c.last('error').text).toMatch(/at a table in room/);
+    send(c, { t: 'deleteProfile', id: zed.id });
+    expect(c.last('profiles').list.some((p) => p.id === zed.id)).toBe(false);
+    send(c, { t: 'stats', who: zed.id });
+    expect(c.last('error').text).toBe('No such player');
+    // The name is free again, as a new profile.
+    send(c, { t: 'newProfile', name: 'Zed', color: 'blue' });
+    expect(c.last('profile').profile.id).not.toBe(zed.id);
+    send(c, { t: 'deleteProfile', id: 'p-nobody' });
+    expect(c.last('error').text).toBe('No such player');
+  });
+
   it('made once per name, listed with who is using them, and merged unless they shared a game', () => {
     const c = new FakeConn();
     send(c, { t: 'newProfile', name: 'Ann', color: 'red' });

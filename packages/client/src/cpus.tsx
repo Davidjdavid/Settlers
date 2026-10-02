@@ -106,7 +106,8 @@ const BUILT_IN: { name: string; rows: Record<Row, string> }[] = [
   { name: 'Hard', rows: describe(HARD) },
 ];
 
-export function CpusPage() {
+/** The CPU page. With `onBack` it's shown over the lobby (you never leave your room for it). */
+export function CpusPage({ onBack }: { onBack?: () => void } = {}) {
   const st = useClient();
   const [edit, setEdit] = useState<{ id?: string; name: string; persona: Persona } | null>(null);
   const [del, setDel] = useState<CpuInfo | null>(null);
@@ -119,11 +120,15 @@ export function CpusPage() {
   const custom = st.cpus ?? [];
   const cols = [...BUILT_IN, ...custom.map((c) => ({ name: c.name, rows: describe(c.persona) }))];
   return (
-    <div className="center cpuspage">
+    <div className={`center cpuspage${onBack ? ' overlay' : ''}`}>
       <div className="card wide" data-testid="cpus-page">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <Brand />
-          <button className="btn small" onClick={() => client.go('/')}>
+          <button
+            className="btn small"
+            data-testid="cpus-back"
+            onClick={() => (onBack ? onBack() : client.go('/'))}
+          >
             Back
           </button>
         </div>

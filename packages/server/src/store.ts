@@ -261,6 +261,10 @@ export class Store {
     // Schema 4 (Milestone 6): the pre-game table.
     if (!cols.some((c) => c.name === 'table_json'))
       this.db.exec('ALTER TABLE rooms ADD COLUMN table_json TEXT');
+    // Schema 5: deleted profiles (from the Stats page). Their games keep their names.
+    const pcols = this.db.prepare('PRAGMA table_info(profiles)').all() as { name: string }[];
+    if (!pcols.some((c) => c.name === 'deleted_at'))
+      this.db.exec('ALTER TABLE profiles ADD COLUMN deleted_at INTEGER');
     const gcols = this.db.prepare('PRAGMA table_info(games)').all() as { name: string }[];
     if (!gcols.some((c) => c.name === 'last_at'))
       this.db.exec('ALTER TABLE games ADD COLUMN last_at INTEGER');
@@ -367,21 +371,27 @@ export class Store {
   /** Every profile still in use (merged ones are gone), by name. */
   profiles(): ProfileRow[] {
     const rows = this.db
-      .prepare('SELECT id, name, color, created_at FROM profiles WHERE merged_into IS NULL ORDER BY name_key')
+      .prepare(
+        'SELECT id, name, color, created_at FROM profiles WHERE merged_into IS NULL AND deleted_at IS NULL ORDER BY name_key',
+      )
       .all() as { id: string; name: string; color: string; created_at: number }[];
     return rows.map(Store.profile);
   }
 
   profileById(id: string): ProfileRow | null {
     const r = this.db
-      .prepare('SELECT id, name, color, created_at FROM profiles WHERE id = ? AND merged_into IS NULL')
+      .prepare(
+        'SELECT id, name, color, created_at FROM profiles WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL',
+      )
       .get(id) as { id: string; name: string; color: string; created_at: number } | undefined;
     return r ? Store.profile(r) : null;
   }
 
   profileByName(name: string): ProfileRow | null {
     const r = this.db
-      .prepare('SELECT id, name, color, created_at FROM profiles WHERE name_key = ? AND merged_into IS NULL')
+      .prepare(
+        'SELECT id, name, color, created_at FROM profiles WHERE name_key = ? AND merged_into IS NULL AND deleted_at IS NULL',
+      )
       .get(nickKey(name)) as { id: string; name: string; color: string; created_at: number } | undefined;
     return r ? Store.profile(r) : null;
   }
@@ -416,6 +426,11 @@ export class Store {
       )
       .get(a, b) as { n: number };
     return r.n;
+  }
+
+  /** A profile leaves the list (and its name is free again); its games keep their names. */
+  deleteProfile(id: string, at: number) {
+    this.db.prepare('UPDATE profiles SET deleted_at = ? WHERE id = ?').run(at, id);
   }
 
   /** Move everything of `from` to `into`; `from` disappears. One transaction (the caller's). */

@@ -324,7 +324,10 @@ export class Client {
         return;
       }
       case 'error':
-        if (!this.state.room && !this.state.path.startsWith('/maps')) this.set({ roomError: m.text });
+        // Outside a room, an error is about joining one, except on the pages that do other
+        // things (Maps, Stats, CPUs), where it pops up like any other.
+        if (!this.state.room && !/^\/(maps|stats|cpus)/.test(this.state.path))
+          this.set({ roomError: m.text });
         else this.toast(m.text, 'err');
         return;
       case 'notice':
@@ -420,6 +423,10 @@ export class Client {
   }
   newProfile(name: string, color: Color) {
     this.send({ t: 'newProfile', name, color });
+  }
+  /** Take a person off the list, from the Stats page. */
+  deleteProfile(id: string) {
+    this.send({ t: 'deleteProfile', id });
   }
   mergeProfiles(from: string, into: string) {
     this.send({ t: 'mergeProfiles', from, into });

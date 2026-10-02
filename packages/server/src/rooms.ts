@@ -318,6 +318,8 @@ export class Rooms {
         return this.newProfile(conn, msg.name, msg.color);
       case 'mergeProfiles':
         return this.mergeProfiles(conn, msg.from, msg.into);
+      case 'deleteProfile':
+        return this.deleteProfile(conn, msg.id);
       case 'saved':
         return conn.send({ t: 'saved', list: this.savedList() });
       case 'resume':
@@ -552,6 +554,20 @@ export class Rooms {
     this.settings.delete(a.id);
     this.log(`profile ${a.name} merged into ${b.name}`);
     conn.send({ t: 'notice', kind: 'info', text: `${a.name} is now part of ${b.name}` });
+    conn.send({ t: 'profiles', list: this.profileList() });
+  }
+
+  /** Take a person off the list. Their finished games keep their name; their stats go. */
+  private deleteProfile(conn: Conn, id: string) {
+    const p = this.store.profileById(id);
+    if (!p) return conn.send({ t: 'error', text: 'No such player' });
+    for (const room of this.rooms.values())
+      if (room.seats.some((st) => st.profileId === p.id))
+        return conn.send({ t: 'error', text: `${p.name} is at a table in room ${room.code}` });
+    this.store.tx(() => this.store.deleteProfile(p.id, this.now()));
+    this.settings.delete(p.id);
+    this.log(`profile ${p.name} deleted`);
+    conn.send({ t: 'notice', kind: 'info', text: `${p.name} was deleted` });
     conn.send({ t: 'profiles', list: this.profileList() });
   }
 

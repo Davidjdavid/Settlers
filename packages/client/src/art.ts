@@ -36,6 +36,12 @@ export const PCOL: Record<Color, string> = {
   pink: '#f2a2e4',
   yellow: '#fff023',
   gray: '#9d9f93',
+  teal: '#0f9b8e',
+  cyan: '#38d6f5',
+  brown: '#7b4a22',
+  magenta: '#d4157a',
+  lavender: '#c9b8ff',
+  mint: '#8ff5c8',
 };
 /** Outline for pieces of each colour: dark, except a light one for black pieces. */
 export const PEDGE = (c: Color) => (c === 'black' ? '#d9dde0' : '#0b1418');
@@ -51,6 +57,12 @@ export const PNAME: Record<Color, string> = {
   pink: 'Pink',
   yellow: 'Yellow',
   gray: 'Gray',
+  teal: 'Teal',
+  cyan: 'Cyan',
+  brown: 'Brown',
+  magenta: 'Magenta',
+  lavender: 'Lavender',
+  mint: 'Mint',
 };
 export const DEV_LABEL: Record<DevType, string> = {
   knight: 'Knight',

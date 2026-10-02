@@ -13,10 +13,15 @@ export const SCENARIOS: Record<string, MapData> = {
   'fog-islands': fogIslands as unknown as MapData,
 };
 
-/** Layouts for a particular number of players (docs/rules/seafarers.md D15). */
-const FOR_PLAYERS: Record<string, Record<number, MapData>> = {
-  'heading-for-new-shores': { 3: hfns3 as unknown as MapData },
-};
+/**
+ * Layouts for a particular number of players. None now: Heading for New Shores used its own
+ * smaller 3-player island until players found it looked like missing tiles (docs/rules/seafarers.md
+ * D15, changed 2 October); 3 players now play the full island. The old file stays, so saved games
+ * that copied it are unaffected (a game keeps a copy of its map anyway).
+ */
+const FOR_PLAYERS: Record<string, Record<number, MapData>> = {};
+/** The old 3-player Heading for New Shores layout (kept for the simulator and older tests). */
+export const HFNS_3_OLD = hfns3 as unknown as MapData;
 
 /** A scenario's map for this many players: its own layout for that count if it has one. */
 export function scenarioMap(scenario: string, players: number): MapData {

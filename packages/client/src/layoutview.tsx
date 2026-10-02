@@ -35,14 +35,30 @@ export function LayoutView({
   onDone: () => void;
 }) {
   const center = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   const [peek, setPeek] = useState<PanelId | null>(null);
-  // A float being dragged or widened: where it started and where the pointer started.
+  // A box being dragged (by its bar: to an edge, or over the board) or a float being widened.
   const drag = useRef<{ id: PanelId; mode: 'move' | 'size'; x0: number; y0: number; px: number; py: number; w: number } | null>(null); // prettier-ignore
   const [live, setLive] = useState<{ id: PanelId; x: number; y: number; w: number } | null>(null);
+  // Where a dragged box would land if dropped now.
+  const [zone, setZone] = useState<Dock | null>(null);
   const phone = device === 'phone';
   const has = (id: PanelId) => panels[id] != null;
   const hidden = PANELS.filter((id) => has(id) && r[id].hidden);
   const absent = PANELS.filter((id) => !has(id));
+
+  /** The edge under the pointer (near the screen's sides), or 'float' over the board. */
+  const zoneAt = (x: number, y: number): Dock => {
+    const b = root.current?.getBoundingClientRect();
+    if (!b) return 'float';
+    const fx = (x - b.left) / b.width;
+    const fy = (y - b.top) / b.height;
+    if (fx < 0.15) return 'left';
+    if (fx > 0.85) return 'right';
+    if (fy < 0.12) return 'top';
+    if (fy > 0.88) return 'bottom';
+    return 'float';
+  };
 
   const frame = (id: PanelId) => {
     if (!has(id)) return null;
@@ -51,7 +67,8 @@ export function LayoutView({
     const pos = live?.id === id ? live : p;
     const style = float ? { left: `${(pos.x ?? 0) * 100}%`, top: `${(pos.y ?? 0) * 100}%`, width: `${(pos.w ?? 0.3) * 100}%` } : undefined; // prettier-ignore
     const start = (mode: 'move' | 'size') => (e: React.PointerEvent) => {
-      if (!editing || !float || (e.target as Element).closest('button')) return;
+      if (!editing || phone || (e.target as Element).closest('button')) return;
+      if (mode === 'size' && !float) return;
       e.preventDefault();
       (e.target as Element).setPointerCapture?.(e.pointerId);
       drag.current = { id, mode, x0: p.x ?? 0, y0: p.y ?? 0, px: e.clientX, py: e.clientY, w: p.w ?? 0.3 };
@@ -62,22 +79,30 @@ export function LayoutView({
       if (!d || d.id !== id || !box) return;
       const dx = (e.clientX - d.px) / box.width;
       const dy = (e.clientY - d.py) / box.height;
-      setLive(
-        d.mode === 'move'
-          ? {
-              id,
-              x: Math.min(1 - d.w, Math.max(0, d.x0 + dx)),
-              y: Math.min(0.9, Math.max(0, d.y0 + dy)),
-              w: d.w,
-            }
-          : { id, x: d.x0, y: d.y0, w: Math.min(0.6, Math.max(0.18, d.w + dx)) },
-      );
+      if (d.mode === 'move') {
+        setZone(zoneAt(e.clientX, e.clientY));
+        // A float follows the pointer; a docked box shows where it would go.
+        const x0 = float ? d.x0 : (d.px - box.left) / box.width - 0.05;
+        const y0 = float ? d.y0 : (d.py - box.top) / box.height - 0.02;
+        setLive({
+          id,
+          x: Math.min(1 - d.w, Math.max(0, x0 + dx)),
+          y: Math.min(0.9, Math.max(0, y0 + dy)),
+          w: d.w,
+        });
+      } else setLive({ id, x: d.x0, y: d.y0, w: Math.min(0.6, Math.max(0.18, d.w + dx)) });
     };
-    const end = () => {
+    const end = (e: React.PointerEvent) => {
       const d = drag.current;
       drag.current = null;
-      if (d && live?.id === id) onChange(floatAt(r, id, live.x, live.y, live.w));
+      const at = live;
       setLive(null);
+      setZone(null);
+      if (!d || d.id !== id || !at) return;
+      if (d.mode === 'size') return onChange(floatAt(r, id, at.x, at.y, at.w));
+      const z = zoneAt(e.clientX, e.clientY);
+      if (z === 'float') onChange(floatAt(r, id, at.x, at.y, at.w));
+      else if (z !== p.dock) onChange(dockAt(r, id, z));
     };
     return (
       <div
@@ -175,14 +200,23 @@ export function LayoutView({
   };
 
   return (
-    <div className={`ly${phone ? ' phone' : ''}`} data-testid="layout">
+    <div className={`ly${phone ? ' phone' : ''}`} data-testid="layout" ref={root}>
+      {zone ? (
+        <div className="lyzones" aria-hidden="true">
+          {(['left', 'right', 'top', 'bottom', 'float'] as const).map((z) => (
+            <div key={z} className={`lyzone z-${z}${zone === z ? ' on' : ''}`}>
+              {z === 'float' ? 'Float here' : `Dock ${z}`}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {editing ? (
         <div className="lyedit" data-testid="layout-edit">
           <b>Edit layout</b>
           <span className="hint">
             {phone
               ? 'Move boxes up or down, or hide them.'
-              : 'Dock boxes to an edge, float them over the board (drag by the bar), or hide them.'}
+              : 'Drag a box by its bar to an edge of the screen, or over the board to float it. Or use its buttons.'}
           </span>
           <span className="lybtns">
             {PRESETS.map((p) => (

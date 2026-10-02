@@ -457,7 +457,7 @@ Your answers to the questions in the first draft:
     - The hex is (1, 3), south of the main island. It touches no land, so it hurts nobody on the first turn.
     - I couldn't check the official position (the rulebook sites are blocked from here), so this is our choice.
     - New games only; saved games keep theirs.
-15. **D15 3-player layout:** with 3 players, Heading for New Shores uses `maps/heading-for-new-shores-3.json`. It's our own layout, since the official one couldn't be checked:
+15. **D15 3-player layout:** *Changed 2 October: 3 players now play the full 19-tile main island, the same as 4, because the smaller island looked like tiles were missing. Games already saved keep the board they started on.* Before that, with 3 players Heading for New Shores used `maps/heading-for-new-shores-3.json`, our own layout, since the official one couldn't be checked:
     - The main island's west column is sea, leaving 16 tiles: 3 of each resource and the desert.
     - The number tokens are the standard 18 without a 3, an 11 and the 12.
     - Its three harbors move to the new west coast.

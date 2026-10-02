@@ -67,7 +67,12 @@ test('Hard and custom CPUs: the CPU page, the lobby menu and a full game', async
     await a.getByTestId('opt-cpuOneOffer').click();
     await expect(a.getByTestId('opt-cpuOneOffer')).not.toBeChecked();
     await expect(b.getByTestId('opt-cpuOneOffer')).not.toBeChecked();
-    await expect(a.getByTestId('cpu-page-link')).toHaveAttribute('href', '/cpus');
+    // The CPU page opens over the lobby: the room and the seat stay put.
+    await a.getByTestId('cpu-page-link').click();
+    await expect(a.getByTestId('cpus-page')).toBeVisible();
+    await a.getByTestId('cpus-back').click();
+    await expect(a.getByTestId('cpus-page')).toHaveCount(0);
+    await expect(a.getByTestId('start')).toBeVisible();
     await shot(a, 'cpu-3-lobby');
 
     await a.click('[data-testid=start]');

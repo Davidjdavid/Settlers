@@ -7,16 +7,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   SCENARIOS, applyAction, checkInvariants, cpuMove, geo, isLand, legalActions, newCpuMemo, newGame, publicVP,
-  seedRng, startHexes, viewFor, vpBreakdown, scenarioMap, hexAt, type GameState, type MapData,
+  seedRng, startHexes, viewFor, vpBreakdown, scenarioMap, hexAt, HFNS_3_OLD, type GameState, type MapData,
 } from '../src/index'; // prettier-ignore
 import { islandOf } from '../src/modules/seafarers';
 import { act, reject } from './helpers';
 import { seatsFor } from './simulate';
 
 /** Every published scenario with Seafarers rules. */
-const SEA = [...Object.values(SCENARIOS), scenarioMap('heading-for-new-shores', 3)].filter((m) =>
-  m.modules.includes('seafarers'),
-);
+const SEA = [...Object.values(SCENARIOS), HFNS_3_OLD].filter((m) => m.modules.includes('seafarers'));
 
 /** Corners of island hexes outside the scenario's starting area. */
 function outsideStart(s: GameState): number[] {
@@ -134,16 +132,15 @@ describe('Heading for New Shores: pirate and the 3-player layout (D14, D15)', ()
     }
   });
 
-  it('with 3 players the main island is 16 tiles: 3 of each resource and the desert', () => {
-    const map = scenarioMap('heading-for-new-shores', 3);
-    expect(map.players).toEqual([3]);
-    const s = newGame('three', seatsFor(3), { map });
-    const start = startHexes(map, s.board);
-    expect(start.size).toBe(16);
-    const kinds: Record<string, number> = {};
-    for (const h of start) kinds[s.board.hexes[h]!.t] = (kinds[s.board.hexes[h]!.t] ?? 0) + 1;
-    expect(kinds).toEqual({ wood: 3, brick: 3, sheep: 3, wheat: 3, ore: 3, desert: 1 });
-    expect(s.board.ports).toHaveLength(9);
+  it('3 players play the full main island, the same as 4 (D15, changed 2 October)', () => {
+    expect(scenarioMap('heading-for-new-shores', 3)).toBe(SCENARIOS['heading-for-new-shores']);
     expect(scenarioMap('heading-for-new-shores', 4)).toBe(SCENARIOS['heading-for-new-shores']);
+    const map = scenarioMap('heading-for-new-shores', 3);
+    expect(map.players).toContain(3);
+    const s = newGame('three', seatsFor(3), { map });
+    expect(startHexes(map, s.board).size).toBe(19);
+    // The old 16-tile layout still loads, for games that saved it.
+    const old = newGame('three-old', seatsFor(3), { map: HFNS_3_OLD });
+    expect(startHexes(HFNS_3_OLD, old.board).size).toBe(16);
   });
 });

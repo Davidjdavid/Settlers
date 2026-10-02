@@ -18,7 +18,7 @@ import type { DiceInfo, GameStatsInfo } from '@settlers/server/protocol';
 import { CARD_LABEL, DEV_LABEL, PCOL, PROGRESS_LABEL, TILE_COLOR } from './art';
 import { Brand, MODE_NAME, MapPreview } from './home';
 import { client, useClient } from './net';
-import { Sheet } from './Sheets';
+import { ConfirmTwice, Sheet } from './Sheets';
 import { savePin } from './dicepin';
 
 const WAYS = (t: number) => 6 - Math.abs(t - 7);
@@ -445,6 +445,7 @@ export function StatsPage() {
   const st = useClient();
   const [who, setWho] = useState<string | null>(null);
   const [merge, setMerge] = useState<{ from: string; into: string } | null>(null);
+  const [del, setDel] = useState(false);
   useEffect(() => {
     if (st.status === 'live') {
       client.loadProfiles();
@@ -482,27 +483,16 @@ export function StatsPage() {
               {p.name}
             </button>
           ))}
-          {[
-            ...(['easy', 'medium', 'hard'] as const).map((l) => ({
-              id: `cpu:${l}`,
-              name: `${l[0]!.toUpperCase()}${l.slice(1)} CPU`,
-            })),
-            ...(st.cpus ?? []).map((c) => ({ id: `cpu:${c.id}`, name: `${c.name} (CPU)` })),
-          ].map((c) => (
-            <button
-              key={c.id}
-              className={`profile${who === c.id ? ' on' : ''}`}
-              onClick={() => setWho(c.id)}
-              data-testid="stats-who"
-              data-name={c.name}
-            >
-              <span className="dot" style={{ background: PCOL.gray }} />
-              {c.name}
-            </button>
-          ))}
         </div>
+        {/* CPUs aren't listed: their records only fill up from games with two people, so they
+            were nearly always blank. */}
         {r ? (
           <div data-testid="record">
+            <div className="row" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn small ghost" data-testid="delete-profile" onClick={() => setDel(true)}>
+                Delete {rec!.name}
+              </button>
+            </div>
             <h3>
               {rec!.name}: {r.wins} {r.wins === 1 ? 'win' : 'wins'}, {r.games - r.wins}{' '}
               {r.games - r.wins === 1 ? 'loss' : 'losses'} ({pct(r.wins, r.games)})
@@ -649,6 +639,19 @@ export function StatsPage() {
         </details>
       </div>
       {st.gameStats ? <PastGame info={st.gameStats} onClose={() => client.closeGameStats()} /> : null}
+      {del && rec ? (
+        <ConfirmTwice
+          title={`Delete ${rec.name}?`}
+          first={`${rec.name} comes off the list and their stats go. Games they played keep their name.`}
+          second="This can’t be undone. Delete for good?"
+          action="Delete"
+          onConfirm={() => {
+            client.deleteProfile(rec.who);
+            setWho(null);
+          }}
+          onClose={() => setDel(false)}
+        />
+      ) : null}
     </div>
   );
 }

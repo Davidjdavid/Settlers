@@ -67,9 +67,31 @@ export const COLORS = [
   'pink',
   'yellow',
   'gray',
+  // Added 2 October: more to pick from (not checked for colourblind players, by request).
+  'teal',
+  'cyan',
+  'brown',
+  'magenta',
+  'lavender',
+  'mint',
 ] as const;
 /** Colours people can pick; gray is only for CPU players (SPEC 4.2). */
-export const PLAYER_COLORS = ['red', 'blue', 'white', 'orange', 'purple', 'black', 'pink', 'yellow'] as const;
+export const PLAYER_COLORS = [
+  'red', 'blue', 'white', 'orange', 'purple', 'black', 'pink', 'yellow',
+  'teal', 'cyan', 'brown', 'magenta', 'lavender', 'mint',
+] as const; // prettier-ignore
+/** The first eight: checked against every kind of colour vision (the rest only normal vision). */
+export const CVD_COLORS = [
+  'red',
+  'blue',
+  'white',
+  'orange',
+  'purple',
+  'black',
+  'pink',
+  'yellow',
+  'gray',
+] as const;
 export type Color = (typeof COLORS)[number];
 
 /** One hex on the board. `n` is the number token; 0 means none (desert, sea). */
