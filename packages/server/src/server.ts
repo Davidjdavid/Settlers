@@ -144,7 +144,7 @@ export function startServer(cfg: ServerConfig): Promise<RunningServer> {
     createReadStream(file).pipe(res);
   }
 
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
   http.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://x');

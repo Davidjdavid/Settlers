@@ -12,9 +12,11 @@ import {
   type GameConfig,
   type HouseRules, applyAction, checkInvariants, cpuMove, eventsFor, newCpuMemo, newGame, seedRng, viewFor,
   COLORS, type CpuMemo, StatsFold, cpuChat, type CpuLevel, type GameStats,
-  type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView,
+  type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView, type MapData,
+  type GenRules,
 } from '@settlers/engine'; // prettier-ignore
 import { History, modeOf } from './history';
+import { MapLibrary } from './maps';
 import {
   DEFAULT_OPTIONS,
   OptionsSchema,
@@ -159,6 +161,7 @@ export class Rooms {
   private snapshotEvery: number;
   private log: (m: string) => void;
   private history: History;
+  readonly maps: MapLibrary;
 
   constructor(
     private store: Store,
@@ -168,6 +171,7 @@ export class Rooms {
     this.snapshotEvery = opts.snapshotEvery ?? 25;
     this.log = opts.log ?? ((m) => console.log(m));
     this.history = new History(store);
+    this.maps = new MapLibrary(store, this.now, this.log);
     this.loadAll();
     for (const room of this.rooms.values()) this.scheduleCpu(room);
   }
@@ -264,6 +268,26 @@ export class Rooms {
         return this.deleteSaved(conn, msg.game);
       case 'stats':
         return this.statsFor(conn, msg.who);
+      case 'maps':
+        return conn.send({ t: 'maps', list: this.maps.list() });
+      case 'getMap':
+        return this.maps.get(conn, msg.id);
+      case 'saveMap':
+        return this.maps.save(conn, msg.map as MapData, msg.by);
+      case 'importMap':
+        return this.maps.import(conn, msg.map as MapData, msg.by);
+      case 'renameMap':
+        return this.maps.rename(conn, msg.id, msg.name);
+      case 'duplicateMap':
+        return this.maps.duplicate(conn, msg.id, msg.by);
+      case 'deleteMap':
+        return this.maps.delete(conn, msg.id);
+      case 'presets':
+        return conn.send({ t: 'presets', list: this.maps.presets() });
+      case 'savePreset':
+        return this.maps.savePreset(conn, msg.id, msg.name, msg.rules as GenRules, msg.by);
+      case 'deletePreset':
+        return this.maps.deletePreset(conn, msg.id);
       case 'gameStats': {
         const g = this.history.gameInfo(msg.game);
         const row = this.store.loadGame(msg.game);

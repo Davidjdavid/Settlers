@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import type { Color, CpuLevel, GameEvent, GameStats, PlayerView } from '@settlers/engine';
+import type { Color, CpuLevel, GameEvent, GameStats, GenRules, MapData, PlayerView } from '@settlers/engine';
 
 const RES = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore']);
 const CARD = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore', 'paper', 'cloth', 'coin']);
@@ -143,6 +143,104 @@ export type PlayerSettings = z.infer<typeof SettingsSchema>;
 export type RoomOptions = z.infer<typeof OptionsSchema>;
 export const DEFAULT_OPTIONS: RoomOptions = { scenario: 'classic', winVP: 10, houseRules: {} };
 
+/* ---------- Maps (docs/maps.md 3) and generator presets (5.18) ---------- */
+
+const TERRAIN = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore', 'gold', 'desert', 'sea', 'fog']);
+const PORT = z.enum(['any', 'wood', 'brick', 'sheep', 'wheat', 'ore']);
+const coord = z.number().int().min(-30).max(30);
+const at = z.tuple([coord, coord]);
+const token = z
+  .number()
+  .int()
+  .min(2)
+  .max(12)
+  .refine((n) => n !== 7);
+const many = z.number().int().min(0).max(200);
+const mapName = z.string().trim().min(1).max(40);
+
+export const MapSchema = z.strictObject({
+  format: z.literal(1),
+  id: z.string().min(1).max(60),
+  name: mapName,
+  modules: z.array(z.enum(['seafarers'])).max(1),
+  players: z.array(z.number().int().min(2).max(4)).min(1).max(3),
+  winVP: z.number().int().min(3).max(30),
+  specialVP: z.strictObject({ newIsland: z.number().int().min(0).max(5).optional() }).optional(),
+  hexes: z
+    .array(
+      z.strictObject({
+        q: coord,
+        r: coord,
+        t: z.union([TERRAIN, z.literal('random')]),
+        pool: z.string().min(1).max(20).optional(),
+        n: z.union([token, z.literal('random')]).optional(),
+        lock: z.strictObject({ t: z.boolean().optional(), n: z.boolean().optional() }).optional(),
+      }),
+    )
+    .max(120),
+  pools: z
+    .record(
+      z.string().min(1).max(20),
+      z.strictObject({ terrain: z.array(TERRAIN).max(120), numbers: z.array(token).max(120) }),
+    )
+    .optional(),
+  harbors: z
+    .array(
+      z.strictObject({
+        q: coord,
+        r: coord,
+        side: z.number().int().min(0).max(5),
+        t: z.union([PORT, z.literal('random')]),
+        lock: z.boolean().optional(),
+      }),
+    )
+    .max(60),
+  harborPool: z.array(PORT).max(60).optional(),
+  fog: z.strictObject({ terrain: z.array(TERRAIN).max(120), numbers: z.array(token).max(120) }).optional(),
+  numberRules: z
+    .strictObject({ noAdjacentRed: z.boolean().optional(), noAdjacentSame: z.boolean().optional() })
+    .optional(),
+  start: z.union([z.literal('all'), z.array(at).max(120)]).optional(),
+  robber: z.union([z.literal('desert'), at, z.null()]),
+  pirate: z.union([at, z.null()]).optional(),
+  set: z
+    .strictObject({
+      terrain: z.partialRecord(TERRAIN, many),
+      numbers: z.record(z.string().regex(/^\d{1,2}$/), many),
+      harbors: z.partialRecord(PORT, many),
+    })
+    .optional(),
+  made: z
+    .strictObject({
+      by: z.string().max(40).optional(),
+      at: z.number().int().optional(),
+      generator: z.strictObject({ preset: z.string().max(40), seed: z.string().max(40) }).optional(),
+      edited: z.array(z.string().max(40)).max(20).optional(),
+    })
+    .optional(),
+});
+
+const limit = (lo: number, hi: number) => z.number().int().min(lo).max(hi).nullable();
+export const GenRulesSchema = z.strictObject({
+  pips: z.record(z.string().regex(/^\d{1,2}$/), z.number().int().min(0).max(10)),
+  redApart: z.boolean(),
+  harborGood: z.enum(['off', '68', '5689']),
+  harborNoRed: z.boolean(),
+  bestSpot: limit(0, 30),
+  badSpot: limit(0, 30),
+  badSpotDesert: z.boolean(),
+  twoTwelveApart: z.boolean(),
+  noLowClusters: z.boolean(),
+  sameApart: z.boolean(),
+  clump: limit(0, 19),
+  balance: limit(0, 100),
+  fairness: limit(0, 30),
+  fairPlayers: limit(2, 4),
+  desert: z.enum(['center', 'edge', 'random', 'none']),
+  harbors: z.enum(['standard', 'random']),
+  numbers: z.enum(['spiral', 'random']),
+});
+
 const roomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);
 const nick = z.string().min(1).max(40);
 
@@ -163,6 +261,23 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   /** Stats (SPEC 5.6): someone's record (a profile id, or cpu:easy etc.), or one game. */
   z.strictObject({ t: z.literal('stats'), who: z.string().max(60) }),
   z.strictObject({ t: z.literal('gameStats'), game: z.string().max(60) }),
+  /** Maps (docs/maps.md 4.4) and presets (5.18), shared by everyone. Allowed outside rooms. */
+  z.strictObject({ t: z.literal('maps') }),
+  z.strictObject({ t: z.literal('getMap'), id: z.string().max(60) }),
+  z.strictObject({ t: z.literal('saveMap'), map: MapSchema, by: z.string().max(40).optional() }),
+  z.strictObject({ t: z.literal('importMap'), map: MapSchema, by: z.string().max(40).optional() }),
+  z.strictObject({ t: z.literal('renameMap'), id: z.string().max(60), name: mapName }),
+  z.strictObject({ t: z.literal('duplicateMap'), id: z.string().max(60), by: z.string().max(40).optional() }),
+  z.strictObject({ t: z.literal('deleteMap'), id: z.string().max(60) }),
+  z.strictObject({ t: z.literal('presets') }),
+  z.strictObject({
+    t: z.literal('savePreset'),
+    id: z.string().max(60).optional(),
+    name: mapName,
+    rules: GenRulesSchema,
+    by: z.string().max(40).optional(),
+  }),
+  z.strictObject({ t: z.literal('deletePreset'), id: z.string().max(60) }),
   /** CPU chatter on or off for this room (SPEC 5.14), any time, by anyone seated. */
   z.strictObject({ t: z.literal('setCpuChat'), on: z.boolean() }),
   z.strictObject({ t: z.literal('setColor'), color: COLOR }),
@@ -273,6 +388,28 @@ export interface GameStatsInfo {
   hexes: { q: number; r: number; t: string; n: number }[];
 }
 
+/** A map in the map list. */
+export interface MapInfo {
+  id: string;
+  name: string;
+  by: string | null;
+  createdAt: number;
+  updatedAt: number;
+  players: number[];
+  seafarers: boolean;
+  /** Tiles, for the small preview ('random' = blank). */
+  hexes: { q: number; r: number; t: string; n: number }[];
+}
+
+/** A generator preset; built-in ones can't be changed or deleted. */
+export interface PresetInfo {
+  id: string;
+  name: string;
+  rules: GenRules;
+  builtIn: boolean;
+  by: string | null;
+}
+
 export interface RoomInfo {
   code: string;
   seats: SeatInfo[];
@@ -313,6 +450,10 @@ export type ServerMsg =
   | { t: 'saved'; list: SavedGame[] }
   | { t: 'stats'; who: string; name: string; record: PlayerRecord }
   | { t: 'gameStats'; game: GameStatsInfo }
+  | { t: 'maps'; list: MapInfo[] }
+  /** One map, to open in the editor; `saved` when it was just saved (the editor takes its id). */
+  | { t: 'map'; map: MapData; info: MapInfo; saved?: boolean }
+  | { t: 'presets'; list: PresetInfo[] }
   /** The room was closed ("Save and quit"); go back to the start screen. */
   | { t: 'closed'; text: string }
   | { t: 'ack'; id: string; ok: boolean; error?: string }

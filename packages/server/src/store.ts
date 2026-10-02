@@ -59,6 +59,23 @@ export interface GameRow {
   lastAt?: number;
 }
 
+/** A saved map (docs/maps.md 4.4) or generator preset (5.18), shared by everyone. */
+export interface MapRow {
+  id: string;
+  name: string;
+  map: unknown;
+  madeBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface PresetRow {
+  id: string;
+  name: string;
+  rules: unknown;
+  madeBy: string | null;
+  createdAt: number;
+}
+
 export interface ActionRow {
   seq: number;
   pid: string;
@@ -160,6 +177,25 @@ CREATE TABLE IF NOT EXISTS game_stats (
   engine_version INTEGER NOT NULL,
   seq INTEGER NOT NULL,
   stats_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS maps (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  map_json TEXT NOT NULL,
+  made_by TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS presets (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  rules_json TEXT NOT NULL,
+  made_by TEXT,
+  created_at INTEGER NOT NULL,
+  deleted_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS player_settings (
   nick_key TEXT PRIMARY KEY,
@@ -609,8 +645,99 @@ export class Store {
       .map((r) => ({ id: r.id, roomCode: r.room_code, pid: r.pid, nick: r.nick, text: r.text, at: r.at }));
   }
 
+  /* ---------- Maps and presets ---------- */
+
+  maps(): MapRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM maps WHERE deleted_at IS NULL ORDER BY updated_at DESC')
+      .all() as MapDbRow[];
+    return rows.map(mapRow);
+  }
+
+  mapById(id: string): MapRow | null {
+    const r = this.db.prepare('SELECT * FROM maps WHERE id = ? AND deleted_at IS NULL').get(id) as
+      MapDbRow | undefined;
+    return r ? mapRow(r) : null;
+  }
+
+  /** A live map with this name (any case and spacing), other than `except`. */
+  mapNameTaken(name: string, except?: string): boolean {
+    return !!this.db
+      .prepare('SELECT 1 FROM maps WHERE name_key = ? AND deleted_at IS NULL AND id != ?')
+      .get(nickKey(name), except ?? '');
+  }
+
+  putMap(r: MapRow) {
+    this.db
+      .prepare(
+        `INSERT INTO maps (id, name, name_key, map_json, made_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_key = excluded.name_key,
+           map_json = excluded.map_json, updated_at = excluded.updated_at`,
+      )
+      .run(r.id, r.name, nickKey(r.name), JSON.stringify(r.map), r.madeBy, r.createdAt, r.updatedAt);
+  }
+
+  deleteMap(id: string, at: number) {
+    this.db.prepare('UPDATE maps SET deleted_at = ? WHERE id = ?').run(at, id);
+  }
+
+  presets(): PresetRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM presets WHERE deleted_at IS NULL ORDER BY name_key')
+      .all() as {
+      id: string;
+      name: string;
+      rules_json: string;
+      made_by: string | null;
+      created_at: number;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      rules: JSON.parse(r.rules_json),
+      madeBy: r.made_by,
+      createdAt: r.created_at,
+    }));
+  }
+
+  presetNameTaken(name: string, except?: string): boolean {
+    return !!this.db
+      .prepare('SELECT 1 FROM presets WHERE name_key = ? AND deleted_at IS NULL AND id != ?')
+      .get(nickKey(name), except ?? '');
+  }
+
+  putPreset(r: PresetRow) {
+    this.db
+      .prepare(
+        `INSERT INTO presets (id, name, name_key, rules_json, made_by, created_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_key = excluded.name_key, rules_json = excluded.rules_json`,
+      )
+      .run(r.id, r.name, nickKey(r.name), JSON.stringify(r.rules), r.madeBy, r.createdAt);
+  }
+
+  deletePreset(id: string, at: number) {
+    this.db.prepare('UPDATE presets SET deleted_at = ? WHERE id = ?').run(at, id);
+  }
+
   /** Run `fn` in one transaction: all of its writes commit together or not at all. */
   tx<T>(fn: () => T): T {
     return this.db.transaction(fn)();
   }
 }
+
+interface MapDbRow {
+  id: string;
+  name: string;
+  map_json: string;
+  made_by: string | null;
+  created_at: number;
+  updated_at: number;
+}
+const mapRow = (r: MapDbRow): MapRow => ({
+  id: r.id,
+  name: r.name,
+  map: JSON.parse(r.map_json),
+  madeBy: r.made_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
