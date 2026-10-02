@@ -59,7 +59,9 @@ export type GenResult =
   | { ok: true; map: MapData; steps: number; attempts: number; late: number; eased: boolean }
   | { ok: false; error: string; rules: RuleId[]; steps: number };
 
-export const DEFAULT_BUDGET = 300_000;
+export const DEFAULT_BUDGET = 200_000;
+/** Retries when saying why: a quick pass first, then a longer one if the quick one finds nothing. */
+const DIAG_QUICK = 9_000;
 const DIAG_BUDGET = 25_000;
 const TERRAIN_NODES = 4_000;
 const NUMBER_NODES = 3_000;
@@ -237,8 +239,9 @@ class Search {
     for (const h of this.harbors)
       if (rules.harbors !== 'random' || h.pinned)
         for (const x of this.spotOf(h).hexes) this.settled[x]!.push(h);
-    if (rules.desert === 'none') this.removeDeserts();
+    this.basePools = structuredClone(this.pools);
   }
+  private basePools: Record<string, { terrain: Terrain[]; numbers: number[] }>;
 
   private step(n = 1) {
     this.steps += n;
@@ -249,6 +252,7 @@ class Search {
 
   /** D2: with no desert, each pool desert becomes a random resource with an extra 3-5 or 9-11 token. */
   private removeDeserts() {
+    this.pools = structuredClone(this.basePools);
     for (const p of Object.values(this.pools)) {
       p.terrain = p.terrain.map((t) => {
         if (t !== 'desert') return t;
@@ -262,6 +266,9 @@ class Search {
     for (;;) {
       this.attempts++;
       this.step(10);
+      // No desert: the replacement tile and token are drawn again for every attempt, so one
+      // hard draw (a sixth weak number) can't stall the search.
+      if (this.rules.desert === 'none') this.removeDeserts();
       if (!this.placeTerrain()) continue;
       for (let k = 0; k < NUMBER_TRIES; k++) {
         if (!this.placeNumbers()) continue;
@@ -398,33 +405,45 @@ class Search {
       }
     });
     const maxPip = this.maxPip;
+    const pipTable = this.pipTable;
+    // Numbers left in each pool, as counts by number (cheaper than lists at every step).
+    const counts: Record<string, number[]> = {};
+    for (const [k, list] of Object.entries(left)) {
+      const c = new Array<number>(13).fill(0);
+      for (const n of list) c[n]!++;
+      counts[k] = c;
+    }
     let nodes = 0;
     const dfs = (j: number): boolean => {
       if (j === order.length) return true;
       if (++nodes > NUMBER_NODES) return false;
       this.step();
       const i = order[j]!;
-      const pool = left[this.nPool[i]!]!;
+      const cnt = counts[this.nPool[i]!]!;
       const t = b.t[i]!;
-      for (const v of shuffle([...new Set(pool)], this.rng)) {
-        if (!this.numberOK(i, v)) continue;
-        if (bounds && isResource(t)) {
-          const p = resPips[t]! + pipOf(rules.pips, v);
-          const [lo, hi] = bounds[t]!;
-          if (p > hi || p + (resLeft[t]! - 1) * maxPip < lo) continue;
+      const res = isResource(t) ? t : null;
+      const opts: number[] = [];
+      for (let v = 2; v <= 12; v++) if (cnt[v]) opts.push(v);
+      for (const v of shuffle(opts, this.rng)) {
+        // The balance bound is plain arithmetic, so it goes before the touching checks.
+        if (bounds && res) {
+          const p = resPips[res]! + pipTable[v]!;
+          const [lo, hi] = bounds[res]!;
+          if (p > hi || p + (resLeft[res]! - 1) * maxPip < lo) continue;
         }
+        if (!this.numberOK(i, v)) continue;
         b.n[i] = v;
-        pool.splice(pool.indexOf(v), 1);
-        if (isResource(t)) {
-          resPips[t]! += pipOf(rules.pips, v);
-          resLeft[t]!--;
+        cnt[v]!--;
+        if (res) {
+          resPips[res]! += pipTable[v]!;
+          resLeft[res]!--;
         }
         if (dfs(j + 1)) return true;
-        if (isResource(t)) {
-          resPips[t]! -= pipOf(rules.pips, v);
-          resLeft[t]!++;
+        if (res) {
+          resPips[res]! -= pipTable[v]!;
+          resLeft[res]!++;
         }
-        pool.push(v);
+        cnt[v]!++;
         b.n[i] = null;
       }
       return false;
@@ -811,10 +830,30 @@ const isOn = (k: Knob, r: GenRules) => JSON.stringify(k.off(r)) !== JSON.stringi
 
 /** Which rules block, and the nearest setting that works, by retrying with small budgets. */
 export function diagnose(m: MapData, rules: GenRules, o: GenOptions): { error: string; rules: RuleId[] } {
-  const works = (r: GenRules) =>
-    generate(m, r, { ...o, keep: 'placed', budget: DIAG_BUDGET, diagnose: false, ease: false }).ok;
+  // A few short tries with different seeds beat one long one: unlucky searches run long.
+  const works = (r: GenRules, budget: number) => {
+    for (let k = 0; k < 3; k++)
+      if (
+        generate(m, r, {
+          ...o,
+          seed: `${o.seed}:why${k}`,
+          keep: 'placed',
+          budget: budget / 3,
+          diagnose: false,
+          ease: false,
+        }).ok
+      )
+        return true;
+    return false;
+  };
   const on = KNOBS.filter((k) => isOn(k, rules));
-  const singles = on.filter((k) => works(k.off(rules)));
+  // Most blocking rules show up in the quick pass; the longer one is only for close calls.
+  let budget = DIAG_QUICK;
+  let singles = on.filter((k) => works(k.off(rules), budget));
+  if (!singles.length) {
+    budget = DIAG_BUDGET;
+    singles = on.filter((k) => works(k.off(rules), budget));
+  }
   if (singles.length > 1) {
     const names = singles.map((k) => k.label(rules));
     return {
@@ -824,7 +863,8 @@ export function diagnose(m: MapData, rules: GenRules, o: GenOptions): { error: s
   }
   const k = singles[0];
   if (k) {
-    const near = k.nearer?.tries(rules).find(works);
+    const tries = k.nearer?.tries(rules) ?? [];
+    const near = tries.find((r) => works(r, DIAG_QUICK)) ?? tries.find((r) => works(r, DIAG_BUDGET));
     if (k.nearer && near)
       return {
         error: `No board fits: ${k.label(rules)} is ${k.nearer.too}. The ${k.nearer.most} that works with your other rules is about ${k.nearer.value(near)}.`,
@@ -834,7 +874,7 @@ export function diagnose(m: MapData, rules: GenRules, o: GenOptions): { error: s
   }
   for (let i = 0; i < on.length; i++)
     for (let j = i + 1; j < on.length; j++)
-      if (works(on[j]!.off(on[i]!.off(rules))))
+      if (works(on[j]!.off(on[i]!.off(rules)), DIAG_QUICK))
         return {
           error: `No board fits: ${on[i]!.label(rules)} together with ${on[j]!.label(rules)}.`,
           rules: [on[i]!.id, on[j]!.id],

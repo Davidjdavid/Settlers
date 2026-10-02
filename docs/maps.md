@@ -347,6 +347,7 @@ Shown under every board: in the editor, the pre-game table and the end screen.
 2. **D2 No desert:**
    - "None" is a desert setting (5.15), alongside center, edge and random.
    - The 19th hex becomes a random resource with an extra token from 3–5 or 9–11.
+   - Both are drawn again on every attempt of the search, so a hard draw (a sixth weak number) can't stall it.
    - The robber starts off the board.
 3. **D3 Bad-spot limit:**
    - Default 4.
