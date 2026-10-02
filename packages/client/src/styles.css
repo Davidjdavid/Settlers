@@ -2467,3 +2467,32 @@ button.vp {
 .mapboard use {
   pointer-events: none;
 }
+.presetform {
+  display: grid;
+  gap: 8px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.presetform .rule {
+  flex-wrap: wrap;
+}
+.presetform .rule b {
+  color: var(--ink-3);
+  font-size: 12px;
+  min-width: 30px;
+}
+.presetform .rule.sub {
+  padding-left: 34px;
+}
+.presetform .pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+}
+.presetform .pips label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}

@@ -726,6 +726,7 @@ export function MapEditorPage({ id }: { id: string }) {
   const [preset, setPreset] = useState('builtin:our rules');
   const [hover, setHover] = useState<Violation | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [name, setName] = useState('');
 
   // Start: a new board, or the saved map once it arrives.
@@ -975,6 +976,9 @@ export function MapEditorPage({ id }: { id: string }) {
                   </option>
                 ))}
               </select>
+              <button className="btn small" onClick={() => setPresetsOpen(true)} data-testid="presets">
+                Presets…
+              </button>
               <button
                 className="btn small primary"
                 data-testid="fill-rest"
@@ -1056,6 +1060,9 @@ export function MapEditorPage({ id }: { id: string }) {
           ) : null}
         </aside>
       </div>
+      {presetsOpen ? (
+        <PresetSheet value={preset} onPick={setPreset} onClose={() => setPresetsOpen(false)} />
+      ) : null}
       {leaving ? (
         <Sheet
           title="Leave without saving?"
@@ -1091,3 +1098,327 @@ const TOOL_HINT: Record<Tool['k'], string> = {
   lock: 'Click a tile, number or harbor to lock or unlock it. Filling keeps locked things.',
   shape: 'Click + to add a hex, or a hex to remove it.',
 };
+
+/* ---------- Presets (5.18) ---------- */
+
+type Bool = 'redApart' | 'harborNoRed' | 'twoTwelveApart' | 'noLowClusters' | 'sameApart';
+type Limit = 'bestSpot' | 'badSpot' | 'clump' | 'balance' | 'fairness';
+const LIMITS: { k: Limit; no: string; label: string; unit: string; def: number; min: number; max: number }[] =
+  [
+    { k: 'bestSpot', no: '5.5', label: 'Best-spot limit', unit: 'pips at most', def: 12, min: 5, max: 30 },
+    {
+      k: 'badSpot',
+      no: '5.6',
+      label: 'Bad-spot limit (inland corners)',
+      unit: 'pips at least',
+      def: 4,
+      min: 0,
+      max: 30,
+    },
+    { k: 'clump', no: '5.10', label: 'Resource clump limit', unit: 'tiles at most', def: 3, min: 1, max: 19 },
+    {
+      k: 'balance',
+      no: '5.11',
+      label: 'Resource balance',
+      unit: '% of fair share',
+      def: 25,
+      min: 0,
+      max: 100,
+    },
+    {
+      k: 'fairness',
+      no: '5.12',
+      label: 'Starting fairness',
+      unit: 'pips gap at most',
+      def: 4,
+      min: 0,
+      max: 30,
+    },
+  ];
+const BOOLS: { k: Bool; no: string; label: string }[] = [
+  { k: 'redApart', no: '5.2', label: 'Red numbers (6, 8) never touch' },
+  { k: 'harborNoRed', no: '5.4', label: 'No 6 or 8 at any harbor' },
+  { k: 'twoTwelveApart', no: '5.7', label: '2 and 12 never touch' },
+  { k: 'noLowClusters', no: '5.8', label: 'No clusters of 2, 3, 11, 12' },
+  { k: 'sameApart', no: '5.9', label: 'Same number never touches' },
+];
+
+/** Pick, view, copy, edit and delete generator presets. Built-in ones are read-only. */
+export function PresetSheet(props: { value: string; onPick: (id: string) => void; onClose: () => void }) {
+  const st = useClient();
+  const list = st.presets ?? [];
+  const current = list.find((p) => p.id === props.value) ?? list[0];
+  const [draft, setDraft] = useState<{ id?: string; name: string; rules: GenRules } | null>(null);
+  const [del, setDel] = useState(false);
+  const [trial, setTrial] = useState<string | null>(null);
+  const r = draft?.rules ?? current?.rules ?? OUR_RULES;
+  const ro = !draft;
+  const set = (patch: Partial<GenRules>) =>
+    draft && setDraft({ ...draft, rules: { ...draft.rules, ...patch } });
+  // After saving, pick the preset by its name.
+  useEffect(() => {
+    if (!draft?.name) return;
+    const saved = list.find((p) => p.name === draft.name.trim() && !p.builtIn);
+    if (saved && JSON.stringify(saved.rules) === JSON.stringify(draft.rules)) {
+      props.onPick(saved.id);
+      setDraft(null);
+    }
+  }, [st.presets]);
+  const tryIt = () => {
+    const t0 = performance.now();
+    const g = fillRest(standardBlank(CLASSIC_MAP, 'try', 'Try'), r, newSeed(), r.fairPlayers ?? 4);
+    setTrial(
+      g.ok
+        ? `A board in ${Math.round(performance.now() - t0)} ms${g.eased ? ' (spot rules eased a little)' : ''}.`
+        : g.error,
+    );
+  };
+  return (
+    <Sheet
+      title="Generator presets"
+      sub="Rules a filled or generated board follows. Presets are shared with everyone."
+      onClose={props.onClose}
+      foot={
+        draft ? (
+          <>
+            <button className="btn ghost" onClick={() => setDraft(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn primary"
+              disabled={!draft.name.trim()}
+              onClick={() => client.savePreset(draft.id, draft.name.trim(), draft.rules)}
+              data-testid="preset-save"
+            >
+              Save preset
+            </button>
+          </>
+        ) : (
+          <>
+            {current && !current.builtIn ? (
+              <>
+                <button className="btn ghost" onClick={() => setDel(true)} data-testid="preset-delete">
+                  Delete
+                </button>
+                <button
+                  className="btn"
+                  onClick={() =>
+                    setDraft({ id: current.id, name: current.name, rules: structuredClone(current.rules) })
+                  }
+                  data-testid="preset-edit"
+                >
+                  Edit
+                </button>
+              </>
+            ) : null}
+            <button
+              className="btn"
+              onClick={() =>
+                setDraft({ name: `${current?.name ?? 'Our rules'} (mine)`, rules: structuredClone(r) })
+              }
+              data-testid="preset-copy"
+            >
+              Copy to a new preset
+            </button>
+            <button className="btn primary" onClick={props.onClose}>
+              Done
+            </button>
+          </>
+        )
+      }
+    >
+      <div className="presetform" data-testid="preset-sheet">
+        {draft ? (
+          <input
+            className="text"
+            value={draft.name}
+            maxLength={40}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            aria-label="Preset name"
+            data-testid="preset-name"
+          />
+        ) : (
+          <select
+            value={current?.id}
+            onChange={(e) => props.onPick(e.target.value)}
+            aria-label="Preset"
+            data-testid="preset-pick"
+          >
+            {list.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.by ? ` (${p.by})` : ''}
+              </option>
+            ))}
+          </select>
+        )}
+        {BOOLS.map((b) => (
+          <label key={b.k} className="check rule">
+            <input
+              type="checkbox"
+              disabled={ro}
+              checked={r[b.k]}
+              onChange={(e) => set({ [b.k]: e.target.checked })}
+              data-testid={`rule-${b.k}`}
+            />
+            <b>{b.no}</b> {b.label}
+          </label>
+        ))}
+        <label className="check rule">
+          <b>5.3</b> 2:1 harbors away from good numbers of their resource
+          <select
+            disabled={ro}
+            value={r.harborGood}
+            onChange={(e) => set({ harborGood: e.target.value as GenRules['harborGood'] })}
+          >
+            <option value="off">Off</option>
+            <option value="68">6 and 8</option>
+            <option value="5689">5, 6, 8 and 9</option>
+          </select>
+        </label>
+        {LIMITS.map((l) => (
+          <label key={l.k} className="check rule">
+            <input
+              type="checkbox"
+              disabled={ro}
+              checked={r[l.k] !== null}
+              onChange={(e) => set({ [l.k]: e.target.checked ? l.def : null })}
+              data-testid={`rule-${l.k}`}
+            />
+            <b>{l.no}</b> {l.label}
+            {r[l.k] !== null ? (
+              <>
+                <input
+                  type="number"
+                  className="text num"
+                  disabled={ro}
+                  min={l.min}
+                  max={l.max}
+                  value={r[l.k] ?? ''}
+                  onChange={(e) =>
+                    set({ [l.k]: Math.max(l.min, Math.min(l.max, Math.round(Number(e.target.value) || 0))) })
+                  }
+                  data-testid={`limit-${l.k}`}
+                />
+                <small>{l.unit}</small>
+              </>
+            ) : null}
+          </label>
+        ))}
+        {r.badSpot !== null ? (
+          <label className="check rule sub">
+            <input
+              type="checkbox"
+              disabled={ro}
+              checked={r.badSpotDesert}
+              onChange={(e) => set({ badSpotDesert: e.target.checked })}
+            />
+            Count corners on the desert too
+          </label>
+        ) : null}
+        {r.fairness !== null ? (
+          <label className="check rule sub">
+            Fairness for
+            <select
+              disabled={ro}
+              value={r.fairPlayers ?? 0}
+              onChange={(e) => set({ fairPlayers: Number(e.target.value) || null })}
+            >
+              <option value={0}>the table’s players</option>
+              <option value={2}>2 players</option>
+              <option value={3}>3 players</option>
+              <option value={4}>4 players</option>
+            </select>
+          </label>
+        ) : null}
+        <label className="check rule">
+          <b>5.15</b> Desert
+          <select
+            disabled={ro}
+            value={r.desert}
+            onChange={(e) => set({ desert: e.target.value as GenRules['desert'] })}
+            data-testid="rule-desert"
+          >
+            <option value="random">Anywhere</option>
+            <option value="center">In the middle</option>
+            <option value="edge">On the coast</option>
+            <option value="none">No desert</option>
+          </select>
+        </label>
+        <label className="check rule">
+          <b>5.16</b> Harbors
+          <select
+            disabled={ro}
+            value={r.harbors}
+            onChange={(e) => set({ harbors: e.target.value as GenRules['harbors'] })}
+          >
+            <option value="standard">Standard spots</option>
+            <option value="random">Random spots</option>
+          </select>
+        </label>
+        <label className="check rule">
+          <b>5.17</b> Numbers
+          <select
+            disabled={ro}
+            value={r.numbers}
+            onChange={(e) => set({ numbers: e.target.value as GenRules['numbers'] })}
+          >
+            <option value="random">Random, within the rules</option>
+            <option value="spiral">Official spiral</option>
+          </select>
+        </label>
+        <details>
+          <summary>
+            <b>5.1</b> Pips per token
+          </summary>
+          <div className="pips">
+            {NUMBERS.map((n) => (
+              <label key={n}>
+                {n}
+                <input
+                  type="number"
+                  className="text num"
+                  disabled={ro}
+                  min={0}
+                  max={10}
+                  value={r.pips[n] ?? 0}
+                  onChange={(e) =>
+                    set({
+                      pips: {
+                        ...r.pips,
+                        [n]: Math.max(0, Math.min(10, Math.round(Number(e.target.value) || 0))),
+                      },
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        </details>
+        <div className="row tight">
+          <button type="button" className="btn small" onClick={tryIt} data-testid="preset-try">
+            Try these rules
+          </button>
+          {trial ? (
+            <span className="hint small" data-testid="preset-trial">
+              {trial}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {del && current ? (
+        <ConfirmTwice
+          title={`Delete “${current.name}”?`}
+          first="It’ll be gone for everyone."
+          second="Boards already made with it stay as they are. Delete it?"
+          action="Delete it"
+          onConfirm={() => {
+            client.deletePreset(current.id);
+            props.onPick('builtin:our rules');
+          }}
+          onClose={() => setDel(false)}
+        />
+      ) : null}
+    </Sheet>
+  );
+}

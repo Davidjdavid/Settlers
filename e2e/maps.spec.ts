@@ -138,6 +138,32 @@ test('make, edit, save and share a map', async ({ browser }) => {
   await expect(page.locator('.heat')).toHaveCount(0);
   await page.getByTestId('heat').check();
 
+  // Presets: copy "Our rules" to a new one, change it, try it, fill with it, then delete it.
+  await page.getByTestId('presets').click();
+  await expect(page.getByTestId('rule-redApart')).toBeDisabled();
+  await page.getByTestId('preset-copy').click();
+  await page.getByTestId('preset-name').fill('Tight');
+  await page.getByTestId('limit-bestSpot').fill('11');
+  await page.getByTestId('rule-fairness').uncheck();
+  await page.getByTestId('preset-try').click();
+  await expect(page.getByTestId('preset-trial')).toContainText('A board in');
+  await page.getByTestId('preset-save').click();
+  await expect(page.getByTestId('preset-pick')).toHaveValue(/^p-/);
+  await expect(page.getByTestId('limit-bestSpot')).toHaveValue('11');
+  await shot(page, 'maps-6-preset');
+  await page.locator('.sheet button:has-text("Done")').click();
+  await expect(page.getByTestId('preset')).toHaveValue(/^p-/);
+  await page.getByTestId('clear-unlocked').click();
+  await page.getByTestId('fill-rest').click();
+  await expect(page.locator('[data-kind=hex][data-t=random]')).toHaveCount(0);
+  await expect(page.locator('.heat[data-pips="12"], .heat[data-pips="13"]')).toHaveCount(0);
+  await page.getByTestId('presets').click();
+  await page.getByTestId('preset-delete').click();
+  await page.locator('.sheet button:has-text("Continue")').click();
+  await page.locator('.sheet button:has-text("Delete it")').click();
+  await expect(page.locator('[data-testid=preset-pick] option')).toHaveCount(2);
+  await page.locator('.sheet button:has-text("Done")').click();
+
   // Back to the list: rename, duplicate, export, import, delete.
   await page.getByTestId('save-map').click();
   await page.getByTestId('editor-back').click();
