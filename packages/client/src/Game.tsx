@@ -667,8 +667,12 @@ export function Game({
           ],
         };
   } else {
-    // CPU players never trade with people (docs/bot.md), so don't offer.
-    const tradable = me != null && !v.players[v.turn]!.cpu;
+    // Easy CPUs never trade with people (docs/bot.md), nor any CPU with "CPU trading" off.
+    const turnSeat = room.seats.find((x) => x.pid === v.players[v.turn]!.pid);
+    const tradable =
+      me != null &&
+      (!v.players[v.turn]!.cpu ||
+        ((turnSeat?.level ?? 'easy') !== 'easy' && room.options.cpuTrading !== false));
     pm = {
       title: `${cur}’s turn`,
       sub: tradable ? `${cur} rolled ${sum}. You can offer them a trade.` : `${cur} rolled ${sum}.`,
@@ -1096,7 +1100,11 @@ export function Game({
                 <span className="nm">
                   <span>{p.nick}</span>
                   {i === me ? <span className="you">you</span> : null}
-                  {p.cpu ? <span className="you">CPU</span> : null}
+                  {p.cpu ? (
+                    <span className="you" data-testid="cpu-tag">
+                      CPU · {room.seats.find((x) => x.pid === p.pid)?.levelName ?? 'Easy'}
+                    </span>
+                  ) : null}
                   {v.discard?.[i] != null ? <span className="tag wait">discarding</span> : null}
                   <span
                     className={`online${connected(i) ? '' : ' away'}`}

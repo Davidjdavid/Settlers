@@ -1,6 +1,8 @@
 /*
- * The CPU player, as specified in docs/bot.md: legal, weak, and never mean to humans. It decides
- * from its own view only. `memo` is the little it remembers within a turn; the caller keeps it.
+ * The CPU players. Easy is specified in docs/bot.md: legal, weak, and never mean to humans.
+ * Medium, Hard and custom CPUs (docs/bot-medium-hard.md) are in cpu/smart.ts. Every CPU decides
+ * from its own view only. `memo` is what it remembers; the caller keeps it, and feeds it what
+ * the CPU saw of every move through cpuObserve.
  */
 
 import { TABLE_TALK, legalActions, mustDiscard } from './legal';
@@ -12,16 +14,55 @@ import {
   RES, type Action, type Card, type Cards, type GameState, type Progress, type Resource, type Seat,
 } from './types'; // prettier-ignore
 import { stateFromView, type PlayerView } from './view';
+import { DEFAULT_CPU_OPTIONS, type CpuBrain, type CpuOptions } from './cpu/persona';
+import { smartMove } from './cpu/smart';
+import { newGuess, observe, type Guess } from './cpu/track';
+import type { GameEvent } from './types';
 
 export interface CpuMemo {
   /** The turn this memory is about. */
   turnN: number;
-  /** One of its 1-in-4 "build" turns? */
+  /** Easy: one of its 1-in-4 "build" turns? */
   buildTurn: boolean;
-  /** Has it built this turn? */
+  /** Easy: has it built this turn? */
   built: boolean;
+  /** Medium and Hard: offers made this turn, so it never repeats one. */
+  offers?: string[];
+  /** Its moves so far this turn. */
+  moves?: number;
+  /** Offers by id: its move count when it first saw each (an offer on its turn is answered at once). */
+  seen?: Record<number, number>;
+  /** Turns it ended holding more cards than the hand limit (for walls). */
+  big?: number;
+  /** Hard: its guess at every hand, from what it has seen. */
+  guess?: Guess;
 }
 export const newCpuMemo = (): CpuMemo => ({ turnN: -1, buildTurn: false, built: false });
+
+/**
+ * Its move, or null if it has nothing to do. `brain` picks Easy or a personality (Medium, Hard
+ * or custom); `opts` are the room's CPU trading settings.
+ */
+export function cpuMove(
+  v: PlayerView,
+  rng: RngState,
+  memo: CpuMemo,
+  brain: CpuBrain = 'easy',
+  opts: CpuOptions = DEFAULT_CPU_OPTIONS,
+): Action | null {
+  return brain === 'easy' ? easyMove(v, rng, memo) : smartMove(v, rng, memo, brain, opts);
+}
+
+/** Fold what this CPU saw of one move (its own view after it, and the events redacted for it). */
+export function cpuObserve(
+  memo: CpuMemo,
+  v: PlayerView,
+  events: GameEvent[],
+  brain: CpuBrain = 'easy',
+): void {
+  if (brain === 'easy' || brain.base !== 'hard' || v.me == null) return;
+  memo.guess = observe(memo.guess ?? newGuess(v), v, events);
+}
 
 /** Chance that a turn is a build turn. */
 export const CPU_BUILD_CHANCE = 0.25;
@@ -110,7 +151,7 @@ function bestSpot(
 }
 
 /** Robber or pirate move: the best spot, robbing a CPU before a human when it must rob. */
-function robberMove(s: GameState, me: Seat, acts: Action[], rng: RngState): Action | null {
+export function cpuEasyRobber(s: GameState, me: Seat, acts: Action[], rng: RngState): Action | null {
   const moves = acts.filter(
     (a): a is Extract<Action, { type: 'robber' | 'pirate' }> => a.type === 'robber' || a.type === 'pirate',
   );
@@ -209,8 +250,8 @@ function ofType<T extends Action['type']>(acts: Action[], t: T): Extract<Action,
 
 const anyOf = <T>(rng: RngState, xs: T[]): T | null => (xs.length ? xs[nextInt(rng, xs.length)]! : null);
 
-/** Its move, or null if it has nothing to do. */
-export function cpuMove(v: PlayerView, rng: RngState, memo: CpuMemo): Action | null {
+/** Easy's move (docs/bot.md), or null if it has nothing to do. */
+function easyMove(v: PlayerView, rng: RngState, memo: CpuMemo): Action | null {
   const me = v.me;
   if (me == null || v.phase !== 'play') return null;
   const s = stateFromView(v);
@@ -232,7 +273,7 @@ export function cpuMove(v: PlayerView, rng: RngState, memo: CpuMemo): Action | n
     }
     return { type: 'chooseGold', cards };
   }
-  if (s.stage === 'ck') return owedChoice(s, me, rng);
+  if (s.stage === 'ck') return cpuOwedChoice(s, me, rng);
   if (s.stage === 'gold') return null;
 
   // Decline every trade offer it is asked to answer.
@@ -260,7 +301,7 @@ export function cpuMove(v: PlayerView, rng: RngState, memo: CpuMemo): Action | n
     case 'setup':
       return anyOf(rng, acts);
     case 'robber':
-      return robberMove(s, me, acts, rng);
+      return cpuEasyRobber(s, me, acts, rng);
     case 'roads': {
       const pieces = acts.filter((a) => a.type === 'freeRoad' || a.type === 'freeShip');
       return anyOf(rng, toSpot(s, pieces)) ?? anyOf(rng, pieces) ?? of('skipRoads')[0] ?? null;
@@ -379,7 +420,7 @@ function harmlessCard(s: GameState, me: Seat, acts: Action[], rng: RngState): Ac
 }
 
 /** Answer a Cities & Knights choice it owes (docs/bot.md §7). */
-function owedChoice(s: GameState, me: Seat, rng: RngState): Action | null {
+export function cpuOwedChoice(s: GameState, me: Seat, rng: RngState): Action | null {
   const o = firstOwe(s, me);
   if (!o) return null;
   const due = ckDiscardDue(s, me);

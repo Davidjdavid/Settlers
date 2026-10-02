@@ -84,6 +84,9 @@ export function Home({ error }: { error: string | null }) {
           <button className="btn" onClick={() => client.go('/maps')} data-testid="open-maps">
             Maps
           </button>
+          <button className="btn" onClick={() => client.go('/cpus')} data-testid="open-cpus">
+            CPU players
+          </button>
         </div>
         <form
           className="row"

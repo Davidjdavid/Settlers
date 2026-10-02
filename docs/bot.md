@@ -20,7 +20,7 @@ The CPU player is a seat you can add to any room. It plays legally but badly, an
   - Its randomness comes from a seeded generator, so its choices can be replayed in tests.
 - **Its moves go through the normal path.** The server applies them with `applyAction`, saves them to SQLite before broadcasting, and sends them to everyone like any other move. A CPU move can be illegal only through a bug, and the server rejects it like any other.
 - **The server drives it:**
-  - Whenever the game changes and a CPU seat has something to do (its turn, a discard, a choice it owes, an offer to answer), the server waits a random **1 to 2 seconds**, then makes its move.
+  - Whenever the game changes and a CPU seat has something to do (its turn, a discard, a choice it owes, an offer to answer), the server waits a random **1 to 3 seconds** (1 to 2 before Milestone 7, which gave every CPU the same pace), then makes its move.
   - Only one move is pending per CPU at a time.
   - After a server restart, pending CPU moves are picked up again.
 - **The engine marks CPU seats** with a public flag (`cpu: true`) on the player, so everyone (and the CPU itself) can tell humans from CPUs. The rules are the same for CPUs as for people. Games without CPUs are unchanged, so saved games replay as before.
@@ -46,7 +46,7 @@ The CPU player is a seat you can add to any room. It plays legally but badly, an
 ## 3. Trading
 
 - **It never offers a trade to a player.**
-- **It declines every offer it is asked to answer**, about 1–2 seconds after the offer appears.
+- **It declines every offer it is asked to answer**, about 1–3 seconds after the offer appears.
 - **It trades with the bank toward a city** on its build turns (§4, **D4**).
 - **It trades with the bank to protect its hand when it is about to end its turn:**
   - While it holds more cards than its hand limit, and the cards it holds allow a bank trade, it trades with the bank, then ends its turn.
@@ -172,7 +172,7 @@ Printer and Constitution are shown automatically, as for everyone.
 
 ## 8. Chat
 
-The CPU never talks: no chat lines, no messages (**D6**). It only takes **1 to 2 seconds per move**, so you can follow along.
+The CPU never talks: no chat lines, no messages (**D6**). It only takes **1 to 3 seconds per move**, so you can follow along.
 
 ---
 

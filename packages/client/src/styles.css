@@ -1594,9 +1594,20 @@ body.noroom .dock {
 .cpuseat .cpurow {
   flex: 1 0 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   padding-left: 18px;
+  min-width: 0;
+}
+.cpuseat .cpurow select {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 .cpucolor {
   background: var(--abyss);
@@ -2760,4 +2771,99 @@ button.vp {
 }
 .overlay.raid .raidcard {
   pointer-events: auto;
+}
+
+/* CPU players page (docs/bot-medium-hard.md §5) */
+.center.cpuspage {
+  /* The comparison scrolls inside its box rather than widening the page. */
+  grid-template-columns: minmax(0, 1fr);
+}
+.cpuspage .card {
+  min-width: 0;
+}
+.cpulevel {
+  background: var(--abyss);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 3px 4px;
+  font-size: 13px;
+  max-width: 110px;
+}
+.cpucompare {
+  overflow-x: auto;
+  margin: 8px 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.cpucompare table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.cpucompare th,
+.cpucompare td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.cpucompare thead th {
+  font-family: var(--display, inherit);
+  font-size: 14px;
+  color: var(--ink);
+}
+.cpucompare tbody th {
+  color: var(--ink-2);
+  font-weight: 600;
+  width: 120px;
+}
+.cpucompare tbody tr:last-child th,
+.cpucompare tbody tr:last-child td {
+  border-bottom: 0;
+}
+.cpulist {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: grid;
+  gap: 8px;
+}
+.cpulist li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.slider {
+  margin-bottom: 12px;
+}
+.sliderlabel {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.seg.cpuseg {
+  margin-left: 0;
+}
+.cpupreview {
+  font-size: 13px;
+  color: var(--ink-2);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin: 6px 0 12px;
+}
+.cpupreview p {
+  margin: 0 0 6px;
+}
+@container (max-width: 520px) {
+  .cpucompare tbody th {
+    width: 90px;
+  }
 }

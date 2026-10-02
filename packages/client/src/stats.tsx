@@ -429,7 +429,10 @@ export function StatsPage() {
   const [who, setWho] = useState<string | null>(null);
   const [merge, setMerge] = useState<{ from: string; into: string } | null>(null);
   useEffect(() => {
-    if (st.status === 'live') client.loadProfiles();
+    if (st.status === 'live') {
+      client.loadProfiles();
+      client.loadCpus();
+    }
   }, [st.status]);
   useEffect(() => {
     if (who && st.status === 'live') client.loadStats(who);
@@ -462,10 +465,24 @@ export function StatsPage() {
               {p.name}
             </button>
           ))}
-          <button className={`profile${who === 'cpu:easy' ? ' on' : ''}`} onClick={() => setWho('cpu:easy')}>
-            <span className="dot" style={{ background: PCOL.gray }} />
-            Easy CPU
-          </button>
+          {[
+            ...(['easy', 'medium', 'hard'] as const).map((l) => ({
+              id: `cpu:${l}`,
+              name: `${l[0]!.toUpperCase()}${l.slice(1)} CPU`,
+            })),
+            ...(st.cpus ?? []).map((c) => ({ id: `cpu:${c.id}`, name: `${c.name} (CPU)` })),
+          ].map((c) => (
+            <button
+              key={c.id}
+              className={`profile${who === c.id ? ' on' : ''}`}
+              onClick={() => setWho(c.id)}
+              data-testid="stats-who"
+              data-name={c.name}
+            >
+              <span className="dot" style={{ background: PCOL.gray }} />
+              {c.name}
+            </button>
+          ))}
         </div>
         {r ? (
           <div data-testid="record">

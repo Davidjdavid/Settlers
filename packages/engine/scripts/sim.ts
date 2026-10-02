@@ -6,14 +6,17 @@
  * threads, and exits non-zero on any failure. Every game's seed encodes how it was set up, so
  * `--replay <seed>` reruns exactly that game with every check on every step.
  *
- * The cpu-* scenarios seat 1 or more CPU players (docs/bot.md) against the test bot, and check
- * every CPU move against the CPU's rules.
+ * The cpu-* scenarios seat 1 or more CPU players against the test bot, cycling through Easy
+ * (docs/bot.md), Medium, Hard and a custom CPU (docs/bot-medium-hard.md), and check every CPU
+ * move against its rules.
  */
 
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import fogTest from '../test/fixtures/fog-test.json';
-import { SCENARIOS, scenarioMap, type HouseRules, type MapData, type ModuleId } from '../src/index';
+import {
+  HARD, MEDIUM, SCENARIOS, scenarioMap, type CpuBrain, type HouseRules, type MapData, type ModuleId,
+} from '../src/index'; // prettier-ignore
 import { cpuGame } from '../test/cpuSim';
 import { simulate, type SimResult } from '../test/simulate';
 
@@ -86,6 +89,14 @@ const DEFAULT_GAMES: Record<string, number> = {
   'cpu-ck-sea': 250,
 };
 
+/** The CPUs the cpu-* scenarios cycle through: Easy, Medium, Hard and a custom one. */
+const CPU_KINDS: CpuBrain[] = [
+  'easy',
+  MEDIUM,
+  HARD,
+  { ...MEDIUM, robber: 'leader', trading: 'generous', style: 'cards', focus: 'chase', timing: 'hold' },
+];
+
 /**
  * Seed format: base.scenario.index.<n>p.<house rules or ->. House rules: n no 7s in round 1,
  * b 3:1 bank, f free ship moves, r re-roll 7s / d no discards until the barbarians attack,
@@ -120,8 +131,13 @@ function run(seed: string, deepCheckRate?: number): SimResult & { cpuWon?: boole
   const index = Number(seed.split('.')[2]);
   const winVP = sc.quickVP && index % 2 ? sc.quickVP : sc.winVP;
   if (sc.cpu) {
-    // 1 to n-1 CPUs; the rest are test bots.
-    const r = cpuGame(seed, n, 1 + (index % (n - 1)), {
+    // 1 to n-1 CPUs, of every kind in turn; the rest are test bots.
+    const k = 1 + (index % (n - 1));
+    const brains = Array.from({ length: n }, (_, i): CpuBrain | 'bot' =>
+      i < k ? CPU_KINDS[(index + i) % CPU_KINDS.length]! : 'bot',
+    );
+    const r = cpuGame(seed, n, k, {
+      brains,
       ...(sc.map ? { map: sc.map } : {}),
       ...(sc.modules ? { modules: sc.modules } : {}),
       ...(winVP ? { winVP } : {}),

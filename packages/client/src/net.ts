@@ -7,10 +7,11 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import type { Action, Color, GameStats, GenRules, MapData, PlayerView } from '@settlers/engine';
+import type { Action, Color, GameStats, GenRules, MapData, Persona, PlayerView } from '@settlers/engine';
 import type {
   MapInfo,
   PresetInfo,
+  CpuInfo,
   ClientMsg,
   DiceInfo,
   GameStatsInfo,
@@ -59,6 +60,8 @@ export interface ClientState {
   /** The map last opened or saved, for the editor. */
   openMap: { map: MapData; info: MapInfo; saved?: boolean } | null;
   presets: PresetInfo[] | null;
+  /** Custom CPUs (docs/bot-medium-hard.md §5.2), loaded on request. */
+  cpus: CpuInfo[] | null;
 }
 
 export interface Fresh {
@@ -119,6 +122,7 @@ export class Client {
     maps: null,
     openMap: null,
     presets: null,
+    cpus: null,
   };
   private listeners = new Set<() => void>();
   private freshListeners = new Set<(f: Fresh) => void>();
@@ -353,6 +357,9 @@ export class Client {
       case 'presets':
         this.set({ presets: m.list });
         return;
+      case 'cpus':
+        this.set({ cpus: m.list });
+        return;
       case 'closed':
         // "Save and quit" (or a deleted game): back to the start screen.
         this.waiting.clear();
@@ -465,6 +472,15 @@ export class Client {
   deletePreset(id: string) {
     this.send({ t: 'deletePreset', id });
   }
+  loadCpus() {
+    this.send({ t: 'cpus' });
+  }
+  saveCpu(id: string | undefined, name: string, persona: Persona) {
+    this.send({ t: 'saveCpu', ...(id ? { id } : {}), name, persona, ...this.by() });
+  }
+  deleteCpu(id: string) {
+    this.send({ t: 'deleteCpu', id });
+  }
   loadStats(who: string) {
     this.send({ t: 'stats', who });
   }
@@ -495,7 +511,7 @@ export class Client {
     this.send({ t: 'addCpu' });
   }
 
-  editCpu(pid: string, change: { nick?: string; color?: Color }) {
+  editCpu(pid: string, change: { nick?: string; color?: Color; level?: string }) {
     this.send({ t: 'editCpu', pid, ...change });
   }
 

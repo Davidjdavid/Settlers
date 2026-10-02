@@ -5,7 +5,16 @@
 
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
-import type { Action, Color, CpuLevel, GameConfig, GameEvent, GameState, NewPlayer } from '@settlers/engine';
+import type {
+  Action,
+  Color,
+  CpuLevel,
+  GameConfig,
+  GameEvent,
+  GameState,
+  NewPlayer,
+  Persona,
+} from '@settlers/engine';
 
 export interface SeatRow {
   pid: string;
@@ -16,8 +25,10 @@ export interface SeatRow {
   cpu?: true;
   /** The person's profile (SPEC 5.1); CPUs have none. */
   profileId?: string;
-  /** A CPU's difficulty (SPEC 5.2). */
-  level?: CpuLevel;
+  /** A CPU's difficulty (SPEC 5.2): a built-in level, or a custom CPU's id (docs/bot-medium-hard.md §5.2). */
+  level?: CpuLevel | string;
+  /** A custom CPU's personality as it was when picked, so later edits don't change this seat. */
+  persona?: Persona;
 }
 
 /** A player profile (SPEC 5.1): a name and a favourite colour, no password. */
@@ -74,6 +85,14 @@ export interface PresetRow {
   id: string;
   name: string;
   rules: unknown;
+  madeBy: string | null;
+  createdAt: number;
+}
+/** A custom CPU (docs/bot-medium-hard.md §5.2), shared by everyone. */
+export interface CpuRow {
+  id: string;
+  name: string;
+  persona: Persona;
   madeBy: string | null;
   createdAt: number;
 }
@@ -195,6 +214,15 @@ CREATE TABLE IF NOT EXISTS table_boards (
   seq INTEGER NOT NULL,
   board_json TEXT NOT NULL,
   PRIMARY KEY (room_code, seq)
+);
+CREATE TABLE IF NOT EXISTS cpus (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  persona_json TEXT NOT NULL,
+  made_by TEXT,
+  created_at INTEGER NOT NULL,
+  deleted_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS presets (
   id TEXT PRIMARY KEY,
@@ -754,6 +782,53 @@ export class Store {
 
   deletePreset(id: string, at: number) {
     this.db.prepare('UPDATE presets SET deleted_at = ? WHERE id = ?').run(at, id);
+  }
+
+  /* ---------- Custom CPUs ---------- */
+
+  cpus(): CpuRow[] {
+    return this.cpuRows('WHERE deleted_at IS NULL');
+  }
+
+  /** A custom CPU by id, even a deleted one (its stats keep its name). */
+  cpuById(id: string): CpuRow | null {
+    return this.cpuRows('WHERE id = ?', id)[0] ?? null;
+  }
+
+  private cpuRows(where: string, ...args: string[]): CpuRow[] {
+    const rows = this.db.prepare(`SELECT * FROM cpus ${where} ORDER BY name_key`).all(...args) as {
+      id: string;
+      name: string;
+      persona_json: string;
+      made_by: string | null;
+      created_at: number;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      persona: JSON.parse(r.persona_json) as Persona,
+      madeBy: r.made_by,
+      createdAt: r.created_at,
+    }));
+  }
+
+  cpuNameTaken(name: string, except?: string): boolean {
+    return !!this.db
+      .prepare('SELECT 1 FROM cpus WHERE name_key = ? AND deleted_at IS NULL AND id != ?')
+      .get(nickKey(name), except ?? '');
+  }
+
+  putCpu(r: CpuRow) {
+    this.db
+      .prepare(
+        `INSERT INTO cpus (id, name, name_key, persona_json, made_by, created_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_key = excluded.name_key, persona_json = excluded.persona_json`,
+      )
+      .run(r.id, r.name, nickKey(r.name), JSON.stringify(r.persona), r.madeBy, r.createdAt);
+  }
+
+  deleteCpu(id: string, at: number) {
+    this.db.prepare('UPDATE cpus SET deleted_at = ? WHERE id = ?').run(at, id);
   }
 
   /** Run `fn` in one transaction: all of its writes commit together or not at all. */

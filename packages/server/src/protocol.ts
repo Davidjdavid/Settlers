@@ -4,7 +4,16 @@
  */
 
 import { z } from 'zod';
-import type { Color, CpuLevel, GameEvent, GameStats, GenRules, MapData, PlayerView } from '@settlers/engine';
+import type {
+  Color,
+  CpuLevel,
+  GameEvent,
+  GameStats,
+  GenRules,
+  MapData,
+  Persona,
+  PlayerView,
+} from '@settlers/engine';
 
 const RES = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore']);
 const CARD = z.enum(['wood', 'brick', 'sheep', 'wheat', 'ore', 'paper', 'cloth', 'coin']);
@@ -123,6 +132,10 @@ export const OptionsSchema = z.strictObject({
   }),
   /** CPU chatter in table talk (SPEC 5.14); on unless set to false. */
   cpuChat: z.boolean().optional(),
+  /** CPUs trade with people (docs/bot-medium-hard.md §1.2); on unless set to false. */
+  cpuTrading: z.boolean().optional(),
+  /** At most one offer per CPU per turn; on unless set to false. */
+  cpuOneOffer: z.boolean().optional(),
 });
 
 /** Personal confirmation settings (SPEC 4.3), saved under your nickname. Missing means on. */
@@ -229,6 +242,18 @@ export const MapSchema = z.strictObject({
 });
 
 const limit = (lo: number, hi: number) => z.number().int().min(lo).max(hi).nullable();
+/** A custom CPU's id, and its personality (docs/bot-medium-hard.md §5.2). */
+const CPU_ID = z.string().regex(/^c-[A-Za-z0-9-]{1,40}$/);
+export const PersonaSchema = z.strictObject({
+  base: z.enum(['medium', 'hard']),
+  robber: z.enum(['gentle', 'late', 'leader']),
+  trading: z.enum(['never', 'fair', 'generous', 'shrewd']),
+  style: z.enum(['cities', 'settlements', 'cards', 'balanced']),
+  focus: z.enum(['ignore', 'normal', 'chase']),
+  timing: z.enum(['soon', 'hold']),
+  chatter: z.enum(['off', 'quiet', 'chatty']),
+}) satisfies z.ZodType<Persona>;
+
 export const GenRulesSchema = z.strictObject({
   pips: z.record(z.string().regex(/^\d{1,2}$/), z.number().int().min(0).max(10)),
   redApart: z.boolean(),
@@ -323,6 +348,16 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
     by: z.string().max(40).optional(),
   }),
   z.strictObject({ t: z.literal('deletePreset'), id: z.string().max(60) }),
+  /** Custom CPUs (docs/bot-medium-hard.md §5.2), shared by everyone. */
+  z.strictObject({ t: z.literal('cpus') }),
+  z.strictObject({
+    t: z.literal('saveCpu'),
+    id: CPU_ID.optional(),
+    name: z.string().trim().min(1).max(24),
+    persona: PersonaSchema,
+    by: z.string().max(40).optional(),
+  }),
+  z.strictObject({ t: z.literal('deleteCpu'), id: CPU_ID }),
   /** CPU chatter on or off for this room (SPEC 5.14), any time, by anyone seated. */
   z.strictObject({ t: z.literal('setCpuChat'), on: z.boolean() }),
   /** The pre-game table: board, seating, Ready and who goes first (docs/pregame.md). Lobby only. */
@@ -337,6 +372,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
     pid: z.string().max(40),
     nick: nick.optional(),
     color: COLOR.optional(),
+    /** Easy, Medium, Hard, or a custom CPU's id. */
+    level: z.union([z.enum(['easy', 'medium', 'hard']), CPU_ID]).optional(),
   }),
   z.strictObject({ t: z.literal('removeCpu'), pid: z.string().max(40) }),
   /** Lobby only: scenario, points to win and house rules for the next game. */
@@ -361,9 +398,10 @@ export interface SeatInfo {
   nick: string;
   color: Color;
   connected: boolean;
-  /** A CPU player, and how good it is. */
+  /** A CPU player, and how good it is: a built-in level or a custom CPU's id, and its name. */
   cpu?: boolean;
-  level?: CpuLevel;
+  level?: CpuLevel | string;
+  levelName?: string;
   /** The person's profile. */
   profile?: string;
 }
@@ -446,6 +484,14 @@ export interface MapInfo {
   seafarers: boolean;
   /** Tiles, for the small preview ('random' = blank). */
   hexes: { q: number; r: number; t: string; n: number }[];
+}
+
+/** A custom CPU (docs/bot-medium-hard.md §5.2). */
+export interface CpuInfo {
+  id: string;
+  name: string;
+  persona: Persona;
+  by: string | null;
 }
 
 /** A generator preset; built-in ones can't be changed or deleted. */
@@ -537,6 +583,7 @@ export type ServerMsg =
   /** One map, to open in the editor; `saved` when it was just saved (the editor takes its id). */
   | { t: 'map'; map: MapData; info: MapInfo; saved?: boolean }
   | { t: 'presets'; list: PresetInfo[] }
+  | { t: 'cpus'; list: CpuInfo[] }
   /** The room was closed ("Save and quit"); go back to the start screen. */
   | { t: 'closed'; text: string }
   | { t: 'ack'; id: string; ok: boolean; error?: string }

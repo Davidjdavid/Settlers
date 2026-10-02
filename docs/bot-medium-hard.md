@@ -1,6 +1,6 @@
 # CPU players: Medium and Hard
 
-**Status: agreed (your answers are in section 6). Being implemented.**
+**Status: agreed (your answers are in section 6). Built (Milestone 7); how it was built is in section 7.**
 
 Today's CPU becomes **Easy** and stays exactly as it is ([bot.md](bot.md)). This adds **Medium** and **Hard**.
 
@@ -188,7 +188,7 @@ Hard keeps an estimate of **how many turns** each way to the target would take, 
 1. **No illegal moves:** at least 1,000 simulated games per difficulty and mode (3 × 4 combinations), every CPU move legal, plus every existing simulator check (rules, invariants, replay, leaks).
 2. **No cheating:** the test in 1.1 for every difficulty and mode, plus the import check.
 3. **Tournaments** (Easy is the baseline):
-   - **Hard vs Medium:** 4-player games, 1 Hard + 3 Medium, every mode, 1,000 games each. Hard should win **well above 25%** (the share by chance). Target: at least 40%.
+   - **Hard vs Medium:** 4-player games, 1 Hard + 3 Medium, every mode, 1,000 games each. Hard should win **well above 25%** (the share by chance): the bottom of its 95% range must be above 25% (D2).
    - **Medium vs Easy:** 1 Medium + 3 Easy. Target: Medium wins at least 60%.
    - Also 2 Hard + 2 Medium, and other mixes, reported for interest.
    - **The win rates are reported to you,** per mode, with how many games.
@@ -235,8 +235,87 @@ You can make your own CPU personalities, saved for everyone like maps and preset
    - Easy never robs a person.
    - Medium robs whoever is ahead, only once someone is within 3 points of winning; before that it robs like Easy.
    - Hard always goes for the real leader, people included.
-2. **D2 Tournament targets:** Hard wins at least 40% against three Mediums, and Medium at least 60% against three Easys.
+2. **D2 Tournament targets:** Hard wins clearly more than its fair share against three Mediums (the bottom of its 95% range above 25%), and Medium at least 60% against three Easys. Changed 2 October from "Hard at least 40%" after your note: *"The CPU difficulties don't need to be too perfect, as long as hard plays pretty hard, easy is super easy, and medium plays okay."*
 3. **D3 Hard's thinking time:** the same 1–3 seconds per move as every CPU; its search runs inside that pause.
 4. **D4 CPU offers:** made to everyone. "One CPU offer per turn" and "CPU trading" are both switches set before the game starts.
 5. **D5 Default difficulty:** Easy.
 6. **D6 Custom CPUs and the CPU page:** section 5.
+
+## 7. As built
+
+**Where the code is:**
+
+- `packages/engine/src/cpu.ts`: Easy, unchanged, and `cpuMove(view, rng, memo, brain, opts)`, which picks Easy or a personality.
+- `src/cpu/persona.ts`: a personality is the sliders of §5.2 plus a base level. Medium and Hard are two built-in personalities:
+  - Medium: robber "only near the end", trading "fair", building "balanced", focus "normal", cards "as soon as useful";
+  - Hard: robber "always the leader", trading "shrewd", building "balanced", focus "normal", cards "hold for the best moment".
+- `src/cpu/smart.ts`: the Medium/Hard brain. `src/cpu/track.ts`: Hard's card counting.
+
+**How Medium and Hard decide (simpler than §2-3 in places):**
+
+- **Goals.** Each move it lists what it could build next:
+  - the best city;
+  - the best open spot for a settlement;
+  - a road or ship toward the best spot within reach;
+  - a road for Longest Road when the title is close;
+  - a development card.
+
+  Each goal is worth rough points: 1 for the building, plus its production, plus a Seafarers island bonus counted as the points it is.
+  - Medium takes the first goal in its building style's order.
+  - Hard takes the goal worth most per round it would take to afford, counting its production and bank rates. That is its planning (§3.3).
+- **Saving and the bank.**
+  - It builds the goal when it can.
+  - Otherwise it trades with the bank only when that completes the goal this turn.
+  - It builds something else only with cards the goal doesn't need.
+- **Turn end.** Over the hand limit, it builds or trades with the bank until it isn't, if it can.
+- **Hard's extras:**
+  - a second starting spot chosen knowing the others pick in between;
+  - knights played to keep up in the Largest Army race;
+  - Hard looks up to 6 ships away for islands;
+  - an Alchemist when a chosen roll pays well;
+  - a metropolis-winning improvement is worth trading for.
+- **Card counting (§3.1).**
+  - For every player it keeps the expected number of each card, updated from the events its seat sees.
+  - A steal it didn't see spreads over the victim's likely hand.
+  - After every move, each guess is scaled back to the public card count.
+  - Development cards are guessed from the cards still unseen (§3.2).
+  - It uses these to choose whom to rob, when to play Monopoly, and what to ask for.
+- **Trading with people.**
+  - Accepting (Medium): only if the cards it gets help its goal, and it gives no more than it gets.
+  - Generous: one card more is all right.
+  - Shrewd (Hard): only if it comes out ahead by its own valuation.
+  - Nobody trades with a player within 2 points of winning. Hard also counts that player's likely hidden points, and never trades with the leader.
+  - Its own offer: 1 for 1, or 2 for 1 of something it has 3 or more spare of. It takes the first acceptable "yes".
+  - It withdraws the offer once everyone has said no, or after **20 seconds** without all the answers.
+- **Offers on its own turn.** An offer someone makes to the CPU on the CPU's turn is answered at once, before anything else it does. That way the other player can't have lost the cards in between.
+
+**On the server:**
+
+- **Picking a level.** Each CPU seat has a menu: Easy, Medium, Hard, or a custom CPU. The seat keeps a copy of a custom CPU's personality, so editing or deleting that CPU never changes a seat that already picked it.
+- **Pace.** Every move waits 1 to 3 seconds.
+- **Hard's memory** lives in the server's memory. After a restart, Hard starts counting again from the public card counts.
+- **A rejected Medium/Hard move** is logged, and Easy's move is made instead (once), so the game never stops on a CPU mistake.
+
+**Tests:**
+
+- `test/cpuSmart.test.ts`:
+  - the import check (with a planted import);
+  - the no-cheating test on every move of a game in each mode, for Medium and Hard;
+  - trading, robber and starting-spot rules;
+  - card counting;
+  - whole games.
+- `test/cpuSim.ts` checks every CPU move in the simulator.
+- `npm run sim`'s `cpu-*` scenarios cycle through Easy, Medium, Hard and a custom CPU.
+- `npm run tournament` plays the tournaments of §4.3.
+
+**Tournament results** (2 October, `npm run tournament -- --games 1000`): 12,000 four-player games with only CPUs, every move checked by the simulator. Every game finished; none failed.
+
+| Mode | Hard vs 3 Medium | Medium vs 3 Easy | 2 Hard vs 2 Medium (either Hard wins) |
+|---|---|---|---|
+| Base | 49.5% (46.4–52.6%) | 100.0% | 71.1% |
+| Seafarers | 45.2% (42.1–48.3%) | 100.0% | 67.5% |
+| Knights | 36.8% (33.8–39.8%) | 99.7% | 66.5% |
+| Full game | 33.8% (30.9–36.7%) | 99.9% | 57.1% |
+
+A fair share would be 25% for one Hard and 50% for two. The ranges are 95%.
+

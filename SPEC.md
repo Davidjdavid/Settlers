@@ -269,7 +269,7 @@ The rules are written down, with your decisions, in **docs/bot.md**.
 
 - Any seated player adds a CPU in the lobby; anyone in the lobby renames it, recolours it (gray by default) or removes it. At least one person must play.
 - It plays legally but badly (builds on 1 turn in 4), and is never mean: no trading with players (it declines every offer), bank trades only for its hand limit and toward a city, the robber/pirate on an empty hex, else a hex only it uses, else its own hex shared with the fewest players, robbing a CPU before a person; no Monopoly or nasty progress cards; in C&K it builds and activates knights but never displaces or chases.
-- It takes 1–2 seconds a move and never chats. Works with every expansion.
+- It takes 1–3 seconds a move and never chats. Works with every expansion.
 
 ## Milestone 5: Stats, saved games and game-night extras
 
@@ -598,7 +598,7 @@ The full design is in **[docs/maps.md](docs/maps.md)** (map format, editor, gene
 
 ## Milestone 7: Medium and Hard CPUs
 
-**Status: agreed. Being implemented (after Milestone 6).** Also: custom CPUs and a page explaining the difficulties (docs/bot-medium-hard.md §5).
+**Status: built; deploying.** Also: custom CPUs and a page explaining the difficulties (docs/bot-medium-hard.md §5). Tournament targets as changed on 2 October (D2): Hard clearly above its fair share against Mediums, Medium at least 60% against Easys.
 
 The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 

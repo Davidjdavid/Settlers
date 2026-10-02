@@ -42,6 +42,7 @@ function goal(v: PlayerView): 'city' | 'settlement' {
 /**
  * Something to say at the start of the CPU's turn, or after it was robbed, or null.
  * `robbedBefore`: how many times it was robbed earlier this game (for "AGAIN").
+ * `rate`: how chatty (1 as usual, 2 for a chatty custom CPU).
  */
 export function cpuChat(
   v: PlayerView,
@@ -49,13 +50,14 @@ export function cpuChat(
   level: CpuLevel,
   rng: RngState,
   robbedBefore = 0,
+  rate = 1,
 ): Chat | null {
   const me = v.me;
   if (me == null || !v.hand || v.phase !== 'play') return null;
   const hand = v.hand.res;
   const robbed = events.find((e) => e.k === 'steal' && e.from === me);
   if (robbed && robbed.k === 'steal') {
-    if (nextFloat(rng) >= 0.5) return null;
+    if (nextFloat(rng) >= Math.min(1, 0.5 * rate)) return null;
     const lines = robbedBefore
       ? ['robbed AGAIN', 'seriously, again?', 'why is it always me']
       : robbed.r && RES.includes(robbed.r as Resource)
@@ -64,7 +66,7 @@ export function cpuChat(
     return { text: pick(rng, lines), claim: { k: 'robbed' } };
   }
   const myTurnStart = events.some((e) => e.k === 'turn' && e.p === me);
-  if (!myTurnStart || nextFloat(rng) >= 0.25) return null;
+  if (!myTurnStart || nextFloat(rng) >= Math.min(1, 0.25 * rate)) return null;
 
   const g = goal(v);
   const cost = COST[g] as Partial<Record<Resource, number>>;

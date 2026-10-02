@@ -5,6 +5,7 @@ import { Home } from './home';
 import { Lobby, Login } from './Lobby';
 import { client, useClient } from './net';
 import { MapEditorPage, MapsPage } from './maps';
+import { CpusPage } from './cpus';
 import { StatsPage } from './stats';
 
 function roomFromPath(): string | null {
@@ -50,6 +51,7 @@ export function App() {
   else if (st.auth === 'needed') body = <Login />;
   else if (!st.roomCode && st.path.startsWith('/stats')) body = <StatsPage />;
   else if (!st.roomCode && /^\/maps\/?$/.test(st.path)) body = <MapsPage />;
+  else if (!st.roomCode && /^\/cpus\/?$/.test(st.path)) body = <CpusPage />;
   else if (!st.roomCode && st.path.startsWith('/maps/')) {
     const id = decodeURIComponent(st.path.split('/')[2] ?? 'new');
     body = <MapEditorPage key={id} id={id} />;

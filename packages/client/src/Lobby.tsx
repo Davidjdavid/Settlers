@@ -6,7 +6,7 @@ import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
 import { BRAND_SVG, PCOL, PEDGE, PNAME, K, cityPath, settlementPath } from './art';
 import { Help, RULE_HELP } from './help';
 import { RULE_LABEL } from './text';
-import { client } from './net';
+import { client, useClient } from './net';
 import { Brand, ProfilePicker } from './home';
 import { TableBoardPanel, TurnOrderPanel } from './table';
 
@@ -50,6 +50,11 @@ export function Login() {
 
 export function Lobby({ room }: { room: RoomInfo }) {
   const mine = room.seats.find((s) => s.pid === room.me);
+  const live = useClient().status === 'live';
+  // Custom CPUs, for the CPU seats' menus.
+  useEffect(() => {
+    if (live) client.loadCpus();
+  }, [live]);
   const taken = new Set(room.seats.map((s) => s.color));
   const [profile, setProfile] = useState<{ id: string; color: Color } | null>(null);
   const [color, setColor] = useState<Color | null>(null);
@@ -125,16 +130,22 @@ export function Lobby({ room }: { room: RoomInfo }) {
               />
             </div>
             <Options room={room} editable />
-            {room.seats.length < 4 ? (
-              <button
-                className="btn small"
-                onClick={() => client.addCpu()}
-                data-testid="add-cpu"
-                style={{ marginBottom: 12 }}
+            <div className="row" style={{ marginBottom: 12 }}>
+              {room.seats.length < 4 ? (
+                <button className="btn small" onClick={() => client.addCpu()} data-testid="add-cpu">
+                  Add CPU player
+                </button>
+              ) : null}
+              <a
+                className="btn small ghost"
+                href="/cpus"
+                target="_blank"
+                rel="noreferrer"
+                data-testid="cpu-page-link"
               >
-                Add CPU player
-              </button>
-            ) : null}
+                How CPUs play
+              </a>
+            </div>
             {t ? <TurnOrderPanel room={room} /> : null}
             <div className="row">
               <button
@@ -279,6 +290,7 @@ function ColorPicker(props: {
 
 /** A CPU's seat: anyone in the lobby can rename it, recolour it or remove it. */
 function CpuSeat({ seat, taken }: { seat: RoomInfo['seats'][number]; taken: Set<Color> }) {
+  const custom = useClient().cpus ?? [];
   const [nick, setNick] = useState(seat.nick);
   const [editing, setEditing] = useState(false);
   // Someone else renamed it: show the new name unless you're typing.
@@ -315,7 +327,27 @@ function CpuSeat({ seat, taken }: { seat: RoomInfo['seats'][number]; taken: Set<
         ✕
       </button>
       <span className="cpurow">
-        <span className="you">CPU</span>
+        <select
+          className="cpulevel"
+          aria-label="How good it is"
+          data-testid="cpu-level"
+          value={seat.level ?? 'easy'}
+          onChange={(e) => client.editCpu(seat.pid, { level: e.target.value })}
+        >
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+          {custom.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+          {seat.level &&
+          !['easy', 'medium', 'hard'].includes(seat.level) &&
+          !custom.some((c) => c.id === seat.level) ? (
+            <option value={seat.level}>{seat.levelName}</option>
+          ) : null}
+        </select>
         <select
           className="cpucolor"
           aria-label="CPU color"
@@ -480,6 +512,35 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
           </div>
         ) : null}
       </div>
+      {room.seats.some((st) => st.cpu && st.level !== 'easy') ? (
+        <>
+          <label>CPU players</label>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label style={check}>
+              <input
+                type="checkbox"
+                checked={o.cpuTrading !== false}
+                disabled={!editable}
+                data-testid="opt-cpuTrading"
+                onChange={(e) => set({ ...o, cpuTrading: e.target.checked })}
+              />
+              CPUs trade with people
+              <Help text="Medium, Hard and custom CPUs answer your offers and make fair offers of their own. Off: they never offer and turn every offer down. Easy never trades either way." />
+            </label>
+            <label style={check}>
+              <input
+                type="checkbox"
+                checked={o.cpuOneOffer !== false}
+                disabled={!editable || o.cpuTrading === false}
+                data-testid="opt-cpuOneOffer"
+                onChange={(e) => set({ ...o, cpuOneOffer: e.target.checked })}
+              />
+              One offer per CPU per turn
+              <Help text="Off lets a CPU make more than one offer in its turn (still only fair ones, and never the same offer twice)." />
+            </label>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
