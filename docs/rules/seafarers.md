@@ -452,7 +452,7 @@ Your answers to the questions in the first draft:
 10. **D10 Robber:** any revealed land hex, including unsettled islands.
 11. **D11 House rules:** no 7s in the first round; 3:1 bank trades for everyone; move ships freely. Planned for Cities & Knights: no 7s until the barbarians have attacked once.
 12. **D12 CPU player:** not in this milestone. When it comes, it must never target a human player.
+13. **D13 Starting area (fix, Milestone 5):** replaces the "start anywhere" part of D5. In Heading for New Shores starting settlements go on the main island only, as the rulebook says, and each player earns 2 VP for their first settlement on each small island. Both rules come from the scenario's data file (`start`, `specialVP.newIsland`). Games already saved keep the rule they were started with.
 14. **D14 Pirate start (rulebook check):** in Heading for New Shores the pirate starts on a set sea hex, as in the official scenario, not off the board. New games only; saved games keep theirs.
 15. **D15 3-player layout:** Heading for New Shores gets a smaller 3-player main island as in the official scenario, made with the map editor (Milestone 6).
 16. **D16 Fog:** confirmed as D8: moving a ship next to fog uncovers it, as well as building.
-13. **D13 Starting area (fix, Milestone 5):** replaces the "start anywhere" part of D5. In Heading for New Shores starting settlements go on the main island only, as the rulebook says, and each player earns 2 VP for their first settlement on each small island. Both rules come from the scenario's data file (`start`, `specialVP.newIsland`). Games already saved keep the rule they were started with.
