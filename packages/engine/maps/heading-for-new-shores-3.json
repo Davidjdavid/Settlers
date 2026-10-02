@@ -1,9 +1,9 @@
 {
   "format": 1,
-  "id": "heading-for-new-shores",
-  "name": "Heading for New Shores",
+  "id": "heading-for-new-shores-3",
+  "name": "Heading for New Shores (3 players)",
   "modules": ["seafarers"],
-  "players": [3, 4],
+  "players": [3],
   "winVP": 14,
   "specialVP": { "newIsland": 2 },
   "hexes": [
@@ -14,16 +14,16 @@
     { "q": 0, "r": -1, "t": "random", "pool": "main", "n": "random" },
     { "q": 1, "r": -1, "t": "random", "pool": "main", "n": "random" },
     { "q": 2, "r": -1, "t": "random", "pool": "main", "n": "random" },
-    { "q": -2, "r": 0, "t": "random", "pool": "main", "n": "random" },
+    { "q": -2, "r": 0, "t": "sea" },
     { "q": -1, "r": 0, "t": "random", "pool": "main", "n": "random" },
     { "q": 0, "r": 0, "t": "random", "pool": "main", "n": "random" },
     { "q": 1, "r": 0, "t": "random", "pool": "main", "n": "random" },
     { "q": 2, "r": 0, "t": "random", "pool": "main", "n": "random" },
-    { "q": -2, "r": 1, "t": "random", "pool": "main", "n": "random" },
+    { "q": -2, "r": 1, "t": "sea" },
     { "q": -1, "r": 1, "t": "random", "pool": "main", "n": "random" },
     { "q": 0, "r": 1, "t": "random", "pool": "main", "n": "random" },
     { "q": 1, "r": 1, "t": "random", "pool": "main", "n": "random" },
-    { "q": -2, "r": 2, "t": "random", "pool": "main", "n": "random" },
+    { "q": -2, "r": 2, "t": "sea" },
     { "q": -1, "r": 2, "t": "random", "pool": "main", "n": "random" },
     { "q": 0, "r": 2, "t": "random", "pool": "main", "n": "random" },
     { "q": -3, "r": 3, "t": "sea" },
@@ -75,12 +75,9 @@
         "wood",
         "wood",
         "wood",
-        "wood",
         "sheep",
         "sheep",
         "sheep",
-        "sheep",
-        "wheat",
         "wheat",
         "wheat",
         "wheat",
@@ -92,7 +89,7 @@
         "ore",
         "desert"
       ],
-      "numbers": [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
+      "numbers": [2, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11]
     },
     "isles": {
       "terrain": [
@@ -113,15 +110,15 @@
     }
   },
   "harbors": [
-    { "q": -2, "r": 0, "side": 4, "t": "random" },
     { "q": 0, "r": -2, "side": 3, "t": "random" },
     { "q": 1, "r": -2, "side": 4, "t": "random" },
     { "q": 2, "r": -2, "side": 0, "t": "random" },
     { "q": 2, "r": 0, "side": 5, "t": "random" },
     { "q": 1, "r": 1, "side": 0, "t": "random" },
     { "q": 0, "r": 2, "side": 2, "t": "random" },
-    { "q": -2, "r": 2, "side": 1, "t": "random" },
-    { "q": -2, "r": 1, "side": 2, "t": "random" }
+    { "q": -1, "r": 0, "side": 2, "t": "random" },
+    { "q": -1, "r": 1, "side": 2, "t": "random" },
+    { "q": -1, "r": 2, "side": 2, "t": "random" }
   ],
   "harborPool": ["any", "any", "any", "any", "wood", "brick", "sheep", "wheat", "ore"],
   "start": [
@@ -132,16 +129,13 @@
     [0, -1],
     [1, -1],
     [2, -1],
-    [-2, 0],
     [-1, 0],
     [0, 0],
     [1, 0],
     [2, 0],
-    [-2, 1],
     [-1, 1],
     [0, 1],
     [1, 1],
-    [-2, 2],
     [-1, 2],
     [0, 2]
   ],

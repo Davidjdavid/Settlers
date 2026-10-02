@@ -13,7 +13,7 @@ import {
   type HouseRules, applyAction, checkInvariants, cpuMove, eventsFor, newCpuMemo, newGame, seedRng, viewFor,
   COLORS, type CpuMemo, StatsFold, cpuChat, type CpuLevel, type GameStats,
   type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView, type MapData,
-  type GenRules, type EditOp, OUR_RULES,
+  type GenRules, type EditOp, OUR_RULES, scenarioMap,
 } from '@settlers/engine'; // prettier-ignore
 import { History, modeOf } from './history';
 import { MapLibrary } from './maps';
@@ -1167,7 +1167,7 @@ export class Rooms {
 
   /** The mode's board, filled the standard way; used only if nothing else can be made. */
   private emergencyBoard(room: Room): TableBoard {
-    const map = SCENARIOS[room.options.scenario]!;
+    const map = this.modeMap(room);
     for (let i = 0; ; i++) {
       const seed = `fallback-${i}`;
       const r = fillBoard(map, STANDARD_FILL, seed, 4);
@@ -1175,12 +1175,17 @@ export class Rooms {
     }
   }
 
+  /** The mode's own map for the seats at the table (a 3-player layout where there is one). */
+  private modeMap(room: Room): MapData {
+    return scenarioMap(room.options.scenario, room.seats.length);
+  }
+
   /** The map a source draws from, and the rules for its blanks. */
   private sourceOf(
     room: Room,
     src: BoardSource,
   ): { map: MapData; rules: GenRules; presetName?: string } | string {
-    const mode = SCENARIOS[room.options.scenario]!;
+    const mode = this.modeMap(room);
     if (src.kind === 'default') return { map: mode, rules: STANDARD_FILL };
     if (src.kind === 'generated') {
       const p = this.maps.rulesOf(src.preset);
@@ -1252,6 +1257,15 @@ export class Rooms {
     )
       return;
     tb.state.ready = [];
+    // A layout made for this many players (Heading for New Shores with 3) replaces the board.
+    const src = tb.board.source;
+    if (src.kind !== 'saved' && tb.board.map.id !== this.modeMap(room).id) {
+      const r = this.makeBoard(room, src, newSeed());
+      if (r.ok) {
+        this.pushBoard(room, r.board);
+        tb.state.last = { who: 'The table', what: `switched to ${r.board.map.name}`, at: this.now() };
+      }
+    }
     const first = tb.state.first;
     if (first.mode === 'pick' && first.pid && tb.state.circle.includes(first.pid)) return;
     for (const line of resetFirst(tb.state, first.mode, this.cpus(room), this.names(room), this.opts.luck))
@@ -1570,7 +1584,10 @@ export function gameConfigFor(o: RoomOptions, board?: MapData): Partial<GameConf
 
 /** Room options matching a game's config (for a resumed game's room). */
 export function optionsFor(c: Partial<GameConfig>): RoomOptions {
-  const scenario = c.map && c.map.id !== 'classic' ? (c.map.id as RoomOptions['scenario']) : 'classic';
+  // Any Seafarers board resumes in the Seafarers modes; anything else in the base modes.
+  const scenario: RoomOptions['scenario'] = c.map?.modules.includes('seafarers')
+    ? 'heading-for-new-shores'
+    : 'classic';
   const hr = c.houseRules ?? {};
   const o: RoomOptions = {
     scenario: SCENARIOS[scenario] ? scenario : 'classic',

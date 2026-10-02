@@ -76,7 +76,8 @@ describe('Seafarers setup', () => {
     expect(s.config.modules).toEqual(['seafarers']);
     expect(s.config.winVP).toBe(14);
     expect(s.players.every((p) => p.pieces.ship === 15)).toBe(true);
-    expect(s.board.pirate).toBe(-1);
+    // D14: the pirate starts on a set sea hex (1, 3), not off the board.
+    expect(s.board.hexes[s.board.pirate!]).toMatchObject({ q: 1, r: 3, t: 'sea' });
     expect(s.board.hexes[s.board.robber]!.t).toBe('desert');
     expect(checkInvariants(s)).toEqual([]);
   });

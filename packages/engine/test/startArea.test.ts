@@ -7,14 +7,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   SCENARIOS, applyAction, checkInvariants, cpuMove, geo, isLand, legalActions, newCpuMemo, newGame, publicVP,
-  seedRng, startHexes, viewFor, vpBreakdown, type GameState, type MapData,
+  seedRng, startHexes, viewFor, vpBreakdown, scenarioMap, hexAt, type GameState, type MapData,
 } from '../src/index'; // prettier-ignore
 import { islandOf } from '../src/modules/seafarers';
 import { act, reject } from './helpers';
 import { seatsFor } from './simulate';
 
 /** Every published scenario with Seafarers rules. */
-const SEA = Object.values(SCENARIOS).filter((m) => m.modules.includes('seafarers'));
+const SEA = [...Object.values(SCENARIOS), scenarioMap('heading-for-new-shores', 3)].filter((m) =>
+  m.modules.includes('seafarers'),
+);
 
 /** Corners of island hexes outside the scenario's starting area. */
 function outsideStart(s: GameState): number[] {
@@ -115,5 +117,33 @@ describe('Heading for New Shores: island bonus', () => {
     expect(r4.state.sea!.specialVP[0]).toBe(4);
     // The main island never gives a bonus.
     expect(checkInvariants(r4.state)).toEqual([]);
+  });
+});
+
+describe('Heading for New Shores: pirate and the 3-player layout (D14, D15)', () => {
+  it('the pirate starts on a set sea hex that touches no land', () => {
+    for (const n of [3, 4]) {
+      const map = scenarioMap('heading-for-new-shores', n);
+      const s = newGame('pirate', seatsFor(n), { map });
+      const at = hexAt(s.board.hexes, 1, 3);
+      expect(s.board.pirate).toBe(at);
+      expect(s.board.hexes[at]!.t).toBe('sea');
+      const g = geo(s);
+      const touching = new Set(g.hexVerts[at]!.flatMap((v) => g.verts[v]!.hexes));
+      for (const h of touching) if (h !== at) expect(s.board.hexes[h]!.t).toBe('sea');
+    }
+  });
+
+  it('with 3 players the main island is 16 tiles: 3 of each resource and the desert', () => {
+    const map = scenarioMap('heading-for-new-shores', 3);
+    expect(map.players).toEqual([3]);
+    const s = newGame('three', seatsFor(3), { map });
+    const start = startHexes(map, s.board);
+    expect(start.size).toBe(16);
+    const kinds: Record<string, number> = {};
+    for (const h of start) kinds[s.board.hexes[h]!.t] = (kinds[s.board.hexes[h]!.t] ?? 0) + 1;
+    expect(kinds).toEqual({ wood: 3, brick: 3, sheep: 3, wheat: 3, ore: 3, desert: 1 });
+    expect(s.board.ports).toHaveLength(9);
+    expect(scenarioMap('heading-for-new-shores', 4)).toBe(SCENARIOS['heading-for-new-shores']);
   });
 });

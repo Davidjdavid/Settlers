@@ -22,6 +22,7 @@ import type {
   RoomOptions,
   SavedGame,
   ServerMsg,
+  TableOp,
 } from '@settlers/server/protocol';
 
 export type Status = 'connecting' | 'live' | 'offline';
@@ -485,6 +486,10 @@ export class Client {
   }
   start() {
     this.send({ t: 'start' });
+  }
+  /** Anything on the pre-game table (docs/pregame.md). */
+  tableOp(op: TableOp) {
+    this.send({ t: 'table', op });
   }
   addCpu() {
     this.send({ t: 'addCpu' });

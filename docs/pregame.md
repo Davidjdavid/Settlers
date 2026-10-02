@@ -1,6 +1,6 @@
 # The pre-game table and turn order
 
-**Status: agreed (your answers are in section 4). Being implemented.**
+**Status: agreed (your answers are in section 4). Implemented in Milestone 6.**
 
 This covers Milestone 6's last two parts:
 
@@ -135,3 +135,4 @@ There are three ways:
 3. **D3 Scenarios with fixed starting islands:**
    - The turn order comes from the circle by default.
    - A table option switches that off, so the scenario's own order is used.
+   - No scenario we have yet gives players their own starting island, so the option appears only once one does.

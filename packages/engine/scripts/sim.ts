@@ -13,7 +13,7 @@
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import fogTest from '../test/fixtures/fog-test.json';
-import { SCENARIOS, type HouseRules, type MapData, type ModuleId } from '../src/index';
+import { SCENARIOS, scenarioMap, type HouseRules, type MapData, type ModuleId } from '../src/index';
 import { cpuGame } from '../test/cpuSim';
 import { simulate, type SimResult } from '../test/simulate';
 
@@ -37,6 +37,12 @@ const SIMS: Record<string, Scenario> = {
   'heading-for-new-shores': {
     map: HFNS,
     players: HFNS.players,
+    maxTurns: 3000,
+    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH'],
+  },
+  'heading-for-new-shores-3': {
+    map: scenarioMap('heading-for-new-shores', 3),
+    players: [3],
     maxTurns: 3000,
     rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH'],
   },
@@ -70,6 +76,7 @@ for (const k of ['classic', 'heading-for-new-shores', 'ck', 'ck-sea'] as const) 
 const DEFAULT_GAMES: Record<string, number> = {
   classic: 1000,
   'heading-for-new-shores': 1000,
+  'heading-for-new-shores-3': 500,
   'fog-test': 200,
   ck: 1000,
   'ck-sea': 1000,

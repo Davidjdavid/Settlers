@@ -155,7 +155,8 @@ describe('room options', () => {
     store = new Store(join(dir, 'test.db'));
     rooms = new Rooms(store, { log: quiet });
     expect(rooms.getRoom(code)!.options).toEqual({ ...HFNS, winVP: 12 });
-    expect(state(code).config.map?.id).toBe('heading-for-new-shores');
+    // Three players get the 3-player layout (docs/rules/seafarers.md D15).
+    expect(state(code).config.map?.id).toBe('heading-for-new-shores-3');
   });
 
   it('older databases get the options column added', () => {

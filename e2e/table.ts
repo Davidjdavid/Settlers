@@ -119,7 +119,8 @@ export function checkFrames(t: Table, seats: (number | null)[], minFrames = 100)
     for (const f of frames) {
       const raw = JSON.stringify(f);
       expect(raw).not.toContain('"rng"');
-      expect(raw).not.toContain('"seed"');
+      // The table's board seed is public (docs/pregame.md 1.1); nothing in a game may carry one.
+      if (f.game) expect(raw).not.toContain('"seed"');
       expect(raw).not.toContain('"deck"');
       expect(raw).not.toMatch(/"fog":\{/);
       if (f.game) {

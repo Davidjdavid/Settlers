@@ -2496,3 +2496,157 @@ button.vp {
   gap: 4px;
   align-items: center;
 }
+
+/* The pre-game table (docs/pregame.md): the shared board beside the lobby card. */
+.lobbywrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.lobbywrap.withtable {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  align-items: start;
+  gap: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+@container app (max-width: 900px) {
+  .lobbywrap.withtable {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.lobbywrap > .card {
+  width: 100%;
+}
+.tableboard {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+.tbhead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 14px;
+}
+.tbsource {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+  min-width: 0;
+}
+.tbsource .seed {
+  color: var(--ink-2);
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.tbsource code {
+  font-family: ui-monospace, Menlo, monospace;
+  color: var(--lantern-2);
+}
+.tblast {
+  color: var(--ink-2);
+}
+.tbmap {
+  aspect-ratio: 1.12;
+  max-height: 62vh;
+  min-height: 220px;
+  display: flex;
+}
+.tbcontrols {
+  display: grid;
+  gap: 6px;
+}
+.seedin {
+  width: 120px;
+  padding: 4px 8px;
+}
+.tbdetails summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.tbdetails .fairness {
+  margin-top: 8px;
+}
+.turnorder {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.circle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.chair {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  user-select: none;
+  touch-action: none;
+  cursor: grab;
+}
+.chair.dragging {
+  outline: 2px dashed var(--lantern);
+  cursor: grabbing;
+}
+.chair.first {
+  border-color: var(--lantern);
+}
+.chair.pickable {
+  cursor: pointer;
+}
+.chair .tick {
+  color: var(--go);
+  font-weight: 800;
+}
+.chair .rolled {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+}
+.chair .rolled .die {
+  width: 18px;
+  height: 18px;
+}
+.chair .arrows .btn {
+  padding: 0 6px;
+}
+.rolloff {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+.orderline {
+  font-size: 14px;
+  color: var(--ink-2);
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 8px;
+}
+.orderline b {
+  color: var(--ink);
+}
+.mapboard .harbor line {
+  pointer-events: none;
+}
+.chair .rolled > span {
+  display: inline-flex;
+  gap: 2px;
+}

@@ -8,6 +8,7 @@ import { Help, RULE_HELP } from './help';
 import { RULE_LABEL } from './text';
 import { client } from './net';
 import { Brand, ProfilePicker } from './home';
+import { TableBoardPanel, TurnOrderPanel } from './table';
 
 export function Login() {
   const [pass, setPass] = useState('');
@@ -67,8 +68,11 @@ export function Lobby({ room }: { room: RoomInfo }) {
   // A profile already at the table rejoins that seat (SPEC 4.6, 5.1).
   const rejoining = !!profile && room.seats.some((s) => !s.cpu && !s.connected && s.profile === profile.id);
   const seated = new Set(room.seats.flatMap((s) => (s.profile && s.connected ? [s.profile] : [])));
+  const t = room.table;
+  const canStart = fits && !!t && !t.problem && !!t.first.pid;
   return (
-    <div className="center">
+    <div className={`lobbywrap${t ? ' withtable' : ''}`}>
+      {t ? <TableBoardPanel room={room} /> : null}
       <div className="card" data-testid="lobby">
         <Brand />
         <div className="roomline">
@@ -131,10 +135,11 @@ export function Lobby({ room }: { room: RoomInfo }) {
                 Add CPU player
               </button>
             ) : null}
+            {t ? <TurnOrderPanel room={room} /> : null}
             <div className="row">
               <button
                 className="btn primary"
-                disabled={!fits}
+                disabled={!canStart}
                 onClick={() => client.start()}
                 data-testid="start"
               >
@@ -145,9 +150,13 @@ export function Lobby({ room }: { room: RoomInfo }) {
               </button>
             </div>
             <p className="hint">
-              {fits
-                ? 'Anyone seated can start when everyone is here.'
-                : `${MODES[mode].label} needs ${allowed.join(' or ')} players.`}
+              {!fits
+                ? `${MODES[mode].label} needs ${allowed.join(' or ')} players.`
+                : t?.problem
+                  ? t.problem
+                  : t && !t.first.pid
+                    ? 'Finish the roll for who goes first.'
+                    : 'Anyone seated can start whenever you like; Ready is just a signal.'}
             </p>
           </>
         ) : (
@@ -158,6 +167,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
             }}
           >
             <Options room={room} editable={false} />
+            {t ? <TurnOrderPanel room={room} /> : null}
             <div className="field">
               <label>Who are you?</label>
               <ProfilePicker
