@@ -583,6 +583,275 @@ This replaces bot.md D6 ("the CPU never talks").
 11. **A full 3-player game in browsers** ends with confetti and correct stats.
 12. **`npm run check` green, then deploy.**
 
+## Milestone 6: Custom maps, the generator and the pre-game table
+
+**Status: proposed. Waiting for your OK.**
+
+The full design is in **[docs/maps.md](docs/maps.md)** (map format, editor, generator and its rules, with "touching" diagrams) and **[docs/pregame.md](docs/pregame.md)** (pre-game table and turn order, with the Joe/Alex/Sam example).
+
+**Build order,** each part shown working before the next:
+
+1. Map format and editor.
+2. Generator.
+3. Pre-game table.
+4. Turn order.
+
+## Milestone 7: Medium and Hard CPUs
+
+**Status: proposed. Waiting for your OK.**
+
+The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
+
+- Easy stays as it is.
+- Medium plays a solid game.
+- Hard counts cards, plans and times its moves, with no cheating, enforced by a test.
+- Each CPU seat picks its difficulty.
+
+## Milestone 8: Bank, gates, warnings, trading, helpers, keep playing, the log
+
+**Status: proposed. Waiting for your OK (questions in 8.11).**
+
+### 8.1 Bank supply
+
+**One pre-game setting, "Bank cards: Limited / Unlimited":**
+
+- It's shown with the other options on the pre-game screen, locked when the game starts, and saved with the game.
+- **Limited** is the default, with the official supply: 19 of each resource and 12 each of paper, cloth and coin.
+- **Unlimited:** the bank never runs out of anything.
+- Development and progress decks are the same in both modes.
+
+**Shortages (Limited):**
+
+- When the bank can't pay everyone what a roll produces of one card type, **nobody gets that type** this roll.
+- If only **one** player is owed it, they get what's left (official FAQ, as today).
+- Cities & Knights says nothing about commodities running out, so they follow the same rule. This is written in docs/rules/cities-and-knights.md as **our ruling**.
+
+**Every bank payout is capped by what the bank holds (Limited):**
+
+- production, Seafarers gold fields included;
+- bank and harbor trades;
+- Year of Plenty, the Aqueduct, Irrigation, Mining and other progress cards that pay from the bank.
+
+**On screen:**
+
+- The bank's count of every resource and commodity in play (∞ when unlimited).
+- When a shortage blocks a payout, the log says so: "The bank is out of Ore: nobody gets Ore this roll".
+
+**Where it lives:**
+
+- The setting lives in the rules engine, so the server, every screen, the CPUs and the stats agree.
+- Games saved before this change keep their old behaviour: resources limited, commodities unlimited.
+
+### 8.2 Metropolis gates
+
+**The drawing:** a small **golden gate** on top of the city replaces today's up-arrow tower:
+
+- an arch between two little towers;
+- a banner in the track's colour (yellow Trade, blue Politics, green Science);
+- a tiny mark of the track's commodity on the banner (cloth, coin, paper), so it doesn't rely on colour;
+- the city underneath keeps its owner's colour.
+
+It's checked in screenshots at the smallest and largest zoom and display size. No arrows are left anywhere.
+
+### 8.3 Hover and press-and-hold info on the board
+
+**How it works:**
+
+- Hovering a piece, or **pressing and holding** on a phone or tablet, shows a short label.
+- A normal tap does what it does now. Press and hold **only** shows info: it never places or picks anything.
+
+**What the labels say:**
+
+- **Metropolis:** "Science metropolis · Alex · worth 4 points (city 2 + metropolis 2) · can't be pillaged by barbarians · Alex is at Science level 4, so whoever reaches level 5 first takes it". Once the owner reaches 5: "… it's Alex's for good".
+- **Knights:** owner, level, active or not.
+- **City walls:** owner, "adds 2 to their hand limit".
+- **Harbors:** the trade rate.
+- **The merchant, the robber and the pirate:** what they do, and whose they are.
+
+### 8.4 Hand-limit warning
+
+**When it shows:**
+
+- When a player holds more cards than their limit, their card count turns **red with a warning icon**, both on your own hand and in the players panel, so everyone sees who's exposed to a 7.
+- Hover or press and hold explains it: "11 cards. If a 7 is rolled, you'll discard 5 (half, rounded down). Your limit is 9: 7, plus 2 for your city wall."
+
+**What counts:**
+
+- **The real limit:** 7, plus 2 per city wall (Knights, Full game).
+- **Cards:** resources and commodities count; development and progress cards don't.
+- **Before the first barbarian attack** (Knights, Full game) the warning still shows, because 7s still make players discard then. The exception is a house rule that turns those discards off (Q2).
+
+**At the end of your turn:**
+
+- If you end your turn over your limit, a small warning shows by End turn, and the end-turn confirmation mentions it.
+- It never blocks you.
+
+### 8.5 Points to win
+
+- **Always on screen:** "First to 13" in the top bar, on every device and display size.
+- **Every score** shows as "8 / 13".
+- **The target lives in the game state:** set from the mode or scenario data at the start (never hard-coded), and raised by Keep playing (8.9).
+
+### 8.6 Trade buttons
+
+**Two buttons:** "**Trade with players**" and "**Trade with bank**", each with its own icon.
+
+- They're bigger and bolder than today, in their own colour, so they're easy to tell from the build buttons.
+
+**Trade with bank:**
+
+- The button shows your best rate: "Bank · 2:1 Ore".
+- The bank screen lists your rate for every card type, counting harbors, the Merchant, Merchant Fleet, and the level 3 Trade improvement (2:1 commodities).
+- You can make several trades in a row without reopening it.
+- The rates come from the rules engine, so the button and the screen always agree with what the engine will accept.
+
+**Trade with players** shows a badge when offers are waiting on you.
+
+**When trading isn't allowed** (before you roll, say), both buttons stay visible but grayed out, with the reason on hover.
+
+### 8.7 Before-the-roll reminders
+
+**Alchemist:**
+
+- If you hold an Alchemist when your turn starts, a **Play Alchemist** button shows next to Roll dice and the dice. It goes away once you roll.
+- Playing it lets you choose both production dice; the event die is still rolled.
+- With the card confirmation on, rolling while holding an Alchemist asks first: "Roll without using your Alchemist?"
+
+**Knight (Base, Seafarers):** a **Play Knight** button shows there the same way, when you have a Knight you can play before rolling.
+
+### 8.8 Smith
+
+**The card:** it promotes up to 2 of your knights one level each, for free.
+
+- **Normal promotion rules apply:** each knight once per turn; strong to mighty needs the Fortress.
+- If no knight can be promoted, playing it warns you first.
+
+**After you play it:**
+
+- Every knight you can promote lights up. Ineligible knights can't be picked.
+- **2 or fewer can be promoted:** one button upgrades them all at once: "Upgrade both knights", or "Upgrade knight".
+- **More than 2 can be promoted:** you pick two. The game shows both picks with their new levels and an "**Upgrade these 2**" button.
+- Nothing changes until you press it. **Cancel** keeps the card in your hand.
+
+**Using only one of two possible upgrades** takes its own clearly separate button and a confirmation ("Use only 1 of your 2 upgrades?"), so a misclick never wastes one.
+
+### 8.9 Keep playing after a win
+
+**Asking:**
+
+- The end screen gets **Keep playing** next to Rematch.
+- Whoever presses it picks a new target: default 2 more than the current one, and always higher than everyone's current score.
+- Every person must agree; CPUs agree on their own. One "no" ends the game normally.
+
+**Playing on:**
+
+- The first win always counts as a **normal win**.
+- Play resumes exactly where it stopped, in the winner's turn, with the new target in the top bar. CPUs play toward it.
+- Whoever reaches the new target first gets an **overtime win**: celebrated like a normal win, and the end screen offers Keep playing again.
+
+**Stats:**
+
+- Overtime wins get their own column on the Stats page and in each player's game history ("Overtime wins: 3"), listed with the target reached.
+- They never change regular wins, win rate, head-to-head records or average points, which all use the game as it stood at the first win.
+- Per-game stats cover the whole game, with a marker where the first win happened.
+
+**Saving:** an overtime game saves and resumes like any other, still in overtime.
+
+### 8.10 The game log
+
+**Following:**
+
+- The log opens at the newest entry and follows new entries.
+- If you scroll up, it stops following and shows "**3 new ↓**". Tapping it, or scrolling back to the bottom, starts following again.
+- New entries briefly highlight.
+
+**Layout:**
+
+- **On laptops and desktops** (down to 1366×768 at the default display size), the log is visible beside the board without scrolling the page. It has a fixed height, scrolls inside itself, and new entries never move the page.
+- **On phones**, its tab or drawer works the same way.
+
+**Content:**
+
+- **Each turn starts with a divider:** the player in their colour and their roll (both dice and the total, plus the event die in Knights and Full game).
+- **Colour-coded:**
+  - player names in their piece colour;
+  - every resource and commodity with its own colour, icon and amount;
+  - one set of card colours everywhere: hand, bank, log, stats, tooltips;
+  - 7s, the robber and the barbarians in a warning colour.
+- **Who got what and how many,** for example:
+
+  ```
+  ── Alex · rolled 3 + 5 = 8 ──
+  Alex got 2 Brick and 1 Ore
+  Sam got 1 Wool
+  The robber blocked 1 Brick from Joe
+  Alex gave Sam 2 Brick for 1 Ore
+  Joe traded 4 Wool to the bank for 1 Grain
+  ```
+
+  The same detail goes for builds, discards, steals, development and progress cards, Monopoly, the robber and pirate, the event die, barbarian moves and attacks, knights, metropolises gained or taken, Longest Road and Largest Army changes, and wins (overtime included).
+
+**Hidden information is filtered on the server for each player:**
+
+- Only the thief and the victim see which card was stolen.
+- Only the buyer sees which development card they bought.
+- Progress cards stay hidden until played; others see only which deck they came from.
+- Everyone else sees "a card" or "2 cards".
+
+**Structure:**
+
+- Log entries are stored as structured data (who, what, how many), as the game's events already are.
+- Each screen turns them into coloured text.
+- Old saved games load with a readable log.
+
+**Readability:**
+
+- Every colour has at least **4.5:1 contrast** against the log's background, checked automatically.
+- A player colour too dark or too light for text (black, white, gray) shows the name in normal text with a dot in their colour.
+- Colour is never the only signal; the icons and words are always there.
+- Player names in table talk are coloured too.
+
+### 8.11 Questions
+
+1. **Q1 Old Knights games.** Games already saved keep unlimited commodities (they replay exactly as played). New games get the setting, default Limited. OK?
+2. **Q2 Hand-limit warning with "No discards before the first attack".** With that house rule on, a 7 makes nobody discard before the first attack, so I'd show no warning until then. OK?
+3. **Q3 Keep playing in the history.** Overtime wins are only counted in games that count for stats (finished, 2+ people). OK?
+4. **Q4 Smith with nothing to promote.** It warns you, then lets you play it anyway if you insist, wasting it? Or refuse to play it at all?
+5. **Q5 Bank button with no harbor.** It shows "Bank · 4:1" (or 3:1 with the house rule) when no card has a better rate. OK?
+6. **Q6 "Lumber/Wool/Grain".** Your examples call wood "Lumber", sheep "Wool" and wheat "Grain", but the game says Wood, Sheep and Wheat everywhere today. Switch everywhere to Lumber, Wool and Grain (the official card names), or keep what we have?
+
+### 8.12 Done means
+
+1. **Bank:**
+   - Rules tests for Limited mode: resource and commodity shortages, including the one-player case, and every bank payout capped by what the bank holds.
+   - 500 simulated games per mode where the bank plus all hands always make 19 of each resource and 12 of each commodity (Limited).
+   - Nothing ever refused for lack of cards (Unlimited).
+   - The setting shows for everyone before the start, locks after, and survives save and resume.
+2. **Gates:** screenshots of all three gates at the smallest and largest zoom and display size; no arrows anywhere.
+3. **Hover labels** on a laptop and a phone; press and hold never places a piece.
+4. **Hand-limit warning:** shown exactly when a player is over their limit, with the right discard number, walls and commodities included, checked across simulated games.
+5. **Points to win:** visible and correct on a phone, a tablet and a laptop, in every mode and scenario, and after Keep playing raises it.
+6. **Trade buttons:**
+   - Each opens the right screen.
+   - The bank button's rate matches the rules engine in every mode.
+   - Both are easy to spot in phone and laptop screenshots.
+7. **Play Alchemist:** appears only before your roll while you hold one, and goes once you roll. It sets the production dice exactly as chosen; the event die is still rolled.
+8. **Smith:**
+   - "Upgrade both knights" does both in one step.
+   - A single upgrade only happens through its own button and confirmation.
+   - Cancel keeps the card.
+   - Ineligible knights are never selectable.
+9. **Keep playing:**
+   - A game past its first win records the first as a normal win and the second as an overtime win.
+   - Regular stats stay exactly as at the first win.
+   - Overtime survives save and resume.
+10. **The log:**
+    - On a 1366×768 laptop and a phone, it opens at the newest entry, follows a full game, stops following when scrolled up, shows the new-entries button, and never scrolls the page.
+    - The contrast check passes for every player and card colour.
+    - Full simulated games confirm no player's log ever shows another's stolen cards, bought development cards or unplayed progress cards.
+    - An old saved game loads with a readable log.
+11. **`npm run check` green, then deploy.**
+
 ## Later milestones (design for these now, don't build them)
 - Map editor (custom boards, saved and shared).
 - More Seafarers scenarios: The Four Islands, The Fog Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan.

@@ -280,6 +280,12 @@ export const seafarers: RuleModule = {
     if (!bonus || !isl) return;
     const st = sea(s);
     if (st.home[p]!.some((h) => overlaps(h, isl)) || st.bonus[p]!.some((h) => overlaps(h, isl))) return;
+    // A scenario with a starting area: islands in it are everyone's home, never a bonus.
+    const m = s.config.map;
+    if (m?.start && m.start !== 'all') {
+      const start = startHexes(m, s.board);
+      if (isl.some((h) => start.has(h))) return;
+    }
     st.bonus[p]!.push(isl);
     st.specialVP[p]! += bonus;
     x.events.push({ k: 'islandBonus', p, vp: bonus });
@@ -504,6 +510,23 @@ export const seafarers: RuleModule = {
         if (!settled) bad.push(`player ${p} has a bonus for an island they haven't settled`);
       }
     });
+    // With a starting area in the data: every island outside it that a player has built on earned
+    // them its bonus, and nobody has a bonus for the starting island.
+    const m = s.config.map;
+    if (bonus && m?.start && m.start !== 'all') {
+      const start = startHexes(m, s.board);
+      s.verts.forEach((b, v) => {
+        if (!b) return;
+        const isl = islandAtVertex(s, v);
+        if (!isl || isl.some((h) => start.has(h))) return;
+        if (!st.bonus[b[0]]!.some((x) => overlaps(x, isl)))
+          bad.push(`player ${b[0]} settled a new island at ${v} without its bonus`);
+      });
+      s.players.forEach((_, p) => {
+        if (st.bonus[p]!.some((x) => x.some((h) => start.has(h))))
+          bad.push(`player ${p} has a bonus for the starting island`);
+      });
+    }
     const fogLeft = s.board.hexes.filter((h) => h.t === 'fog').length;
     if (st.fog.terrain.length < fogLeft)
       bad.push(`fog stack ${st.fog.terrain.length} < ${fogLeft} fog hexes`);
@@ -521,6 +544,18 @@ export const seafarers: RuleModule = {
 
   transition(prev, next) {
     const bad: string[] = [];
+    // Starting settlements only go in the scenario's starting area.
+    if (prev.stage === 'setup') {
+      const start = startHexes(next.config.map, next.board);
+      next.verts.forEach((b, v) => {
+        if (
+          b &&
+          !prev.verts[v] &&
+          !geo(next).verts[v]!.hexes.some((h) => start.has(h) && isLand(next.board.hexes[h]!.t))
+        )
+          bad.push(`starting settlement at ${v} outside the starting area`);
+      });
+    }
     const pir = next.board.pirate ?? -1;
     if (pir >= 0 && prev.board.pirate === pir) {
       geo(next).edges.forEach((E, e) => {

@@ -13,7 +13,7 @@ import {
 import {
   BANK_EACH, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, geo, has,
   publicVP, rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, totalVP, settlementOK, setupVertOK, snakeOrder, total,
-  zeroRes,
+  vertFree, vertexOK, zeroRes,
 } from './queries'; // prettier-ignore
 import { nextInt, seedRng, shuffle, type RngState } from './rng';
 import {
@@ -345,6 +345,9 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       if (!myTurn) return 'Wait for your turn';
       const { v, e } = a;
       if (!isInt(v) || v < 0 || v >= g.verts.length || !setupVertOK(s, v)) {
+        // Say why when the only problem is the scenario's starting area.
+        if (isInt(v) && v >= 0 && v < g.verts.length && vertFree(s, v) && vertexOK(s, v))
+          return 'Starting settlements go on the starting island';
         return 'Settlements need a free corner with no neighbor next to it';
       }
       if (!isInt(e) || !g.verts[v]!.edges.includes(e)) return 'The road must touch your new settlement';

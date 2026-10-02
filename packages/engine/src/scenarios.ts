@@ -6,5 +6,5 @@ import { CLASSIC_MAP } from './rules';
 
 export const SCENARIOS: Record<string, MapData> = {
   classic: CLASSIC_MAP,
-  'heading-for-new-shores': hfns as MapData,
+  'heading-for-new-shores': hfns as unknown as MapData,
 };

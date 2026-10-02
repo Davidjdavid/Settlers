@@ -92,8 +92,8 @@ describe('Seafarers setup', () => {
     expect(checkInvariants(s)).toEqual([]);
   });
 
-  it('starting settlements may go on any island, which become home islands', () => {
-    const s = newGame('anywhere', seatsFor(3), { map: HFNS });
+  it('a map whose starting area is "all" lets you start on any island (custom maps; old saved games)', () => {
+    const s = newGame('anywhere', seatsFor(3), { map: { ...HFNS, start: 'all' } });
     const outer = legalActions(s, 0).find(
       (a) => a.type === 'setup' && geo(s).verts[a.v]!.hexes.every((h) => h >= 19),
     );
@@ -255,7 +255,8 @@ describe('gold fields', () => {
   });
 
   it('a second starting settlement next to gold earns a free choice', () => {
-    let s = newGame('gold-setup', seatsFor(3), { map: HFNS });
+    // Heading for New Shores keeps gold on the small islands; a map that allows starting there.
+    let s = newGame('gold-setup', seatsFor(3), { map: { ...HFNS, start: 'all' } });
     const gold = s.board.hexes.findIndex((h) => h.t === 'gold');
     // Play setup with the first legal moves, but place the very last settlement next to gold.
     for (let i = 0; i < 5; i++) {
