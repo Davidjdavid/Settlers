@@ -566,6 +566,14 @@ export class Store {
       );
   }
 
+  /**
+   * Keep playing (SPEC 8.9): a won game goes on. It counts as unfinished again (so it can be
+   * saved and resumed), but stays 'won', so its first win still counts in stats.
+   */
+  reopenGame(id: string) {
+    this.db.prepare('UPDATE games SET ended_at = NULL WHERE id = ?').run(id);
+  }
+
   endGame(id: string, reason: string, at: number) {
     this.db
       .prepare(

@@ -152,6 +152,7 @@ export class History {
       dice: new Array<number>(13).fill(0),
       events: {},
       streak: { current: 0, best: 0 },
+      overtime: 0,
       past: [],
     };
     const vs = new Map<string, { name: string; wins: number; losses: number }>();
@@ -172,7 +173,11 @@ export class History {
       const m = (rec.byMode[modeOf(g.row.config)] ??= { wins: 0, games: 0 });
       m.games++;
       if (won) m.wins++;
-      const vp = ps.points.reduce((a, x) => a + x.vp, 0);
+      // Points as they stood at the first win; overtime never changes them (SPEC 8.9).
+      const vpOf = (i: number) =>
+        g.stats.firstWin?.points[i] ?? g.stats.players[i]!.points.reduce((a, x) => a + x.vp, 0);
+      const vp = vpOf(seat);
+      rec.overtime += (g.stats.overtime ?? []).filter((w) => w.p === seat).length;
       points += vp;
       for (const k of GAIN_SOURCES) rec.got[k] = (rec.got[k] ?? 0) + sumCards(ps.got[k]);
       for (const k of LOSS_SOURCES) rec.lost[k] = (rec.lost[k] ?? 0) + sumCards(ps.lost[k]);
@@ -200,9 +205,12 @@ export class History {
         players: g.names.map((name, i) => ({
           name,
           color: g.colors[i]!,
-          vp: g.stats.players[i]!.points.reduce((a, x) => a + x.vp, 0),
+          vp: vpOf(i),
           won: g.stats.winner === i,
         })),
+        ...(g.stats.overtime?.length
+          ? { overtime: g.stats.overtime.map((w) => ({ name: g.names[w.p]!, target: w.target })) }
+          : {}),
       });
     }
     rec.streak.current = run;

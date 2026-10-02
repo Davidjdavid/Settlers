@@ -71,8 +71,8 @@ export interface GameStats {
   turns: number;
   /** The first win: the game's result, whatever happens in overtime (SPEC 8.9). */
   winner: Seat | null;
-  /** The turn of the first win, when the game went on after it. */
-  firstWinTurn?: number;
+  /** When the game went on after its first win: that turn, and everyone's points then. */
+  firstWin?: { turn: number; points: number[] };
   /** Wins after keep playing, in order. */
   overtime?: { p: Seat; vp: number; target: number; turn: number }[];
 }
@@ -379,7 +379,7 @@ export class StatsFold {
           else st.winner = e.p;
           break;
         case 'keepPlaying':
-          st.firstWinTurn ??= next.turnN;
+          st.firstWin ??= { turn: next.turnN, points: next.players.map((_, q) => totalVP(next, q)) };
           break;
       }
     }

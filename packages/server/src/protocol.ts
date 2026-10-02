@@ -136,6 +136,8 @@ export const OptionsSchema = z.strictObject({
   }),
   /** CPU chatter in table talk (SPEC 5.14); on unless set to false. */
   cpuChat: z.boolean().optional(),
+  /** The bank (SPEC 8.1): limited unless 'unlimited'. Locked when the game starts. */
+  bank: z.enum(['limited', 'unlimited']).optional(),
   /** CPUs trade with people (docs/bot-medium-hard.md §1.2); on unless set to false. */
   cpuTrading: z.boolean().optional(),
   /** At most one offer per CPU per turn; on unless set to false. */
@@ -458,11 +460,16 @@ export interface PlayerRecord {
   dice: number[];
   events: Record<string, number>;
   streak: { current: number; best: number };
+  /** Wins after keep playing (SPEC 8.9); they never count as wins above. */
+  overtime: number;
   past: {
     id: string;
     at: number;
     mode: string;
+    /** Points as they stood at the game's (first) win. */
     players: { name: string; color: Color; vp: number; won: boolean }[];
+    /** Overtime wins in that game, with the target each reached. */
+    overtime?: { name: string; target: number }[];
   }[];
 }
 

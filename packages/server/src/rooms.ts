@@ -1059,8 +1059,12 @@ export class Rooms {
         events: r.events,
         at,
       });
-      if (over || r.state.seq % this.snapshotEvery === 0) this.store.insertSnapshot(g.row.id, r.state);
+      // Everyone agreed to keep playing (SPEC 8.9): the game is open again.
+      const resumed = g.state.phase === 'over' && r.state.phase === 'play';
+      if (over || resumed || r.state.seq % this.snapshotEvery === 0)
+        this.store.insertSnapshot(g.row.id, r.state);
       if (over) this.store.endGame(g.row.id, 'won', at);
+      if (resumed) this.store.reopenGame(g.row.id);
     });
     const prev = g.state;
     g.state = r.state;
@@ -1686,6 +1690,10 @@ export function gameConfigFor(o: RoomOptions, board?: MapData): Partial<GameConf
   if (o.ck) c.modules = [...map.modules, 'citiesKnights'];
   if (o.winVP !== map.winVP || o.scenario !== 'classic' || o.ck) c.winVP = o.winVP;
   if (Object.keys(hr).length) c.houseRules = hr;
+  // The bank (SPEC 8.1): limited unless set otherwise. A classic limited bank needs no field
+  // (it's how base games always were), so classic configs stay { winVP }.
+  if (o.bank === 'unlimited') c.bank = 'unlimited';
+  else if (o.ck) c.bank = 'limited';
   // From the pre-game table: exactly its board, and the seats already in turn order.
   if (board) {
     c.map = board;
@@ -1709,6 +1717,7 @@ export function optionsFor(c: Partial<GameConfig>): RoomOptions {
     houseRules: { ...hr, handBack: !!hr.handBack, undo: !!hr.undo },
   };
   if (c.modules?.includes('citiesKnights')) o.ck = true;
+  if (c.bank === 'unlimited') o.bank = 'unlimited';
   const parsed = OptionsSchema.safeParse(JSON.parse(JSON.stringify(o)));
   return parsed.success ? parsed.data : structuredClone(DEFAULT_OPTIONS);
 }

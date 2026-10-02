@@ -130,6 +130,14 @@ describe('room options', () => {
       modules: ['citiesKnights'],
       winVP: 13,
       houseRules: { rerollBeforeAttack: true, barbarianDelay: 2, handBack: true, undo: true },
+      // New Knights games have a limited bank: 12 of each commodity (SPEC 8.1).
+      bank: 'limited',
+    });
+    // Unlimited for any mode; a classic limited bank adds nothing (base games always were).
+    expect(gameConfigFor({ ...ck, bank: 'unlimited' }).bank).toBe('unlimited');
+    expect(gameConfigFor({ ...DEFAULT_OPTIONS, bank: 'unlimited' })).toEqual({
+      bank: 'unlimited',
+      houseRules: { handBack: true, undo: true },
     });
     const both = gameConfigFor({ ...HFNS, ck: true, winVP: 17 });
     expect(both.modules).toEqual(['seafarers', 'citiesKnights']);
