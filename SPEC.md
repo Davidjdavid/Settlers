@@ -861,9 +861,144 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
     - An old saved game loads with a readable log.
 11. **`npm run check` green, then deploy.**
 
+## Milestone 9: Sounds, dice on screen, and the barbarians
+
+**Status: draft, waiting for your answers (9.7).** Your requests of 2 October.
+
+### 9.1 The event die beside the big dice
+
+- In Knights games, the **event die** (the barbarian ship, or a gate colour) shows next to the two number dice, the same size.
+- It tumbles with them and lands on the server's face, like the number dice.
+- It shows on every screen, and stays until the next roll.
+
+### 9.2 Losing a city to the barbarians
+
+Today it's easy to miss, and afterwards things just stop working ("why can't I buy science?"). Instead:
+
+- **A moment everyone sees:**
+  - The barbarian ship lands on the board.
+  - Each pillaged city visibly turns back into a settlement.
+- **A banner for each player who lost a city:**
+  - "The barbarians pillaged your city on the ore 6. It's a settlement now."
+  - It stays until dismissed.
+- **The bad-news tune** (9.3).
+- **A red log line:** "Barbarians won (strength 7 against 5): Ann and Bob each lost a city."
+- **Afterwards, every blocked action says why.** For example, the improvement buttons say "You need a city to buy city improvements" instead of just being greyed out.
+- **Winning against the barbarians gets its own moment too:** Defender of Catan, or the progress cards handed out.
+
+### 9.3 Bad-news music
+
+- A short sad tune ("wah-wah-waaah") when the barbarians take one of your cities.
+- It's made in the browser like the other sounds, with no files.
+
+### 9.4 Sound effects for everything
+
+**Each of these gets a sound:**
+
+- dice rolled;
+- cards dealt (production, a soft tick per card);
+- card stolen;
+- road, ship, settlement and city built;
+- ship moved;
+- robber or pirate moved;
+- development or progress card bought, and played;
+- trade done;
+- discard;
+- knight built, activated and promoted;
+- barbarian ship moves, and barbarians attack (won / lost);
+- Longest Road or Largest Army taken;
+- your turn;
+- chat message;
+- win fanfare.
+
+**A Sounds page in Settings:**
+
+- A master volume.
+- **For every sound:**
+  - on/off;
+  - its own volume;
+  - a choice of a few styles;
+  - a ▶ button to hear it.
+- It's saved on your profile, so it follows you to any device. It only changes what **you** hear.
+- **No sound files:** every sound is made in the browser (Web Audio), as today. Nothing to download, and it works offline.
+
+### 9.5 Dice statistics pinned on screen
+
+- The dice statistics sheet gets a **Pin** button. That puts a small panel in a corner of the board, which stays there all game:
+  - the 2–12 bar chart (rolled vs expected);
+  - the last roll;
+  - the event die faces (Knights).
+- You can drag it to another corner, shrink it to a strip, or unpin it.
+- It's a personal setting, remembered on your profile.
+- On a phone, it's a thin strip above the hand.
+
+### 9.6 Knights tracks in the same order as the cards
+
+- The commodity cards show in your hand as **book, linen, coin** (science, trade, politics).
+- The tracks are listed **trade, politics, science**.
+- They'll be put in the same order everywhere: the track list, the improvement buttons, the progress decks, the barbarian bar.
+
+### 9.7 Questions
+
+See the list in the message; answers will be recorded here.
+
+## Milestone 10: Seafarers maps you design, fog islands and treasures
+
+**Status: draft, waiting for your answers (10.6).** Your requests of 2 October.
+
+### 10.1 Seafarers maps from the editor, "broken" ones too
+
+The editor already has sea, gold and fog tiles with Seafarers on. To make maps like "build a lot of boats to cross the water to a gold island" playable, it gets the Seafarers scenario pieces:
+
+- **Start area:** paint the hexes where starting settlements may go (as on Heading for New Shores).
+- **Island bonus:** points for settling a new island, 0–3.
+- **Pirate start:** a sea hex, or off the board.
+- **Points to win** (already there).
+
+**Unbalanced on purpose is fine:**
+
+- Warnings never block saving or playing.
+- The only hard checks are the ones a game can't do without: a valid file, and at least 2 starting spots per player in the start area.
+
+**Playing it:** pick it at the pre-game table in Seafarers or Full game mode.
+
+### 10.2 Fog island maps
+
+- **Fog tiles in the editor**, with a fog stack: what can turn up under the fog (land, gold, sea, and numbers).
+  - You can set the stack yourself, or leave it standard.
+  - The rules for discovering fog are already in the engine (docs/rules/seafarers.md §11).
+- **A built-in Fog Islands scenario** for Seafarers and Full game mode: a home island, with fog hiding islands and gold across the water.
+
+### 10.3 Treasures
+
+Treasure chits, placed in the map maker (as in Catan Universe). The first player to reach one takes it. Possible treasures:
+
+- 2 free ships and/or roads;
+- 2 resources of your choice;
+- 1 sheep, 1 brick and 1 wheat;
+- a free development card (a progress card in Knights games);
+- others you'd like (10.6).
+
+The exact rules get written in docs/rules/treasures.md first, then agreed, as for the expansions.
+
+### 10.4 Your layout, random tiles and numbers
+
+- **Blank tiles already do this.** In the editor, any tile or number left blank is drawn when the board is made at the pre-game table, and every reroll draws again. Anything you place or lock stays.
+- **New: regions.** Tiles can be grouped into regions, each with its own tile set, shuffled only within that region. For example:
+  - the home island gets the standard tiles;
+  - the far islands get gold and the rest.
+- This works for **every mode**, not only Seafarers: a base-game map can have blanks too.
+
+### 10.5 Tests ("done means")
+
+To be filled in with your answers: each scenario and treasure gets rules tests and simulator runs (1,000 games each), as for Heading for New Shores.
+
+### 10.6 Questions
+
+See the list in the message; answers will be recorded here.
+
 ## Later milestones (design for these now, don't build them)
-- Map editor (custom boards, saved and shared).
-- More Seafarers scenarios: The Four Islands, The Fog Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan.
+- More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
 - Options for a more competent CPU player.
 - A replay viewer.
 
