@@ -137,6 +137,18 @@ function ghostsOf(a: Action): Ghost[] {
   }
 }
 
+const KNIGHT_LEVEL = ['', 'Basic', 'Strong', 'Mighty'];
+/** The Smith play promoting exactly these knights, if there is one. */
+const smithPlay = (plays: Play[], picks: number[]) =>
+  picks.length
+    ? plays.find((a) => a.vs!.length === picks.length && picks.every((x) => a.vs!.includes(x)))
+    : undefined;
+/** Smith picks to start with: every knight that can be promoted, when that's 2 or fewer. */
+const smithStart = (plays: Play[]): number[] => {
+  const ks = [...new Set(plays.flatMap((a) => a.vs!))];
+  return ks.length <= 2 && smithPlay(plays, ks) ? ks : [];
+};
+
 const MODE_TEXT: Record<Exclude<Mode, null>, [string, string]> = {
   ship: ['Choose where to build a ship', 'Ships sail from your settlements and other ships.'],
   move: ['Choose a ship to move, then where it goes', 'Only the ship at the open end of a route can move.'],
@@ -319,11 +331,8 @@ export function Game({
           return true;
         });
         if (kind === 'v') targets = { ...NO_TARGETS, verts: uniq(open.map((a) => a.v!)) };
-        if (kind === 'vs')
-          targets = {
-            ...NO_TARGETS,
-            verts: uniq(open.flatMap((a) => a.vs!.filter((x) => !card.picks.includes(x)))),
-          };
+        // Smith: every knight that can be promoted lights up; a picked one can be tapped off.
+        if (kind === 'vs') targets = { ...NO_TARGETS, verts: uniq(card.plays.flatMap((a) => a.vs!)) };
         if (kind === 'h') targets = { ...NO_TARGETS, hexes: uniq(open.map((a) => a.h!)) };
         if (kind === 'hh')
           targets = {
@@ -394,10 +403,11 @@ export function Game({
       if (a) place(a, touch, done);
       return;
     }
+    // Smith (SPEC 8.8): taps pick or unpick knights; nothing happens until the Upgrade button.
     if (kind === 'vs') {
-      const full = card.plays.find((p) => p.vs!.length === 2 && picks.every((y) => p.vs!.includes(y)));
-      if (picks.length === 2 && full) return place(full, touch, done);
-      return setCard({ ...card, picks });
+      let next = card.picks.includes(x) ? card.picks.filter((y) => y !== x) : picks.slice(-2);
+      if (next.length === 2 && !smithPlay(card.plays, next)) next = [x];
+      return setCard({ ...card, picks: next });
     }
   };
   const onVert = (x: number, touch: boolean) => {
@@ -518,7 +528,7 @@ export function Game({
         () => void client.act(plays[0]!),
       );
     if (kind === 'to' || kind === 'r' || kind === 'd') return setSheet({ k: 'cardParam', card: c, plays });
-    setCard({ card: c, plays, picks: [] });
+    setCard({ card: c, plays, picks: kind === 'vs' ? smithStart(plays) : [] });
     setMode('card');
   };
   const improve = (opts: Action[]) => {
@@ -538,6 +548,61 @@ export function Game({
     if (c === 'plenty') setSheet({ k: 'plenty' });
     if (c === 'mono') setSheet({ k: 'mono' });
   };
+
+  /**
+   * The Smith (SPEC 8.8): the picks with their new levels and one button for all of them. Using
+   * only 1 of 2 possible upgrades has its own button and asks first. Cancel keeps the card.
+   */
+  const smithPrompt = (c: { plays: Play[]; picks: number[] }) => {
+    const ks = uniq(c.plays.flatMap((a) => a.vs!));
+    const pairs = c.plays.some((a) => a.vs!.length === 2);
+    const done = () => setMode(null);
+    const lvl = (x: number) => v.ck!.knights[x]?.lvl ?? 1;
+    const sub = c.picks.length
+      ? c.picks
+          .map((x) => `${KNIGHT_LEVEL[lvl(x)]} knight → ${KNIGHT_LEVEL[lvl(x) + 1]!.toLowerCase()}`)
+          .join(' · ')
+      : 'Tap the knights to promote. Nothing changes until you press Upgrade.';
+    const buttons: PromptButton[] = [];
+    const both = smithPlay(c.plays, c.picks);
+    if (both && c.picks.length === 2)
+      buttons.push({
+        label: ks.length <= 2 ? 'Upgrade both knights' : 'Upgrade these 2',
+        on: () => doAct(both, done),
+        primary: true,
+        testid: 'smith-go',
+      });
+    else if (both && !pairs)
+      buttons.push({
+        label: 'Upgrade knight',
+        on: () => doAct(both, done),
+        primary: true,
+        testid: 'smith-go',
+      });
+    else if (both)
+      buttons.push({
+        label: 'Use only 1 upgrade',
+        testid: 'smith-one',
+        on: () =>
+          setSheet({
+            k: 'ask',
+            title: 'Use only 1 of your 2 upgrades?',
+            sub: 'The Smith promotes up to 2 knights. The other upgrade is lost.',
+            yes: 'Use only 1',
+            onYes: () => doAct(both, done),
+          }),
+      });
+    const title =
+      ks.length > 2 && c.picks.length < 2
+        ? `Smith: pick ${c.picks.length ? 'a second knight' : '2 knights'} to promote`
+        : `Smith: promote ${c.picks.length === 2 ? 'both knights' : 'your knight'}?`;
+    return { title, sub, buttons };
+  };
+  // The Smith's picks, drawn at their new level until Upgrade or Cancel.
+  const smithGhosts: Ghost[] | undefined =
+    mode === 'card' && card && paramOf(card.plays) === 'vs' && card.picks.length
+      ? card.picks.map((x) => ({ kind: 'knight', at: x, lvl: (v.ck!.knights[x]?.lvl ?? 1) + 1 }))
+      : undefined;
 
   // The Roll button and the dice do exactly the same thing (SPEC 5.3).
   const rollRef = useRef<(() => void) | null>(null);
@@ -757,26 +822,15 @@ export function Game({
             '',
           ]
         : null;
-    const smithOne =
-      mode === 'card' && card?.card === 'smith' && card.picks.length === 1
-        ? card.plays.find((a) => a.vs!.length === 1 && a.vs![0] === card.picks[0])
-        : undefined;
+    const smith = mode === 'card' && card && paramOf(card.plays) === 'vs' ? smithPrompt(card) : null;
     pm = mode
       ? {
-          title: (cardText ?? MODE_TEXT[mode])[0],
-          sub: (cardText ?? MODE_TEXT[mode])[1],
+          title: smith?.title ?? (cardText ?? MODE_TEXT[mode])[0],
+          sub: smith?.sub ?? (cardText ?? MODE_TEXT[mode])[1],
           mine: true,
           buttons: [
-            ...(smithOne
-              ? [
-                  {
-                    label: 'Promote just this one',
-                    on: () => doAct(smithOne, () => setMode(null)),
-                    primary: true,
-                  },
-                ]
-              : []),
-            { label: 'Cancel', on: () => setMode(null) },
+            ...(smith?.buttons ?? []),
+            { label: 'Cancel', on: () => setMode(null), testid: 'cancel' },
           ],
         }
       : {
@@ -1147,7 +1201,7 @@ export function Game({
             onEdge={onEdge}
             onHex={onHex}
             preview={previewAt}
-            pending={placing?.ghosts}
+            pending={placing?.ghosts ?? smithGhosts}
             flash={raid?.lost.map((l) => l.v)}
           />
           {/* Hidden while you still pick which city to lose: the prompt says so, and the board stays clear. */}

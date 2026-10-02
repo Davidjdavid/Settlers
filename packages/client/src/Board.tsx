@@ -23,6 +23,7 @@ import {
   hexPts,
   settlementPath,
 } from './art';
+import { spotAt, spotLabel, spotsOf, type Spot } from './boardinfo';
 
 export interface Targets {
   verts: number[];
@@ -311,6 +312,8 @@ export interface Ghost {
     | 'markEdge'
     | 'markHex';
   at: number;
+  /** A knight's level (the Smith shows its picks one level up). */
+  lvl?: number;
 }
 
 function ghostSVG(g: Geometry, gh: Ghost, color: string, waiting: boolean): string {
@@ -332,7 +335,7 @@ function ghostSVG(g: Geometry, gh: Ghost, color: string, waiting: boolean): stri
       inner = shipSVG(g, gh.at, color, false, false);
       break;
     case 'knight':
-      inner = knightSVG(g, gh.at, color, 1, false, -1, false, false);
+      inner = knightSVG(g, gh.at, color, gh.lvl ?? 1, false, -1, false, false);
       break;
     case 'wall':
       inner = `<path d="${wallPath(V!.x * K, V!.y * K)}" fill="#8b8172" stroke="#fff6dc" stroke-width="2"/>`;
@@ -398,6 +401,18 @@ export function Board(props: {
     [hexKey, view.board.ports, g, vb, no3to1],
   );
   const seen = useRef<Set<string> | null>(null);
+  // Hover and press-and-hold labels (SPEC 8.3): the piece, and where its top is in the box.
+  const wrap = useRef<HTMLDivElement | null>(null);
+  const [info, setInfo] = useState<{ key: string; x: number; y: number; below: boolean } | null>(null);
+  const hold = useRef<{ id: number; x: number; y: number; timer: number } | null>(null);
+  const held = useRef(false);
+  useEffect(
+    () => () => {
+      if (hold.current) window.clearTimeout(hold.current.timer);
+    },
+    [],
+  );
+  const spots = spotsOf(view, g, no3to1);
 
   const sum = view.dice ? view.dice[0] + view.dice[1] : 0;
   const hot = view.dice && ['main', 'discard', 'robber', 'roads'].includes(view.stage) && sum !== 7 ? sum : 0;
@@ -519,6 +534,10 @@ export function Board(props: {
     return d.v != null ? `v:${d.v}` : d.e != null ? `e:${d.e}` : `h:${d.h}`;
   };
   const onClick = (ev: React.MouseEvent) => {
+    if (held.current) {
+      held.current = false;
+      return;
+    }
     // The end of a drag or pinch isn't a tap.
     if (zoom.dragged.current) {
       zoom.dragged.current = false;
@@ -532,15 +551,58 @@ export function Board(props: {
     else if (key[0] === 'e') props.onEdge(id, touch);
     else props.onHex(id, touch);
   };
+  /** The labelled piece under a screen point, placed just above it in the board's box. */
+  const infoAt = (cx: number, cy: number) => {
+    const m = zoom.svg.current?.getScreenCTM();
+    const box = wrap.current?.getBoundingClientRect();
+    if (!m || !box) return null;
+    const p = new DOMPoint(cx, cy).matrixTransform(m.inverse());
+    const hit = spotAt(spots, p.x / K, p.y / K);
+    if (!hit) return null;
+    const c = new DOMPoint(hit.x * K, hit.y * K).matrixTransform(m);
+    const r = hit.r * K * m.a;
+    const top = c.y - box.top - r;
+    const below = top < 70;
+    return { key: JSON.stringify(hit.spot), x: c.x - box.left, y: below ? top + 2 * r : top, below };
+  };
+  const showInfo = (n: ReturnType<typeof infoAt>) =>
+    setInfo((old) => (old?.key === n?.key && old?.x === n?.x && old?.y === n?.y ? old : n));
+  const stopHold = () => {
+    if (hold.current) window.clearTimeout(hold.current.timer);
+    hold.current = null;
+  };
+  const onDown = (ev: React.PointerEvent) => {
+    zoom.down(ev);
+    if (ev.pointerType === 'mouse') return;
+    held.current = false;
+    setInfo(null);
+    stopHold();
+    if (!ev.isPrimary) return;
+    // Press and hold only shows info: whatever it's on, the tap that follows is ignored.
+    const { clientX: x, clientY: y } = ev;
+    const timer = window.setTimeout(() => {
+      hold.current = null;
+      held.current = true;
+      showInfo(infoAt(x, y));
+    }, 500);
+    hold.current = { id: ev.pointerId, x, y, timer };
+  };
   const onMove = (ev: React.PointerEvent) => {
     zoom.move(ev);
+    const h = hold.current;
+    if (h && (h.id !== ev.pointerId || Math.hypot(ev.clientX - h.x, ev.clientY - h.y) > 10)) stopHold();
     if (ev.pointerType !== 'mouse') return;
     const key = targetOf(ev);
     if (key !== hover) setHover(key);
+    // A legal spot under the mouse shows its preview instead.
+    showInfo(key ? null : infoAt(ev.clientX, ev.clientY));
   };
+  const shown = info && spots.find((x) => JSON.stringify(x.spot) === info.key);
+  const label = shown ? spotLabel(view, shown.spot as Spot) : null;
+  const boxW = wrap.current?.clientWidth ?? 0;
 
   return (
-    <div className="boardzoom">
+    <div className="boardzoom" ref={wrap}>
       <svg
         id="board"
         viewBox={zoom.box.join(' ')}
@@ -554,18 +616,36 @@ export function Board(props: {
           zoom.svg.current = el;
         }}
         onClick={onClick}
-        onPointerDown={zoom.down}
+        onPointerDown={onDown}
         onPointerMove={onMove}
-        onPointerUp={zoom.up}
-        onPointerCancel={zoom.up}
-        onPointerLeave={(ev) => {
-          setHover(null);
+        onPointerUp={(ev) => {
+          stopHold();
           zoom.up(ev);
         }}
+        onPointerCancel={(ev) => {
+          stopHold();
+          zoom.up(ev);
+        }}
+        onPointerLeave={(ev) => {
+          setHover(null);
+          if (ev.pointerType === 'mouse') setInfo(null);
+          zoom.up(ev);
+        }}
+        onContextMenu={(ev) => ev.preventDefault()}
       >
         <g dangerouslySetInnerHTML={{ __html: staticHtml }} />
         <g dangerouslySetInnerHTML={{ __html: parts.join('') }} />
       </svg>
+      {label && info && (
+        <div
+          className={`boardinfo${info.below ? ' below' : ''}`}
+          data-testid="board-info"
+          role="status"
+          style={{ left: Math.min(Math.max(info.x, 130), Math.max(130, boxW - 130)), top: info.y }}
+        >
+          {label}
+        </div>
+      )}
       <div className="zoomctl" aria-label="Zoom">
         <button
           type="button"

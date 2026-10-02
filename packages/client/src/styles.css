@@ -1836,6 +1836,28 @@ a.btn {
 .boardzoom #board {
   width: 100%;
   height: 100%;
+  /* Press and hold shows a label, not the phone's own menu. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.boardinfo {
+  position: absolute;
+  z-index: 6;
+  max-width: 260px;
+  transform: translate(-50%, calc(-100% - 6px));
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(10, 22, 28, 0.94);
+  border: 1px solid rgba(233, 227, 210, 0.35);
+  color: #f4ecd6;
+  font-size: 13px;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.boardinfo.below {
+  transform: translate(-50%, 6px);
 }
 .zoomctl {
   position: absolute;

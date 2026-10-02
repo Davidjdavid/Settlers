@@ -97,7 +97,7 @@ export const COM_GLYPH: Record<Commodity, string> = {
 export const CARD_LABEL: Record<Card, string> = {
   ...RES_LABEL,
   paper: 'Paper',
-  cloth: 'Cloth',
+  cloth: 'Linen',
   coin: 'Coin',
 };
 export const CARD_COLOR: Record<Card, string> = {

@@ -60,7 +60,9 @@ export function cardWarning(v: PlayerView, a: Action): string | null {
           return noCards ? 'Monopoly: nobody else holds any cards' : null;
         case 'merchantFleet': {
           const n = a.r ? (v.hand.res[a.r] ?? 0) : 0;
-          return n >= 2 ? null : `Merchant Fleet: you hold fewer than 2 ${a.r ?? 'cards'} to trade 2:1`;
+          // Cloth is shown as linen (SPEC 8.11 D6).
+          const name = a.r === 'cloth' ? 'linen' : (a.r ?? 'cards');
+          return n >= 2 ? null : `Merchant Fleet: you hold fewer than 2 ${name} to trade 2:1`;
         }
         case 'warlord': {
           const off = s.ck!.knights.some((k) => k?.p === me && !k.on);
