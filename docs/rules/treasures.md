@@ -1,6 +1,6 @@
 # Treasures: rules as we will implement them
 
-**Status: draft, waiting for your answers (D1–D8 at the end). Nothing is built until they're agreed.**
+**Status: agreed 2 October (your answers are in the Decisions at the end).**
 
 This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the simulator's invariants and the tests will follow it exactly. If something here is wrong, it should be fixed here first. Everything in the base game, Seafarers and Cities & Knights still applies unless this document changes it.
 
@@ -23,7 +23,7 @@ This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the si
 ## 3. Finding a treasure
 
 1. The first player to **build a road or a ship on a spot, or move a ship onto it**, finds it. Free pieces count (Road Building, the Diplomat's rebuilt road, a treasure's own free pieces).
-2. **Setup:** a road or ship placed during setup can't go on a treasure spot. **(D2)**
+2. **Setup:** a road or ship placed during setup can go on a treasure spot, and finds it straight away, as at any other time. That's part of the fun. **(D2)**
 3. The finder draws the **top card** of the treasure deck. **Everyone sees what it is** (the log says "Ann found a treasure: 2 resources of her choice").
 4. The treasure happens **straight away, for the finder only**, before anything else in the turn (§4). The spot is then empty for good.
 5. A piece that finds a treasure stays where it is, as usual.
@@ -36,28 +36,26 @@ This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the si
    - the normal building rules apply (a road joins your roads or buildings, a ship your ships or a coastal building, not next to the pirate);
    - only pieces you still have in supply;
    - **if there's no legal spot, the rest is lost.** It's also lost when you have no pieces left.
-2. **Found while placing free pieces** (from Road Building or from another treasure): the new 2 are added to the ones still to place. **(D3)**
-3. A free piece can find another treasure; that one happens straight away too.
+2. **Found while placing free pieces** (from Road Building or from another treasure): you get **no more free pieces**; that treasure gives nothing. **(D3)**
+3. A free piece can find another treasure of another kind; that one happens straight away too.
 4. You can't do anything else until the free pieces are placed (or lost), the same as Road Building today.
 
 ### 4.2 Two resources of your choice
 
 1. The finder picks **any 2 resources** (wood, brick, sheep, wheat, ore; never commodities), the same two or different, from the bank, as with Year of Plenty.
-2. **The bank running short:** you can only pick what the bank holds. If the bank holds 1 resource card in all, you get that one; if none, nothing. **(D4)**
+2. **The bank running short:** you can only pick what the bank holds. If the bank holds 1 resource card in all, you get that one; if none, nothing. With the bank set to Unlimited (SPEC 8.1) it never runs short. **(D4)**
 3. Like gold, the choice is made straight away, in a sheet that can't be closed without choosing.
 
 ### 4.3 Sheep, brick and wheat
 
 1. The finder takes **1 sheep, 1 brick and 1 wheat** from the bank.
-2. **The bank running short:** you get each of the three the bank still has; any it's out of is lost. **(D4)**
+2. **The bank running short:** you get each of the three the bank still has; any it's out of is lost. With an Unlimited bank you always get all three. **(D4)**
 
 ### 4.4 A free development card
 
 1. **Base and Seafarers:** the top card of the development deck, free. It's a new card: you can't play it this turn (a victory point card counts at once, as when bought).
 2. **Knights and Full game:** a **progress card** from the deck you pick (science, trade or politics), with the usual rules: a victory-point progress card is shown at once; the 4-card limit applies as when you draw one (at the end of your turn you keep 4).
-3. **A deck running out:**
-   - Base and Seafarers: if the development deck is empty, the treasure gives nothing. **(D5)**
-   - Knights: you can only pick a deck with cards in it; if all three are empty, nothing.
+3. **A deck running out:** you can only pick a progress deck with cards in it. If there's no card to give (the development deck empty; in Knights, all three progress decks empty), the treasure is **rerolled**: it becomes one of the other three kinds, picked at random (from the game's random numbers), and happens straight away. **(D5)**
 
 ## 5. Things that don't change
 
@@ -89,13 +87,13 @@ This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the si
 
 ---
 
-## Decisions (your answers go here)
+## Decisions (agreed 2 October)
 
-1. **D1 The deck:** one card per spot, the four kinds dealt round in turn, so the kinds are as even as the number of spots allows. *(Alternative: a fixed deck, e.g. 3 of each, reshuffled when it runs out.)*
-2. **D2 Setup:** setup roads and ships can't go on a treasure spot. *(Alternative: they can, and the treasure happens at the end of that setup turn.)*
-3. **D3 Free pieces while placing free pieces:** the new 2 are added to the ones still to place.
-4. **D4 Resources when the bank is short:** you get what the bank has; the rest is lost (as Year of Plenty and production do today).
-5. **D5 An empty development deck:** the treasure gives nothing. *(Alternative: 2 resources of your choice instead.)*
+1. **D1 The deck:** one card per spot, the four kinds dealt round in turn, so the kinds are as even as the number of spots allows.
+2. **D2 Setup:** setup roads and ships can find treasures, straight away.
+3. **D3 Free pieces while placing free pieces:** no more free pieces; that treasure gives nothing.
+4. **D4 Resources when the bank is short:** you get what the bank has; the rest is lost. An Unlimited bank never runs short.
+5. **D5 No card to give:** the treasure is rerolled into one of the other three kinds.
 6. **D6 Which development card:** only the finder sees it, like a bought card.
 7. **D7 Stats:** treasures count as a new source of cards in the stats.
 8. **D8 Where treasures work:** every mode, on any map with spots (§1.3).

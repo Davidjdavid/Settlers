@@ -1049,6 +1049,35 @@ The exact rules, including what happens when the bank or a deck runs out, get wr
 4. **D4 Free roads and ships from a treasure:** placed right away, with normal rules and piece limits; any mix of two.
 5. **D5 Regions:** in every mode.
 
+## Milestone 11: Your own screen layout
+
+**Status: written down from your request of 2 October; to build after treasures (Milestone 10). The choices below are my defaults: change any you don't like.** You asked to move the boxes around, hide them, and pin them to the top, bottom, left, right or centre.
+
+### 11.1 What you can change
+
+- **Edit layout** in the game menu turns the game screen into a layout editor. Every box gets a handle and buttons:
+  - the players, table talk and the log, your hand and building costs, the barbarians and progress (Knights), the dice and the prompt bar, the pinned dice, and the trade buttons.
+- **Where a box goes:**
+  - **docked** to the left, right, top or bottom edge, in the order you drag it to (several boxes can share an edge);
+  - or **floating** anywhere over the board, at the size you drag it to.
+- **Hide** any box. A hidden box leaves a small tab on its edge ("Log", "Players"), so it's one tap to peek and tap again to put away.
+- **The board** fills whatever space is left and can't be hidden.
+- **Presets:** Standard (today's layout), Big board (everything docked small or hidden behind tabs), Left-handed (left and right swapped), and Reset.
+- **Done** saves it.
+
+### 11.2 Rules that keep it reliable
+
+- **Nothing you need to act on can be lost:** the prompt bar (with Roll, Confirm and End turn) and every sheet that needs an answer (discard, gold, trade offers, owed choices) always show, even if their box is hidden or floating off screen. A box dragged off the screen snaps back inside.
+- **Saved on your profile, per kind of screen** (laptop, tablet, phone), since a layout for a wide screen won't fit a phone. It follows you to a new device, and nobody else's screen changes.
+- **Phones:** boxes can be reordered and hidden, not floated (there's no room).
+- A layout from an older version (or a box added later) falls back to its default place, never to an error.
+
+### 11.3 Tests ("done means")
+
+1. Unit tests: every move, dock, float, hide and preset; a saved layout that's broken or from an older version loads as a sensible one.
+2. A browser test on a laptop, a tablet and a phone: boxes moved, docked to each edge, floated, hidden and peeked; the prompt and a discard still appear with everything hidden; the layout survives a reload and a new device; Reset.
+3. `npm run check` green, then deploy.
+
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
 - Options for a more competent CPU player.
