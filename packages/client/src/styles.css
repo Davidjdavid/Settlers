@@ -2624,6 +2624,9 @@ button.vp {
 .lobbywrap.withtable {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   align-items: start;
+  /* Each side fills its column: sized to its text, the board's side changed width (and the board
+     with it) whenever a reroll changed the warnings, so the buttons moved under the mouse. */
+  justify-items: stretch;
   gap: 16px;
   max-width: 1400px;
   margin: 0 auto;

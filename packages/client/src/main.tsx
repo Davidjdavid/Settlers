@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { botMove, seedRng, type PlayerView } from '@settlers/engine';
+import { botMove, legalActions, seedRng, stateFromView, type PlayerView } from '@settlers/engine';
 import { App } from './App';
 import { client } from './net';
 import '@fontsource/figtree/latin-400.css';
@@ -24,6 +24,9 @@ Object.assign(window, {
     state: () => client.state,
     stage: (game: PlayerView) => client.stage(game),
     staged: () => client.stagedMoves(),
+    // The moves this browser's player could make in a view (a made-up one for staged tests).
+    legal: (game: PlayerView | null = client.state.game) =>
+      game && game.me != null ? legalActions(stateFromView(game), game.me) : [],
     sounds: () => played.slice(),
     // `byHand`: move types the test will make through the UI instead (returned as 'skip:<type>').
     botStep: async (byHand: string[] = []) => {

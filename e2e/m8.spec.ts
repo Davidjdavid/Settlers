@@ -196,7 +196,7 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
       }
       if (!checks.newShown) {
         const btn = a.getByTestId('log-new');
-        if (await btn.isVisible().catch(() => false)) {
+        if ((await btn.isVisible().catch(() => false)) && !(await a.locator('.back').count())) {
           checks.newShown = true;
           await expect(btn).toHaveText(/^\d+ new ↓$/);
           expect((await logState(a)).top).toBeLessThan(5);
@@ -227,6 +227,8 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
         reading.drift = Math.max(reading.drift, Math.abs(now! - reading.top));
         const btn = a.getByTestId('log-new');
         if (++reading.steps < 4 || !(await btn.isVisible())) return false;
+        // A sheet that needs an answer (an Aqueduct pick, say) covers the log: answer it first.
+        if (await a.locator('.back').count()) return false;
         expect(reading.drift, 'new rows moved the rows being read').toBeLessThan(2);
         await shot(a, 'log-held');
         await btn.click();
@@ -388,6 +390,42 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await shot(c, 'smith-pick');
     await c.getByTestId('smith-go').click();
     expect([...(await moves()).at(-1)!.vs].sort()).toEqual([at[1]!, at[2]!].sort());
+
+    /* ---------- Move an active knight, and chase the robber (made-up view) ---------- */
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    // One active knight (activated on an earlier turn) on a corner it can move from.
+    const kAt: { at: number; to: number[] } = await c.evaluate(() => {
+      const s = (window as any).__settlers;
+      const base = structuredClone(s.state().game);
+      Object.assign(base, { phase: 'play', winner: null, stage: 'main', turn: base.me, dice: [3, 4] });
+      delete base.keep;
+      base.ck.hand = [];
+      base.ck.owe = [];
+      base.ck.knights = base.ck.knights.map(() => null);
+      for (let at = 0; at < base.verts.length; at++) {
+        if (base.verts[at]) continue;
+        const v = structuredClone(base);
+        v.ck.knights[at] = { p: v.me, lvl: 1, on: true };
+        const acts = s.legal(v);
+        const to = acts.filter((a: any) => a.type === 'moveKnight' && a.from === at).map((a: any) => a.to);
+        if (to.length) {
+          s.stage(v);
+          return { at, to: to.sort((x: number, y: number) => x - y) };
+        }
+      }
+      throw new Error('no corner for a knight to move from');
+    });
+    await c.getByTestId('knights').click();
+    await c.locator(`#board [data-v="${kAt.at}"]`).tap();
+    await c.getByTestId('k-move').click();
+    // The corners it can reach light up; pick one.
+    await expect.poll(lit).toEqual(kAt.to);
+    await c.locator(`#board [data-v="${kAt.to[0]}"]`).tap();
+    await confirmPlace(c, 1000);
+    await expect
+      .poll(moves)
+      .toEqual([expect.objectContaining({ type: 'moveKnight', from: kAt.at, to: kAt.to[0] })]);
 
     /* ---------- Play Alchemist: only before your roll (made-up view) ---------- */
     const alchemist = (stage: string) =>

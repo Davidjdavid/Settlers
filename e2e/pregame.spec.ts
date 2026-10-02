@@ -106,6 +106,34 @@ test('three browsers share the table, then play on a generated board', async ({ 
   await joe.getByTestId('board-forward').click();
   expect(await sameBoard(t)).toBe(rerolled);
 
+  // Rerolls and Forward don't move the buttons (or the board): the mouse can stay put. Standard
+  // boards have many warnings, and how many changes from board to board.
+  await joe.getByTestId('board-kind').selectOption('default');
+  await expect(joe.getByTestId('board-source')).toContainText('Standard board');
+  const spots = () =>
+    joe.evaluate(() =>
+      ['reroll', 'board-back', 'board-forward', 'board-kind']
+        .map((id) => {
+          const r = document.querySelector(`[data-testid=${id}]`)!.getBoundingClientRect();
+          return [Math.round(r.x), Math.round(r.y), Math.round(r.width)];
+        })
+        .concat([[Math.round(document.querySelector('.tbmap')!.getBoundingClientRect().width)]]),
+    );
+  const at0 = await spots();
+  const warnings = new Set<string>();
+  for (let i = 0; i < 8; i++) {
+    const seed = await joe.getByTestId('board-seed').textContent();
+    await joe.getByTestId(i % 3 === 2 ? 'board-back' : 'reroll').click();
+    await expect(joe.getByTestId('board-seed')).not.toHaveText(seed!);
+    warnings.add((await joe.locator('.tbdetails summary').textContent()) ?? '');
+    expect(await spots(), `after click ${i + 1}`).toEqual(at0);
+  }
+  expect(warnings.size, 'boards with different warnings were tried').toBeGreaterThan(1);
+  // Changing a rule on the other side doesn't move them either.
+  await joe.getByTestId('mode-knights').click();
+  await joe.getByTestId('mode-base').click();
+  expect(await spots()).toEqual(at0);
+
   // Alex edits the board: drag one tile onto another.
   await alex.getByTestId('edit-board').check();
   const board = (await tableOf(alex)).board.map;

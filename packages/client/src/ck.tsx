@@ -358,6 +358,7 @@ export function KnightSheet({
   v: PlayerView;
   at: number;
   acts: Action[];
+  /** Pick where it goes on the board (closes the sheet, keeping that mode on). */
   onMove: () => void;
   onChase: () => void;
   onClose: () => void;
@@ -382,6 +383,15 @@ export function KnightSheet({
         </button>
       }
     >
+      {k.p === v.me && v.turn === v.me && v.stage === 'main' && !has('moveKnight') && !has('chase') ? (
+        <p className="sub" data-testid="k-why">
+          {!k.on
+            ? 'Inactive: activate it (1 wheat) to move it on a later turn.'
+            : k.fresh
+              ? 'Activated this turn: it can move or chase on your next turn.'
+              : 'It has nowhere to go: knights move along your own roads.'}
+        </p>
+      ) : null}
       <div className="menuitems">
         <button
           className="btn"
@@ -399,26 +409,10 @@ export function KnightSheet({
         >
           Promote (1 sheep, 1 ore)
         </button>
-        <button
-          className="btn"
-          disabled={!has('moveKnight')}
-          onClick={() => {
-            onMove();
-            onClose();
-          }}
-          data-testid="k-move"
-        >
+        <button className="btn" disabled={!has('moveKnight')} onClick={onMove} data-testid="k-move">
           Move or chase away a weaker knight
         </button>
-        <button
-          className="btn"
-          disabled={!has('chase')}
-          onClick={() => {
-            onChase();
-            onClose();
-          }}
-          data-testid="k-chase"
-        >
+        <button className="btn" disabled={!has('chase')} onClick={onChase} data-testid="k-chase">
           Chase the robber
         </button>
       </div>

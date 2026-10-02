@@ -127,11 +127,6 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
       <div className="tbmap">
         <MapBoard map={map} tool={editing ? tool : null} onEdit={edit} heat={heat} highlight={hover} />
       </div>
-      {t.problem ? (
-        <p className="err" data-testid="board-problem">
-          {t.problem}
-        </p>
-      ) : null}
       {seated ? (
         <div className="tbcontrols">
           <div className="row tight">
@@ -330,6 +325,12 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
             </div>
           ) : null}
         </div>
+      ) : null}
+      {/* Under the buttons, so they stay put when it shows. */}
+      {t.problem ? (
+        <p className="err" data-testid="board-problem">
+          {t.problem}
+        </p>
       ) : null}
       <details className="tbdetails" open>
         <summary>Warnings ({warnings.length}) and fairness</summary>

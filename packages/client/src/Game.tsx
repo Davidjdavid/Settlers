@@ -1677,11 +1677,15 @@ export function Game({
           v={v}
           at={sheet.at}
           acts={acts}
+          // Closing the sheet here, not through onClose: that ends Knights mode, which used to
+          // switch the move straight back off (moving and chasing never reached the board).
           onMove={() => {
+            setSheet(null);
             setMode('kmove');
             setKFrom(sheet.at);
           }}
           onChase={() => {
+            setSheet(null);
             setMode('chase');
             setKFrom(sheet.at);
           }}
