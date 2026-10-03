@@ -212,7 +212,7 @@ export class Client {
       this.lastMsgAt = Date.now();
       this.set({ status: 'live' });
       if (this.state.roomCode) this.hello(this.state.roomCode);
-      else if (this.creating) this.send({ t: 'create' });
+      else if (this.creating) this.send({ t: 'create', full: true });
     };
     ws.onmessage = (ev) => {
       this.lastMsgAt = Date.now();
@@ -394,7 +394,7 @@ export class Client {
   createRoom() {
     this.creating = true;
     this.set({ roomCode: null, room: null, game: null, log: [], roomError: null });
-    this.send({ t: 'create' });
+    this.send({ t: 'create', full: true });
   }
 
   leaveRoom() {

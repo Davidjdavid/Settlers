@@ -9,7 +9,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { sitAs } from './table';
+import { baseGame, sitAs } from './table';
 
 interface Frame {
   t: string;
@@ -53,6 +53,7 @@ test('three players play a full game, surviving a reload and a server crash', as
     expect(code).toMatch(/^[A-Z0-9]{4}$/);
     const nicks = ['Ann', 'Bob', 'Cat'];
     await sitAs(a, nicks[0]!);
+    await baseGame(a);
     for (const [i, p] of [b, c].entries()) {
       await p.goto(`${server.url}/r/${code}`);
       await sitAs(p, nicks[i + 1]!);

@@ -75,7 +75,7 @@ test('three players use the table polish features through a whole game', async (
     await expect(a.locator('.seat:not(.open)')).toHaveCount(3);
     // The four game modes, picked by anyone seated and shown to everyone.
     await expect(a.locator('[data-testid^=mode-]')).toHaveCount(4);
-    await a.click('[data-testid=mode-full]');
+    // A new room starts on the Full game.
     await expect(c.getByTestId('mode-full')).toHaveClass(/on/);
     await a.click('[data-testid=mode-base]');
     await expect(b.getByTestId('mode-base')).toHaveClass(/on/);

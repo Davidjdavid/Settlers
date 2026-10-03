@@ -18,7 +18,7 @@
 
 import { expect, test, type BrowserContextOptions, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, confirmPlace, playUntil, sitAs, view, type Frame, type Table } from './table';
+import { checkFrames, confirmPlace, playUntil, baseGame, sitAs, view, type Frame, type Table } from './table';
 
 test.use({ actionTimeout: 15000 });
 test.setTimeout(30 * 60 * 1000);
@@ -82,6 +82,7 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await a.click('[data-testid=create]');
     const code = (await a.getByTestId('room-code').textContent())!.trim();
     await sitAs(a, 'Ann', 'red');
+    await baseGame(a);
     await b.goto(`${server.url}/r/${code}`);
     await sitAs(b, 'Bob', 'blue');
     await c.goto(`${server.url}/r/${code}`);

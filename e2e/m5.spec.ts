@@ -15,7 +15,7 @@
 
 import { expect, test, type BrowserContextOptions, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { sitAs, view, type Frame } from './table';
+import { baseGame, sitAs, view, type Frame } from './table';
 
 test.use({ actionTimeout: 15000 });
 test.setTimeout(20 * 60 * 1000);
@@ -67,6 +67,7 @@ test('three people play a whole game with the Milestone 5 features', async ({ br
     await a.click('[data-testid=create]');
     const code = (await a.getByTestId('room-code').textContent())!.trim();
     await sitAs(a, 'Ann', 'red');
+    await baseGame(a);
     for (const i of [1, 2]) {
       await pages[i]!.goto(`${server.url}/r/${code}`);
       await sitAs(pages[i]!, names[i]!, ['red', 'blue', 'yellow'][i]);

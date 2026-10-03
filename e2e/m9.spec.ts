@@ -12,7 +12,7 @@
 
 import { expect, test, type BrowserContextOptions, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, playUntil, sitAs, view, type Frame, type Table } from './table';
+import { checkFrames, playUntil, baseGame, sitAs, view, type Frame, type Table } from './table';
 
 test.use({ actionTimeout: 15000 });
 test.setTimeout(30 * 60 * 1000);
@@ -54,6 +54,7 @@ test('Milestone 9b: sounds with their own settings, and the dice pinned on scree
     await a.click('[data-testid=create]');
     const code = (await a.getByTestId('room-code').textContent())!.trim();
     await sitAs(a, 'Ann', 'red');
+    await baseGame(a);
     await b.goto(`${server.url}/r/${code}`);
     await sitAs(b, 'Bob', 'blue');
     await c.goto(`${server.url}/r/${code}`);

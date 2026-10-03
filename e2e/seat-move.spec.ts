@@ -70,7 +70,8 @@ test('your seat moves to the screen you pick your name on, in the lobby and mid-
 });
 
 test('the Stats page lists people, not CPUs, and a person can be deleted', async ({ browser }) => {
-  const p = await freshBrowser(browser, (await seatedTable(browser, server, ['Gus', 'Hal'])).code);
+  const t = await seatedTable(browser, server, ['Gus', 'Hal']);
+  const p = await freshBrowser(browser, t.code);
   // A name made here but never seated.
   await p.getByTestId('new-profile').click();
   await p.getByTestId('new-name').fill('Typo');
@@ -88,15 +89,24 @@ test('the Stats page lists people, not CPUs, and a person can be deleted', async
     .click();
   await p.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
   await expect(p.locator('[data-testid=stats-who][data-name=Typo]')).toHaveCount(0);
-  // Someone at a table can't be.
-  await p.locator('[data-testid=stats-who][data-name=Gus]').click();
-  await p.getByTestId('delete-profile').click();
-  await p
-    .getByRole('dialog')
-    .getByRole('button', { name: /^(Next|Continue|Yes|Delete)/ })
-    .first()
-    .click();
-  await p.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
-  await expect(p.getByText('Gus is at a table in room')).toBeVisible();
+  // Someone playing right now can't be.
+  const del = async (name: string) => {
+    await p.locator(`[data-testid=stats-who][data-name=${name}]`).click();
+    await p.getByTestId('delete-profile').click();
+    await p
+      .getByRole('dialog')
+      .getByRole('button', { name: /^(Next|Continue|Yes|Delete)/ })
+      .first()
+      .click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  };
+  await del('Gus');
+  await expect(p.getByText('Gus is playing right now in room')).toBeVisible();
   await expect(p.locator('[data-testid=stats-who][data-name=Gus]')).toBeVisible();
+  // Once Gus has gone, he can be, and his seat at the table that never started goes too.
+  await t.pages[0]!.close();
+  await del('Gus');
+  await expect(p.getByText('Gus was deleted and taken off 1 table')).toBeVisible();
+  await expect(p.locator('[data-testid=stats-who][data-name=Gus]')).toHaveCount(0);
+  await expect(t.pages[1]!.locator('.seat:not(.open)')).toHaveCount(1);
 });

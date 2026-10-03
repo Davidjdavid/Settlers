@@ -38,6 +38,7 @@ import {
 } from './table';
 import {
   DEFAULT_OPTIONS,
+  FULL_GAME_OPTIONS,
   OptionsSchema,
   SettingsSchema,
   type ClientMsg,
@@ -309,7 +310,7 @@ export class Rooms {
       case 'ping':
         return conn.send({ t: 'pong' });
       case 'create':
-        return this.create(conn);
+        return this.create(conn, !!msg.full);
       case 'hello':
         return this.hello(conn, msg.room, msg.token);
       case 'profiles':
@@ -422,7 +423,7 @@ export class Rooms {
     if (!wasConnected) this.broadcast(room, [], conn);
   }
 
-  private create(conn: Conn) {
+  private create(conn: Conn, full = false) {
     const code = this.newCode();
     const room: Room = {
       code,
@@ -431,9 +432,12 @@ export class Rooms {
       game: null,
       pendingReset: null,
       conns: new Set(),
-      options: structuredClone(DEFAULT_OPTIONS),
+      options: structuredClone(full ? FULL_GAME_OPTIONS : DEFAULT_OPTIONS),
     };
-    this.store.insertRoom({ code, createdAt: room.createdAt, seats: [], gameId: null, options: null });
+    this.store.tx(() => {
+      this.store.insertRoom({ code, createdAt: room.createdAt, seats: [], gameId: null, options: null });
+      if (full) this.store.saveOptions(code, room.options);
+    });
     this.rooms.set(code, room);
     this.log(`room ${code} created`);
     this.attach(conn, room, null);

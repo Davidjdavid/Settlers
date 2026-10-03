@@ -247,6 +247,13 @@ export const SettingsSchema = z.strictObject({
 export type PlayerSettings = z.infer<typeof SettingsSchema>;
 export type RoomOptions = z.infer<typeof OptionsSchema>;
 export const DEFAULT_OPTIONS: RoomOptions = { scenario: 'classic', winVP: 10, houseRules: {} };
+/** New rooms made from the home page start on the Full game (3 October): Seafarers and C&K. */
+export const FULL_GAME_OPTIONS: RoomOptions = {
+  scenario: 'heading-for-new-shores',
+  ck: true,
+  winVP: 17,
+  houseRules: {},
+};
 
 /* ---------- Maps (docs/maps.md 3) and generator presets (5.18) ---------- */
 
@@ -418,7 +425,8 @@ const nick = z.string().min(1).max(40);
 export const ClientMsgSchema = z.discriminatedUnion('t', [
   /** Attach to a room; with a token, resume your seat. */
   z.strictObject({ t: z.literal('hello'), room: roomCode, token: z.string().max(100).optional() }),
-  z.strictObject({ t: z.literal('create') }),
+  /** `full`: start on the Full game (the home page); otherwise the base game. */
+  z.strictObject({ t: z.literal('create'), full: z.literal(true).optional() }),
   /** Sit down as one of the profiles (SPEC 5.1). Your own seat back if it's already at the table. */
   /** `move`: your own seat is open on another screen; move it here (SPEC 4.6). */
   z.strictObject({

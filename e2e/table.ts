@@ -37,7 +37,17 @@ export async function sitAs(page: Page, name: string, color?: string) {
   await expect(page.locator('[data-testid=sit]')).toHaveCount(0);
 }
 
-/** Open n browsers, log in, create a room and seat everyone. */
+/**
+ * New rooms start on the Full game (3 October); tests that play the base game pick it, once the
+ * host is seated.
+ */
+export async function baseGame(host: Page) {
+  await expect(host.getByTestId('mode-full')).toHaveClass(/on/);
+  await host.click('[data-testid=mode-base]');
+  await expect(host.getByTestId('mode-base')).toHaveClass(/on/);
+}
+
+/** Open n browsers, log in, create a room and seat everyone (in the base game). */
 export async function seatedTable(browser: Browser, server: TestServer, nicks: string[]): Promise<Table> {
   const frames: Frame[][] = nicks.map(() => []);
   const errors: string[] = [];
@@ -57,6 +67,7 @@ export async function seatedTable(browser: Browser, server: TestServer, nicks: s
   await host.click('[data-testid=create]');
   const code = (await host.getByTestId('room-code').textContent())!.trim();
   await sitAs(host, nicks[0]!);
+  await baseGame(host);
   for (let i = 1; i < pages.length; i++) {
     await pages[i]!.goto(`${server.url}/r/${code}`);
     await sitAs(pages[i]!, nicks[i]!);

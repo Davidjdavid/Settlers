@@ -167,6 +167,23 @@ describe('room options', () => {
     expect(state(code).config.map?.id).toBe('heading-for-new-shores');
   });
 
+  it('a room made from the home page starts on the Full game, kept through a restart', () => {
+    const host = new FakeConn();
+    send(host, { t: 'create', full: true });
+    const code = host.last('sync').room.code;
+    const full = { scenario: 'heading-for-new-shores', ck: true, winVP: 17, houseRules: {} };
+    expect(rooms.getRoom(code)!.options).toEqual(full);
+    expect(host.last('sync').room.options).toEqual(full);
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    rooms = new Rooms(store, { log: quiet });
+    expect(rooms.getRoom(code)!.options).toEqual(full);
+    // Without it (older clients, tests), the base game as before.
+    const old = new FakeConn();
+    send(old, { t: 'create' });
+    expect(old.last('sync').room.options).toEqual({ scenario: 'classic', winVP: 10, houseRules: {} });
+  });
+
   it('older databases get the options column added', () => {
     store.close();
     const file = join(dir, 'old.db');
