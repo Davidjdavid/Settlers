@@ -107,9 +107,10 @@ test('everyone picks their own board style, at the table and mid-game', async ({
 
     // Nothing in front of the board: close any barbarian notice.
     for (const p of t.pages) {
+      // Anyone else's notice closes itself after 7 s, so it may go just as it's clicked.
       const ok = p.getByTestId('raid-ok');
-      if (await ok.isVisible().catch(() => false)) await ok.click();
-      await expect(p.locator('.back')).toHaveCount(0);
+      if (await ok.isVisible().catch(() => false)) await ok.click({ timeout: 2000 }).catch(() => {});
+      await expect(p.locator('.back')).toHaveCount(0, { timeout: 10_000 });
     }
     // Classic first: what each screen shows (its own click targets differ), then every style.
     const classic: Awaited<ReturnType<typeof contents>>[] = [];
