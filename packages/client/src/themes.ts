@@ -16,11 +16,12 @@ import {
   pixelBuilding,
   pixelRoad,
   pixelTextures,
+  pixelTile,
   pixelTokenBox,
   shade,
 } from './pixelart';
 
-export const STYLES = ['classic', 'pixel', 'wooden', 'flat', 'night'] as const;
+export const STYLES = ['classic', 'pixel', 'wooden', 'flat', 'night', 'crayon', 'smash'] as const;
 export type ArtStyle = (typeof STYLES)[number];
 export const STYLE_LABEL: Record<ArtStyle, string> = {
   classic: 'Classic',
@@ -28,6 +29,8 @@ export const STYLE_LABEL: Record<ArtStyle, string> = {
   wooden: 'Wooden',
   flat: 'Flat',
   night: 'Night',
+  crayon: 'Crayon',
+  smash: 'Smash',
 };
 export const STYLE_HELP: Record<ArtStyle, string> = {
   classic: 'The standard look.',
@@ -35,6 +38,9 @@ export const STYLE_HELP: Record<ArtStyle, string> = {
   wooden: 'Like the box: a wooden frame, painted tiles on grainy paper and wooden number discs.',
   flat: 'Simple bold shapes and big numbers. The easiest to read on a phone or across a room.',
   night: 'Dark tiles and glowing pieces and numbers. Easy on the eyes late at night.',
+  crayon: 'Drawn with crayons on paper: waxy hatched colour, wobbly outlines and hand-written numbers.',
+  smash:
+    'A fighting-game stage: floating platforms with neon edges over a cosmic sky, and numbers as damage percentages that get hotter the more often they roll.',
 };
 
 export interface Theme {
@@ -44,6 +50,8 @@ export interface Theme {
   glyph: Record<Terrain, string>;
   /** Pictures scattered round the tile, or one above the number. */
   decor: 'scatter' | 'single';
+  /** A tile drawn as a whole little landscape instead of scattered pictures (pixel). */
+  tileArt: ((t: Terrain, cx: number, cy: number, i: number) => string) | null;
   /** How big the pictures are, against the classic size. */
   glyphScale: number;
   /** Extra attributes on each picture (a filter, an opacity). */
@@ -71,6 +79,10 @@ export interface Theme {
   text: (x: number, y: number, s: string, size: number, color: string, weight?: number) => string;
   /** The outline round a piece in this colour. */
   edge: (color: string) => string;
+  /** Drawn under the filtered board (crayon's paper). */
+  underlay: (box: string) => string;
+  /** A filter on the whole board's tiles and sea (crayon's wobble and wax). */
+  boardFilter: string | null;
   /** Wrapped round every piece (night's glow). */
   piecesOpen: string;
   piecesClose: string;
@@ -154,6 +166,7 @@ const classic: Theme = {
   glyph: GLYPH,
   decor: 'scatter',
   glyphScale: 1,
+  tileArt: null,
   glyphAttr: (t) => ` opacity="${t === 'desert' ? 0.7 : 0.85}"`,
   seaDefs: `<pattern id="waves" width="54" height="26" patternUnits="userSpaceOnUse"><path d="M2 15q12.5-9 25 0t25 0" fill="none" stroke="#2a7183" stroke-width="2" stroke-linecap="round" opacity=".55"/></pattern>${glyphSymbols(GLYPH)}<radialGradient id="tokshade" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#eadfc2"/></radialGradient>`,
   sea: (box) =>
@@ -171,6 +184,8 @@ const classic: Theme = {
   token: classicToken,
   text: plainText,
   edge: edgeOf,
+  underlay: () => '',
+  boardFilter: null,
   piecesOpen: '',
   piecesClose: '',
   crisp: false,
@@ -193,6 +208,7 @@ const pixel: Theme = {
   glyph: PIXEL_GLYPH,
   decor: 'scatter',
   glyphScale: 1.35,
+  tileArt: pixelTile,
   glyphAttr: () => '',
   seaDefs: `<pattern id="pxwaves" width="64" height="40" patternUnits="userSpaceOnUse"><rect x="4" y="8" width="12" height="3" fill="#7ea6ff" opacity=".6"/><rect x="8" y="5" width="4" height="3" fill="#bcd2ff" opacity=".6"/><rect x="36" y="27" width="14" height="3" fill="#7ea6ff" opacity=".5"/><rect x="41" y="24" width="4" height="3" fill="#bcd2ff" opacity=".5"/></pattern>${pixelTextures(PIXEL_TILE)}${glyphSymbols(PIXEL_GLYPH)}<symbol id="px-boat" viewBox="-12 -12 24 24">${PIXEL_BOAT}</symbol>`,
   sea: (box) =>
@@ -216,9 +232,11 @@ const pixel: Theme = {
   },
   text: (x, y, s, size, color) => pixelText(x, y, s, size * 0.8, color),
   edge: () => '#141821',
-  piecesOpen: '<g shape-rendering="crispEdges">',
-  piecesClose: '</g>',
-  crisp: true,
+  underlay: () => '',
+  boardFilter: null,
+  piecesOpen: '',
+  piecesClose: '',
+  crisp: false,
 };
 
 const WOOD_TILE: Record<Terrain, string> = {
@@ -238,6 +256,7 @@ const wooden: Theme = {
   glyph: GLYPH,
   decor: 'scatter',
   glyphScale: 1,
+  tileArt: null,
   glyphAttr: (t) => ` opacity="${t === 'desert' ? 0.65 : 0.75}"`,
   seaDefs: `<pattern id="inkwaves" width="60" height="30" patternUnits="userSpaceOnUse"><path d="M3 17q13-9 27 0t27 0" fill="none" stroke="#2f5560" stroke-width="2" stroke-linecap="round" opacity=".5"/></pattern>${glyphSymbols(GLYPH)}<radialGradient id="woodtok" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="#f2d9a6"/><stop offset=".7" stop-color="#d8b07a"/><stop offset="1" stop-color="#b98a52"/></radialGradient><filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".75" numOctaves="2" seed="3"/><feColorMatrix type="saturate" values="0"/></filter><linearGradient id="frame" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a5a30"/><stop offset=".5" stop-color="#6e4421"/><stop offset="1" stop-color="#8a5a30"/></linearGradient>`,
   sea: (box) =>
@@ -263,6 +282,8 @@ const wooden: Theme = {
       `<text font-family="Georgia, 'Times New Roman', serif" `,
     ),
   edge: () => '#3b2410',
+  underlay: () => '',
+  boardFilter: null,
   piecesOpen: '',
   piecesClose: '',
   crisp: false,
@@ -285,6 +306,7 @@ const flat: Theme = {
   glyph: GLYPH,
   decor: 'single',
   glyphScale: 1,
+  tileArt: null,
   glyphAttr: () => ' opacity=".9"',
   seaDefs: glyphSymbols(GLYPH),
   sea: (box) => `<rect ${box} fill="#2479b8"/>`,
@@ -305,6 +327,8 @@ const flat: Theme = {
   text: (x, y, s, size, color) =>
     plainText(x, y, s, size, color, 800).replace('<text ', '<text font-family="system-ui, sans-serif" '),
   edge: edgeOf,
+  underlay: () => '',
+  boardFilter: null,
   piecesOpen: '',
   piecesClose: '',
   crisp: false,
@@ -329,6 +353,7 @@ const night: Theme = {
   glyph: GLYPH,
   decor: 'scatter',
   glyphScale: 1,
+  tileArt: null,
   glyphAttr: () => ' filter="url(#nightglyph)" opacity=".75"',
   seaDefs: `<pattern id="stars" width="70" height="56" patternUnits="userSpaceOnUse"><circle cx="9" cy="11" r="1.3" fill="#b9c8ff" opacity=".7"/><circle cx="44" cy="31" r="1" fill="#b9c8ff" opacity=".55"/><circle cx="61" cy="6" r=".9" fill="#ffe7a8" opacity=".6"/><path d="M14 46q10-6 20 0t20 0" fill="none" stroke="#1d3a5c" stroke-width="2" stroke-linecap="round" opacity=".6"/></pattern>${glyphSymbols(GLYPH)}<filter id="nightglyph"><feFlood flood-color="#f3e2b0"/><feComposite in2="SourceAlpha" operator="in"/></filter><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/><feFlood flood-color="#ffd98a" flood-opacity=".55"/><feComposite in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`,
   sea: (box) =>
@@ -349,12 +374,116 @@ const night: Theme = {
   },
   text: plainText,
   edge: () => NIGHT_EDGE,
+  underlay: () => '',
+  boardFilter: null,
   piecesOpen: '<g filter="url(#glow)">',
   piecesClose: '</g>',
   crisp: false,
 };
 
-export const THEMES: Record<ArtStyle, Theme> = { classic, pixel, wooden, flat, night };
+const CRAYON_TILE: Record<Terrain, string> = {
+  wood: '#3f8f4a',
+  brick: '#d4683f',
+  sheep: '#9ccf55',
+  wheat: '#f1c33f',
+  ore: '#8d96a3',
+  desert: '#e6d3a0',
+  gold: '#e0a92a',
+  sea: '#4a8fd8',
+  fog: '#9aa4aa',
+};
+/** Crayon hatching for a colour: strokes in a darker shade over a lighter wash. */
+const hatch = (id: string, color: string, angle: number) =>
+  `<pattern id="${id}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(${angle})"><rect width="9" height="9" fill="${shade(color, 0.35)}"/><path d="M0 2h9M0 6.5h9" stroke="${color}" stroke-width="3.2" stroke-linecap="round"/><path d="M0 4.3h9" stroke="${shade(color, -0.15)}" stroke-width="1.2" opacity=".6"/></pattern>`;
+const handFont = `font-family="'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', cursive"`;
+const crayon: Theme = {
+  id: 'crayon',
+  tile: CRAYON_TILE,
+  glyph: GLYPH,
+  decor: 'scatter',
+  glyphScale: 1.1,
+  tileArt: null,
+  glyphAttr: () => ' opacity=".9"',
+  seaDefs: `${glyphSymbols(GLYPH)}${(Object.keys(CRAYON_TILE) as Terrain[]).map((t, i) => hatch(`hatch-${t}`, CRAYON_TILE[t], 30 + (i % 3) * 25)).join('')}${hatch('hatch-water', '#4a8fd8', -20)}<filter id="crayonfx" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="7" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="1" seed="2" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 1.35" result="m"/><feComposite in="d" in2="m" operator="in"/></filter>`,
+  sea: (box) =>
+    `<rect ${box.replace(/rx="[^"]*"/, 'rx="18"')} fill="#fbf6e9"/><rect ${box.replace(/rx="[^"]*"/, 'rx="18"')} fill="url(#hatch-water)" opacity=".85"/>`,
+  seaHex: (cx, cy, i) =>
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#2f6fb8" stroke-width="1.5" opacity=".35" data-sea="${i}"/>`,
+  beach: ['#5a4a3a', '#efe0b8'],
+  hexStroke: (t) => shade(CRAYON_TILE[t], -0.45),
+  hexStrokeW: 3,
+  tileTexture: (t) => `url(#hatch-${t})`,
+  building: null,
+  road: null,
+  innerRing: null,
+  overlay: () => '',
+  token: (cx, cy, n) => {
+    const red = n === 6 || n === 8;
+    return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="#fffaf0" stroke="#3a3a3a" stroke-width="2.5"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.29 : 0.33) * K}" fill="${red ? '#d0281c' : '#2b2b2b'}" font-weight="700" ${handFont}>${n}</text>${pips(cx, cy + 0.2 * K, n, red ? '#d0281c' : '#2b2b2b')}`;
+  },
+  text: (x, y, s, size, color) =>
+    plainText(x, y, s, size, color, 700).replace('<text ', `<text ${handFont} `),
+  edge: () => '#2b2b2b',
+  underlay: (box) => `<rect ${box.replace(/rx="[^"]*"/, 'rx="18"')} fill="#fbf6e9"/>`,
+  boardFilter: 'url(#crayonfx)',
+  piecesOpen: '',
+  piecesClose: '',
+  crisp: false,
+};
+
+const SMASH_TILE: Record<Terrain, string> = {
+  wood: '#2f8a4c',
+  brick: '#cf5a36',
+  sheep: '#8ccf4c',
+  wheat: '#f0bf3a',
+  ore: '#8c95a8',
+  desert: '#d8c494',
+  gold: '#f0b020',
+  sea: '#1a1240',
+  fog: '#5a5a7a',
+};
+/** Damage colours: hotter the more often a number rolls. */
+const HEAT = ['#ffffff', '#ffffff', '#ffe14d', '#ffb347', '#ff7a3d', '#ff2d2d'];
+const smash: Theme = {
+  id: 'smash',
+  tile: SMASH_TILE,
+  glyph: GLYPH,
+  decor: 'scatter',
+  glyphScale: 1,
+  tileArt: null,
+  glyphAttr: () => ' opacity=".8"',
+  seaDefs: `${glyphSymbols(GLYPH)}<radialGradient id="stage" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#5a2a9a"/><stop offset=".45" stop-color="#22105a"/><stop offset="1" stop-color="#07051a"/></radialGradient><pattern id="rays" width="400" height="400" patternUnits="userSpaceOnUse"><path d="M200 200L0 0h60zM200 200L400 40v60zM200 200L300 400h-60zM200 200L0 260v60z" fill="#b48cff" opacity=".07"/></pattern><pattern id="sparks" width="90" height="70" patternUnits="userSpaceOnUse"><circle cx="12" cy="14" r="1.4" fill="#fff" opacity=".8"/><circle cx="61" cy="40" r="1" fill="#cfe8ff" opacity=".7"/><circle cx="80" cy="8" r="1.8" fill="#ffd6ff" opacity=".6"/></pattern><linearGradient id="platform" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4f72"/><stop offset="1" stop-color="#14162a"/></linearGradient>`,
+  sea: (box) =>
+    `<rect ${box} fill="url(#stage)"/><rect ${box} fill="url(#rays)"/><rect ${box} fill="url(#sparks)"/><rect ${box} fill="none" stroke="#7a5cff" stroke-width="2" opacity=".6"/>`,
+  seaHex: (cx, cy, i) =>
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#7a5cff" stroke-width="1.2" opacity=".18" data-sea="${i}"/>`,
+  beach: ['url(#platform)', '#1b1d33'],
+  hexStroke: () => '#6ff3ff',
+  hexStrokeW: 2.5,
+  tileTexture: () => null,
+  building: null,
+  road: null,
+  innerRing: 'rgba(255,255,255,.18)',
+  overlay: () => '',
+  token: (cx, cy, n) => {
+    const heat = HEAT[6 - Math.abs(7 - n)]!;
+    const style = `font-family="'Arial Black', 'Arial', sans-serif" font-weight="900" font-style="italic" paint-order="stroke" stroke="#0b0b14" stroke-linejoin="round"`;
+    return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.36 * K}" fill="#0b0b14" opacity=".55"/><text x="${f1(cx - 0.04 * K)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.3 : 0.36) * K}" fill="${heat}" stroke-width="5" ${style}>${n}</text><text x="${f1(cx + (n >= 10 ? 0.25 : 0.19) * K)}" y="${f1(cy + 0.1 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.16 * K}" fill="${heat}" stroke-width="3" ${style}>%</text>`;
+  },
+  text: (x, y, s, size, color) =>
+    plainText(x, y, s, size, color, 900).replace(
+      '<text ',
+      `<text font-family="'Arial Black', 'Arial', sans-serif" font-style="italic" `,
+    ),
+  edge: () => '#ffffff',
+  underlay: () => '',
+  boardFilter: null,
+  piecesOpen: '',
+  piecesClose: '',
+  crisp: false,
+};
+
+export const THEMES: Record<ArtStyle, Theme> = { classic, pixel, wooden, flat, night, crayon, smash };
 
 let current: Theme = classic;
 /** The style the board draws in now. */
@@ -373,6 +502,8 @@ export const GROUNDS: Record<ArtStyle, Record<string, string>> = {
   wooden: { ...WOOD_TILE, water: '#5b8a92' },
   flat: { ...FLAT_TILE, water: '#2479b8' },
   night: { ...NIGHT_TILE, water: '#050c18' },
+  crayon: { ...CRAYON_TILE, water: '#4a8fd8' },
+  smash: { ...SMASH_TILE, water: '#22105a' },
 };
 /** Styles whose pieces stand out by a light outline rather than by their colour (night). */
-export const OUTLINED: readonly ArtStyle[] = ['night'];
+export const OUTLINED: readonly ArtStyle[] = ['night', 'smash'];

@@ -228,41 +228,106 @@ export function pixelTextures(tile: Record<Terrain, string>): string {
 
 /* ---------- Pieces in a player's colour ---------- */
 
-const HOUSE = ['...rr...', '..rrrr..', '.rrrrrr.', 'RRRRRRRR', '.wwwwww.', '.wwddww.', '.wwddww.'];
-const CITY = [
-  '...rr.......',
-  '..rrrr......',
-  '.rrrrrr.....',
-  'RRRRRRRRwwww',
-  '.wwwwwwwwwww',
-  '.wwkwwddwkww',
-  '.wwwwwddwwww',
-];
-
-/** A settlement or city as pixels, in the player's colour (wall a lighter tint). */
+/** A settlement or city: the usual shape with a hard dark outline and a lighter roof. */
 export function pixelBuilding(kind: 'settlement' | 'city', x: number, y: number, color: string): string {
-  const pal = { r: shade(color, 0.25), R: shade(color, -0.25), w: color, d: '#2a1a0c', k: '#ffe9a8' };
-  const px = (kind === 'city' ? 0.05 : 0.045) * K;
-  return `<g transform="translate(${f1(x)} ${f1(y)})" shape-rendering="crispEdges">${sprite(kind === 'city' ? CITY : HOUSE, pal, px)}</g>`;
+  const u = K / 100;
+  const body =
+    kind === 'city'
+      ? `M${f1(x - 27 * u)} ${f1(y + 16 * u)}V${f1(y - 10 * u)}L${f1(x - 13.5 * u)} ${f1(y - 25 * u)}L${f1(x)} ${f1(y - 10 * u)}V${f1(y - 2 * u)}H${f1(x + 27 * u)}V${f1(y + 16 * u)}Z`
+      : `M${f1(x - 17 * u)} ${f1(y + 14 * u)}V${f1(y - 4 * u)}L${f1(x)} ${f1(y - 21 * u)}L${f1(x + 17 * u)} ${f1(y - 4 * u)}V${f1(y + 14 * u)}Z`;
+  const roof =
+    kind === 'city'
+      ? `M${f1(x - 27 * u)} ${f1(y - 10 * u)}L${f1(x - 13.5 * u)} ${f1(y - 25 * u)}L${f1(x)} ${f1(y - 10 * u)}Z`
+      : `M${f1(x - 17 * u)} ${f1(y - 4 * u)}L${f1(x)} ${f1(y - 21 * u)}L${f1(x + 17 * u)} ${f1(y - 4 * u)}Z`;
+  const door = `<rect x="${f1(x - (kind === 'city' ? 17 : 4) * u)}" y="${f1(y + 4 * u)}" width="${f1(7 * u)}" height="${f1(10 * u)}" fill="${shade(color, -0.45)}"/>`;
+  return `<path d="${body}" fill="${color}" stroke="#141821" stroke-width="3" stroke-linejoin="miter"/><path d="${roof}" fill="${shade(color, 0.3)}" stroke="#141821" stroke-width="3" stroke-linejoin="miter"/>${door}`;
 }
 
-/** A road as a row of chunky squares along its edge. */
+/** A road: a straight bar with a dark outline and a light top edge. */
 export function pixelRoad(x1: number, y1: number, x2: number, y2: number, color: string): string {
-  const n = 7;
-  const s = 0.13 * K;
+  const l = `x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}"`;
+  return `<line ${l} stroke="#141821" stroke-width="${f1(0.21 * K)}"/><line ${l} stroke="${color}" stroke-width="${f1(0.13 * K)}"/><line ${l} stroke="${shade(color, 0.35)}" stroke-width="${f1(0.04 * K)}" transform="translate(0 ${f1(-0.03 * K)})"/>`;
+}
+
+/* ---------- Tiles as little landscapes ---------- */
+
+const CANOPY = [
+  '..llll..',
+  '.lmmmml.',
+  'lmmmmmmd',
+  'mmmmmmdd',
+  'mmmmmddd',
+  '.mmdddd.',
+  '..dddd..',
+  '...tt...',
+];
+const BUSH = ['.lll.', 'lmmmd', 'mmmdd', '.ddd.'];
+const TUFT = ['.g.g.', 'gGgGg'];
+const FLOWER = ['.w.', 'wyw', '.w.'];
+const FIELD = [
+  'yyyyyyyyyyyy',
+  'YYYYYYYYYYYY',
+  'yyyyyyyyyyyy',
+  'YYYYYYYYYYYY',
+  'yyyyyyyyyyyy',
+  'YYYYYYYYYYYY',
+];
+const HAY = ['..hhh..', '.hHHHh.', 'hHhhhHh', 'hhhhhhh'];
+const PIT = ['..rrrrrr..', '.rRRRRRRr.', 'rRddddddRr', 'rRddddddRr', '.rRRRRRRr.', '..rrrrrr..'];
+const PEAK = ['.....w......', '....wwg.....', '...wwggd....', '..wggggdd...', '.gggggdddd..', 'gggggddddddd'];
+const SMALL_PEAK = ['...w....', '..wwg...', '.wgggd..', 'ggggddd.'];
+const DUNE = ['....ss....', '..ssddss..', 'ssd....dss'];
+const ROCK = ['.rr.', 'rRRr', '.RR.'];
+const MINE = ['..bbbbbb..', '.bkkkkkkb.', 'bkkkkkkkkb', 'bkkyykkkkb', 'bkykyykykb'];
+const SPARK = ['.w.', 'www', '.w.'];
+const CLOUD2 = ['..wwww....', '.wwwwwwww.', 'wwwwwwwwww', '.ssssssss.'];
+
+type Feature = [rows: string[], pal: Record<string, string>];
+const F: Record<string, Feature> = {
+  canopy: [CANOPY, { l: '#7fd36a', m: '#3d9447', d: '#25683a', t: '#5a3a1c' }],
+  canopy2: [CANOPY, { l: '#9be07a', m: '#4fae52', d: '#2f7a3e', t: '#5a3a1c' }],
+  bush: [BUSH, { l: '#b6ec7c', m: '#6fbf45', d: '#4a8f30' }],
+  tuft: [TUFT, { g: '#5fa63a', G: '#3f7d2a' }],
+  flower: [FLOWER, { w: '#ffffff', y: '#ffd24a' }],
+  field: [FIELD, { y: '#f6d872', Y: '#d4a73a' }],
+  hay: [HAY, { h: '#e8b54a', H: '#c58a1e' }],
+  pit: [PIT, { r: '#e38c5d', R: '#b04628', d: '#6e2412' }],
+  rock: [ROCK, { r: '#b9a58a', R: '#8a7660' }],
+  peak: [PEAK, { w: '#ffffff', g: '#a7b0ba', d: '#5d6672' }],
+  peak2: [SMALL_PEAK, { w: '#ffffff', g: '#a7b0ba', d: '#5d6672' }],
+  dune: [DUNE, { s: '#f3e2b4', d: '#c9ad6f' }],
+  mine: [MINE, { b: '#6b4523', k: '#1e1408', y: '#ffd24a' }],
+  spark: [SPARK, { w: '#fff6c8' }],
+  cloud: [CLOUD2, { w: '#eef3f5', s: '#b9c6cc' }],
+};
+/** Where features go on a tile (fractions of the hex size), clear of the number in the middle. */
+const SPOTS: [number, number][] = [
+  [-0.42, -0.5], [0.42, -0.5], [-0.66, 0.02], [0.66, 0.02], [-0.42, 0.54], [0.42, 0.54], [0, -0.7], [0, 0.72],
+]; // prettier-ignore
+const LAYOUT: Record<Terrain, string[]> = {
+  wood: ['canopy', 'canopy2', 'canopy', 'canopy', 'canopy2', 'canopy', 'canopy2', 'canopy'],
+  sheep: ['bush', 'tuft', 'flower', 'tuft', 'bush', 'tuft', 'flower', 'tuft'],
+  wheat: ['field', 'hay', 'field', 'field', 'hay', 'field', 'hay', 'field'],
+  brick: ['pit', 'rock', 'pit', 'pit', 'rock', 'pit', 'pit', 'rock'],
+  ore: ['peak', 'peak2', 'peak', 'peak2', 'peak', 'peak', 'peak2', 'peak'],
+  desert: ['dune', 'rock', 'dune', 'dune', 'rock', 'dune', 'dune', 'rock'],
+  gold: ['mine', 'spark', 'rock', 'spark', 'mine', 'spark', 'rock', 'spark'],
+  fog: ['cloud', 'cloud', 'cloud', 'cloud', 'cloud', 'cloud', 'cloud', 'cloud'],
+  sea: [],
+};
+/** A tile's landscape: its features round the tile, varied a little from tile to tile. */
+export function pixelTile(t: Terrain, cx: number, cy: number, i: number): string {
+  const kinds = LAYOUT[t];
+  const px = 0.046 * K;
   let out = '';
-  for (let i = 0; i < n; i++) {
-    const t = (i + 0.5) / n;
-    const x = x1 + (x2 - x1) * t;
-    const y = y1 + (y2 - y1) * t;
-    out += `<rect x="${f1(x - s / 2 - 1.5)}" y="${f1(y - s / 2 - 1.5)}" width="${f1(s + 3)}" height="${f1(s + 3)}" fill="#141821"/>`;
-  }
-  for (let i = 0; i < n; i++) {
-    const t = (i + 0.5) / n;
-    const x = x1 + (x2 - x1) * t;
-    const y = y1 + (y2 - y1) * t;
-    out += `<rect x="${f1(x - s / 2)}" y="${f1(y - s / 2)}" width="${f1(s)}" height="${f1(s)}" fill="${color}"/><rect x="${f1(x - s / 2)}" y="${f1(y - s / 2)}" width="${f1(s)}" height="${f1(s / 3)}" fill="${shade(color, 0.3)}"/>`;
-  }
+  SPOTS.forEach(([fx, fy], j) => {
+    const kind = kinds[(j + i) % kinds.length];
+    if (!kind) return;
+    const [rows, pal] = F[kind]!;
+    const jx = (((i * 7 + j * 3) % 5) - 2) * 0.02 * K;
+    const jy = (((i * 5 + j * 11) % 5) - 2) * 0.02 * K;
+    out += `<g transform="translate(${f1(cx + fx * K + jx)} ${f1(cy + fy * K + jy)})">${sprite(rows, pal, px)}</g>`;
+  });
   return `<g shape-rendering="crispEdges">${out}</g>`;
 }
 

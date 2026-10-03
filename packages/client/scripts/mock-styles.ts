@@ -29,7 +29,9 @@ function board(style: (typeof STYLES)[number]): string {
   const t = T();
   const out: string[] = [];
   const box = `x="${vb[0]! + 2}" y="${vb[1]! + 2}" width="${vb[2]! - 4}" height="${vb[3]! - 4}" rx="${0.45 * K}"`;
-  out.push(`<defs>${t.seaDefs}</defs>${t.sea(box)}`);
+  out.push(
+    `<defs>${t.seaDefs}</defs>${t.underlay(box)}<g${t.boardFilter ? ` filter="${t.boardFilter}"` : ''}>${t.sea(box)}`,
+  );
   const lands = g.hexes.filter((_, i) => land(i));
   for (const h of lands)
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.1 * K)}" fill="${t.beach[0]}"/>`);
@@ -49,6 +51,7 @@ function board(style: (typeof STYLES)[number]): string {
       out.push(
         `<polygon points="${hexPts(cx, cy, 0.8 * K)}" fill="none" stroke="${t.innerRing}" stroke-width="2"/>`,
       );
+    if (t.tileArt) return out.push(t.tileArt(hx.t, cx, cy, i));
     const spots = t.decor === 'single' ? [[-90, 0.58] as const] : DECOR;
     spots.forEach(([ang, rad], j) => {
       if (t.decor === 'scatter' && (i + j) % 6 === 2) return;
@@ -60,6 +63,7 @@ function board(style: (typeof STYLES)[number]): string {
     });
   });
   out.push(t.overlay(vb));
+  out.push('</g>');
   s.board.hexes.forEach((hx, i) => {
     if (hx.n) out.push(t.token(g.hexes[i]!.x * K, g.hexes[i]!.y * K, hx.n));
   });
