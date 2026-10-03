@@ -281,7 +281,7 @@ test('three players use the table polish features through a whole game', async (
         count.card.some((x) => x === 0) &&
         before.stage === 'main' &&
         top >= before.winVP - 2 &&
-        before.winVP < 16
+        before.winVP < 25
       ) {
         await openMenu(p);
         await p.getByTestId('menu-rules').click();

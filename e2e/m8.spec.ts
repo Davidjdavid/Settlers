@@ -523,10 +523,13 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
             (b: any, i: number) => b && b[0] === v.me && b[1] === lvl && !v.ck.walls.includes(i),
           );
         let at = mine(need === 'city' ? 2 : 1);
+        if (at < 0) at = mine(need === 'city' ? 1 : 2);
         if (at < 0) {
-          at = mine(need === 'city' ? 1 : 2);
-          v.verts[at] = [v.me, need === 'city' ? 2 : 1];
+          // Every building of mine walled: take one and its wall off.
+          at = v.verts.findIndex((b: any) => b && b[0] === v.me);
+          v.ck.walls = v.ck.walls.filter((w: number) => w !== at);
         }
+        v.verts[at] = [v.me, need === 'city' ? 2 : 1];
         const free = v.verts
           .flatMap((b: unknown, i: number) => (b ? [] : [i]))
           .filter((_: number, i: number) => i % 9 === 4);

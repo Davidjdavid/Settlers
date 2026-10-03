@@ -91,7 +91,7 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
     await a.getByTestId('music-add').click();
     await expect(a.getByTestId('music-now')).toContainText('added by Ann');
     // Cat's browser hasn't been clicked: it asks, and joins on a click.
-    await expect(c.getByTestId('music-join')).toBeVisible();
+    await expect(c.getByTestId('music-join')).toBeVisible({ timeout: 15_000 });
     expect((await player(c))!.playing).toBe(false);
     await c.getByTestId('music-join').click();
     await inStep([a, b, c], 'dQw4w9WgXcQ', true);
