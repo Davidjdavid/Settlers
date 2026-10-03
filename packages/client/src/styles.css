@@ -4025,3 +4025,48 @@ button.vp {
     gap: 4px;
   }
 }
+
+/* Table music (SPEC 12): the hidden player, the join button, the queue. */
+.musichost {
+  position: fixed;
+  left: -400px;
+  top: 0;
+  width: 200px;
+  height: 120px;
+  opacity: 0;
+  pointer-events: none;
+}
+.musicjoin {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--lantern-2, #f5c04a);
+  background: var(--panel, #13232b);
+  color: var(--ink, #f4ecd6);
+  font: inherit;
+  cursor: pointer;
+}
+.musicbtn.on {
+  color: var(--lantern-2, #f5c04a);
+}
+.music {
+  display: grid;
+  gap: 12px;
+}
+.music .nowplaying {
+  display: grid;
+  gap: 4px;
+}
+.musicqueue {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+.musicqueue li button {
+  margin-left: 6px;
+}

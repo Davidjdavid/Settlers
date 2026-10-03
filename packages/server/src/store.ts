@@ -56,6 +56,8 @@ export interface RoomRow {
   options: unknown;
   /** The pre-game table (docs/pregame.md) as JSON, or null if it has none yet. */
   table?: unknown;
+  /** The room's music (SPEC 12) as JSON, or null. */
+  music?: unknown;
 }
 
 export interface GameRow {
@@ -261,6 +263,9 @@ export class Store {
     // Schema 4 (Milestone 6): the pre-game table.
     if (!cols.some((c) => c.name === 'table_json'))
       this.db.exec('ALTER TABLE rooms ADD COLUMN table_json TEXT');
+    // Schema 6 (SPEC 12): the room's music.
+    if (!cols.some((c) => c.name === 'music_json'))
+      this.db.exec('ALTER TABLE rooms ADD COLUMN music_json TEXT');
     // Schema 5: deleted profiles (from the Stats page). Their games keep their names.
     const pcols = this.db.prepare('PRAGMA table_info(profiles)').all() as { name: string }[];
     if (!pcols.some((c) => c.name === 'deleted_at'))
@@ -529,6 +534,10 @@ export class Store {
       .run(nickKey(nick), JSON.stringify(settings), at);
   }
 
+  saveMusic(code: string, music: unknown) {
+    this.db.prepare('UPDATE rooms SET music_json = ? WHERE code = ?').run(JSON.stringify(music), code);
+  }
+
   saveOptions(code: string, options: unknown) {
     this.db.prepare('UPDATE rooms SET options_json = ? WHERE code = ?').run(JSON.stringify(options), code);
   }
@@ -542,7 +551,7 @@ export class Store {
   loadRooms(): RoomRow[] {
     const rows = this.db
       .prepare(
-        'SELECT code, created_at, seats_json, game_id, options_json, table_json FROM rooms WHERE closed_at IS NULL',
+        'SELECT code, created_at, seats_json, game_id, options_json, table_json, music_json FROM rooms WHERE closed_at IS NULL',
       )
       .all() as {
       code: string;
@@ -551,6 +560,7 @@ export class Store {
       game_id: string | null;
       options_json: string | null;
       table_json: string | null;
+      music_json: string | null;
     }[];
     return rows.map((r) => ({
       code: r.code,
@@ -559,6 +569,7 @@ export class Store {
       gameId: r.game_id,
       options: r.options_json ? JSON.parse(r.options_json) : null,
       table: r.table_json ? JSON.parse(r.table_json) : null,
+      music: r.music_json ? JSON.parse(r.music_json) : null,
     }));
   }
 

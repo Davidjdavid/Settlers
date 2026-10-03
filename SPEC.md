@@ -1078,6 +1078,25 @@ The exact rules, including what happens when the bank or a deck runs out, get wr
 2. A browser test on a laptop, a tablet and a phone: boxes moved, docked to each edge, floated, hidden and peeked; the prompt and a discard still appear with everything hidden; the layout survives a reload and a new device; Reset.
 3. `npm run check` green, then deploy.
 
+## Milestone 12: Table music (3 October)
+
+Asked for: "a way for someone to link their Spotify playlist or YouTube videos", then: anyone pastes a link, shared play/pause/skip, each person's own volume, late joiners in sync.
+
+### 12.1 What it does
+
+- **YouTube only.** Anyone at the table (players and watchers) pastes a YouTube link: a video, or a playlist. Spotify isn't offered: its web player needs every listener to have Premium and log in to Spotify, so it can't be shared like this.
+- **One shared player per room**, in the lobby and in the game: what's playing, play/pause, skip to the next, and a queue (each pasted link goes on the end; the first plays at once). Anyone can press them; the log notes who ("Ann added a song", "Bob paused the music").
+- **In sync.** The server keeps what's playing and when it started (its own clock); every screen plays the same video at the same point, and a screen that joins or reloads jumps to where everyone is. Screens more than 2 s out are put back in line.
+- **Your own volume and a mute,** saved on your profile like the sounds (SPEC 9.4). Muting doesn't stop it for anyone else.
+- **Browsers block sound until you've clicked the page;** until then the player says "Click to join the music".
+- The game never waits for the music, and a video that won't play (removed, embedding off) is skipped for everyone, with a log note.
+
+### 12.2 Reliability
+
+- The music is room state on the server, saved with the room, validated with zod (a link must be a YouTube video or playlist id; the queue holds at most 50).
+- YouTube's player is loaded only once someone adds music, so a room without music loads nothing from YouTube.
+- Tests: the server's music state and its timing on a fake clock (`music.test.ts`); in the browser, three screens with a stand-in player (YouTube isn't reachable from the test machines): one adds a link, all play it at the same point, pause and skip reach everyone, a late joiner and a reload land in sync, volume and mute are each person's own.
+
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
 - Options for a more competent CPU player.

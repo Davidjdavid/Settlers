@@ -16,6 +16,7 @@ import type {
   DiceInfo,
   GameStatsInfo,
   LogItem,
+  MusicOp,
   PlayerRecord,
   PlayerSettings,
   ProfileInfo,
@@ -548,6 +549,11 @@ export class Client {
   resetCancel() {
     this.send({ t: 'resetCancel' });
   }
+  /** Table music (SPEC 12). */
+  music(op: MusicOp) {
+    this.send({ t: 'music', op });
+  }
+
   saveSettings(settings: PlayerSettings) {
     this.send({ t: 'saveSettings', settings });
   }

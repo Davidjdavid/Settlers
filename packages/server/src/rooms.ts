@@ -53,6 +53,7 @@ import {
   type TableInfo,
   type TableOp,
 } from './protocol';
+import { emptyMusic, isMusic, musicOp, type MusicOp, type MusicState } from './music';
 import { diceForRoll } from './dice';
 import { nickKey, type ActionRow, type ChatRow, type GameRow, type SeatRow, type Store } from './store';
 
@@ -93,6 +94,8 @@ export interface Room {
   table?: { state: TableState; board: TableBoard };
   /** The table as saved, until it's first needed. */
   savedTable?: unknown;
+  /** Table music (SPEC 12), once anyone has added some. */
+  music?: MusicState;
 }
 
 export interface RoomsOptions {
@@ -267,6 +270,7 @@ export class Rooms {
         pendingReset: null,
         conns: new Set(),
         ...(r.table ? { savedTable: r.table } : {}),
+        ...(isMusic(r.music) ? { music: r.music } : {}),
       };
       if (r.gameId) {
         const row = this.store.loadGame(r.gameId);
@@ -396,6 +400,8 @@ export class Rooms {
         return this.act(conn, room, msg.id, msg.action);
       case 'chat':
         return this.chat(conn, room, msg.text);
+      case 'music':
+        return this.music(conn, room, msg.op);
       case 'resetRequest':
         return this.resetRequest(conn, room, msg.kind ?? 'reset');
       case 'resetConfirm':
@@ -1213,6 +1219,20 @@ export class Rooms {
     this.store.saveOptions(room.code, room.options);
   }
 
+  /** Table music (SPEC 12): anyone in the room, seated or watching. */
+  private music(conn: Conn, room: Room, op: MusicOp) {
+    const who = room.seats.find((s) => s.pid === conn.pid)?.nick ?? 'Someone';
+    const r = musicOp(room.music ?? emptyMusic(), op, who, this.now());
+    if (!r.ok) return conn.send({ t: 'error', text: r.error });
+    if (r.st === room.music) return;
+    room.music = r.st;
+    this.store.tx(() => {
+      this.store.saveMusic(room.code, r.st);
+      if (r.note) this.sys(room, r.note);
+    });
+    this.broadcast(room, this.takeSys(room));
+  }
+
   private chat(conn: Conn, room: Room, raw: string) {
     const text = cleanText(raw);
     if (!text) return;
@@ -1710,6 +1730,7 @@ export class Rooms {
         : null,
       myProfile: room.seats.find((s) => s.pid === conn.pid)?.profileId ?? null,
       ...(room.game ? {} : { table: this.tableInfo(room) }),
+      ...(room.music ? { music: { ...room.music, now: this.now() } } : {}),
     };
   }
 

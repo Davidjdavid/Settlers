@@ -4,6 +4,8 @@
  */
 
 import { z } from 'zod';
+import type { MusicOp, MusicState } from './music';
+export type { MusicOp } from './music';
 import type {
   Color,
   CpuLevel,
@@ -239,6 +241,10 @@ export const SettingsSchema = z.strictObject({
     .optional(),
   /** Knights: the event die's colour with a roll, "9 blue" (default), "blue 9" or left out. */
   eventDieText: z.enum(['after', 'before', 'off']).optional(),
+  /** Table music (SPEC 12): your own volume (0–100) and mute. */
+  music: z
+    .strictObject({ vol: z.number().int().min(0).max(100).optional(), muted: z.boolean().optional() })
+    .optional(),
   /** Table talk's size: folded to its title, short, normal (default) or tall. */
   talk: z.enum(['min', 'short', 'normal', 'tall']).optional(),
   /** SPEC 11: your own screen layout, one per kind of screen (none: the standard screen). */
@@ -430,6 +436,20 @@ export type TableOp = z.infer<typeof TableOpSchema>;
 const roomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);
 const nick = z.string().min(1).max(40);
 
+const ver = z.number().int().min(0);
+/** Table music changes (SPEC 12, server/src/music.ts). */
+export const MusicOpSchema = z.discriminatedUnion('k', [
+  z.strictObject({ k: z.literal('add'), url: z.string().min(1).max(400) }),
+  z.strictObject({ k: z.literal('play') }),
+  z.strictObject({ k: z.literal('pause') }),
+  z.strictObject({ k: z.literal('skip'), ver, last: z.boolean().optional() }),
+  z.strictObject({ k: z.literal('ended'), ver, last: z.boolean().optional() }),
+  z.strictObject({ k: z.literal('error'), ver }),
+  z.strictObject({ k: z.literal('title'), ver, title: z.string().min(1).max(300) }),
+  z.strictObject({ k: z.literal('remove'), i: z.number().int().min(0).max(100) }),
+  z.strictObject({ k: z.literal('stop') }),
+]);
+
 export const ClientMsgSchema = z.discriminatedUnion('t', [
   /** Attach to a room; with a token, resume your seat. */
   z.strictObject({ t: z.literal('hello'), room: roomCode, token: z.string().max(100).optional() }),
@@ -508,6 +528,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   /** `id` makes resends after a dropped connection safe: an id is applied at most once. */
   z.strictObject({ t: z.literal('act'), id: z.string().min(1).max(64), action: ActionSchema }),
   z.strictObject({ t: z.literal('chat'), text: z.string().min(1).max(240) }),
+  /** Table music (SPEC 12): anyone in the room. */
+  z.strictObject({ t: z.literal('music'), op: MusicOpSchema }),
   /** End the game (reset) or "Save and quit" (quit): asks everyone first, then confirm. */
   z.strictObject({ t: z.literal('resetRequest'), kind: z.enum(['reset', 'quit']).optional() }),
   z.strictObject({ t: z.literal('resetConfirm') }),
@@ -682,6 +704,8 @@ export interface RoomInfo {
   myProfile: string | null;
   /** The pre-game table, before a game starts. */
   table?: TableInfo;
+  /** The room's music (SPEC 12), once anyone has added some; `now` is the server's clock. */
+  music?: MusicState & { now: number };
 }
 
 export type LogItem =

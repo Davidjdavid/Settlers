@@ -7,6 +7,7 @@ import { client, useClient } from './net';
 import { MapEditorPage, MapsPage } from './maps';
 import { CpusPage } from './cpus';
 import { StatsPage } from './stats';
+import { MusicHost } from './music';
 
 function roomFromPath(): string | null {
   const m = /^\/r\/([A-Za-z0-9]{4,8})\/?$/.exec(location.pathname);
@@ -74,6 +75,7 @@ export function App() {
   return (
     <>
       {body}
+      {st.room ? <MusicHost /> : null}
       <Flights />
       <div className="toasts" aria-live="polite">
         {st.toasts.map((t) => (

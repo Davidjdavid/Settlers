@@ -5,6 +5,7 @@ import { COLORS, PLAYER_COLORS, SCENARIOS, type Color } from '@settlers/engine';
 import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
 import { BRAND_SVG, PCOL, PEDGE, PNAME, K, cityPath, settlementPath } from './art';
 import { DICE_CHOICES, Help, RULE_HELP } from './help';
+import { MusicButton, MusicSheet } from './music';
 import { RULE_LABEL } from './text';
 import { client, useClient } from './net';
 import { Brand, ProfilePicker } from './home';
@@ -60,6 +61,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const [profile, setProfile] = useState<{ id: string; color: Color } | null>(null);
   const [color, setColor] = useState<Color | null>(null);
   const [cpus, setCpus] = useState(false);
+  const [music, setMusic] = useState(false);
   const free = PLAYER_COLORS.filter((c) => !taken.has(c));
   // Your favourite colour if it's free, else the first free one.
   const pick =
@@ -104,7 +106,9 @@ export function Lobby({ room }: { room: RoomInfo }) {
           >
             Copy invite link
           </button>
+          <MusicButton onOpen={() => setMusic(true)} />
         </div>
+        {music ? <MusicSheet onClose={() => setMusic(false)} /> : null}
         <div className="seats">
           {room.seats.map((s) =>
             s.cpu ? (

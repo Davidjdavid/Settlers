@@ -28,6 +28,13 @@ Object.assign(window, {
     legal: (game: PlayerView | null = client.state.game) =>
       game && game.me != null ? legalActions(stateFromView(game), game.me) : [],
     sounds: () => played.slice(),
+    // Table music with the tests' stand-in player (SPEC 12): what it's playing, and where.
+    music: () => {
+      const w = window as { __settlersMusic?: { state?: () => unknown }; __settlersMusicBlocked?: boolean };
+      return { player: w.__settlersMusic?.state?.() ?? null, blocked: !!w.__settlersMusicBlocked };
+    },
+    musicEnd: () => (window as { __settlersMusic?: { end?: () => void } }).__settlersMusic?.end?.(),
+    musicFail: () => (window as { __settlersMusic?: { fail?: () => void } }).__settlersMusic?.fail?.(),
     // `byHand`: move types the test will make through the UI instead (returned as 'skip:<type>').
     botStep: async (byHand: string[] = []) => {
       const v = client.state.game;

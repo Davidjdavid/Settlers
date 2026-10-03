@@ -15,6 +15,7 @@ import {
 import { Board, NO_TARGETS, type Ghost, type Targets } from './Board';
 import { settingOn } from './help';
 import { AskSheet, RulesSheet, SettingsSheet } from './settings';
+import { MusicButton, MusicSheet } from './music';
 import { RollDice } from './dice';
 import { RaidNotice, type Raid } from './raid';
 import { DicePanel, GameStatsView } from './stats';
@@ -92,6 +93,7 @@ type SheetState =
   | { k: 'claim'; seat: number; nick: string }
   | { k: 'ask'; title: string; sub?: string; yes: string; onYes: () => void; body?: React.ReactNode }
   | { k: 'settings' }
+  | { k: 'music' }
   | { k: 'rules' }
   | { k: 'dice' }
   | { k: 'quit' };
@@ -1662,6 +1664,7 @@ export function Game({
           title={status}
           data-testid="sync"
         />
+        <MusicButton onOpen={() => setSheet({ k: 'music' })} />
         {dice ? (
           <button className="btn small ghost" onClick={() => setSheet({ k: 'dice' })} data-testid="open-dice">
             Dice<span className="wide-only"> stats</span>
@@ -1817,6 +1820,7 @@ export function Game({
           }
         />
       ) : null}
+      {sheet?.k === 'music' ? <MusicSheet onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'settings' ? (
         <SettingsSheet mine={room.mySettings} onClose={() => setSheet(null)} />
       ) : null}
