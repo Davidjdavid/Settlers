@@ -80,8 +80,8 @@ export interface Theme {
   /** Definitions (patterns, filters, gradients) and the sea behind the island. */
   seaDefs: string;
   sea: (box: string) => string;
-  /** A sea hex's own outline, and anything drawn on it (pixel boats). */
-  seaHex: (cx: number, cy: number, i: number) => string;
+  /** A sea hex's own outline, and anything drawn on it (pixel boats); `plain` (a harbor there): no boats. */
+  seaHex: (cx: number, cy: number, i: number, plain?: boolean) => string;
   beach: [string, string];
   /** A tile's outline colour. */
   hexStroke: (t: Terrain) => string;
@@ -244,11 +244,13 @@ const pixel: Theme = {
   seaDefs: `<pattern id="pxwaves" width="64" height="40" patternUnits="userSpaceOnUse"><rect x="4" y="8" width="12" height="3" fill="#7ea6ff" opacity=".6"/><rect x="8" y="5" width="4" height="3" fill="#bcd2ff" opacity=".6"/><rect x="36" y="27" width="14" height="3" fill="#7ea6ff" opacity=".5"/><rect x="41" y="24" width="4" height="3" fill="#bcd2ff" opacity=".5"/></pattern>${pixelTextures(PIXEL_TILE)}${glyphSymbols(PIXEL_GLYPH)}<symbol id="px-boat" viewBox="-12 -12 24 24">${PIXEL_BOAT}</symbol>`,
   sea: (box) =>
     `<rect ${box.replace(/rx="[^"]*"/, 'rx="0"')} fill="#2c5bc4"/><rect ${box.replace(/rx="[^"]*"/, 'rx="0"')} fill="url(#pxwaves)"/>`,
-  seaHex: (cx, cy, i) =>
+  seaHex: (cx, cy, i, plain) =>
     `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="#3a69d0" stroke="#2650b0" stroke-width="3" data-sea="${i}"/><polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="url(#tx-sea)" pointer-events="none"/>` +
-    (i % 5 === 2
-      ? `<use href="#px-boat" x="${f1(cx - 0.34 * K)}" y="${f1(cy - 0.34 * K)}" width="${f1(0.68 * K)}" height="${f1(0.68 * K)}"/>`
-      : `<use href="#g-sea" x="${f1(cx - 0.32 * K)}" y="${f1(cy - 0.12 * K)}" width="${f1(0.64 * K)}" height="${f1(0.64 * K)}" opacity=".85"/>`),
+    (plain
+      ? ''
+      : i % 5 === 2
+        ? `<use href="#px-boat" x="${f1(cx - 0.34 * K)}" y="${f1(cy - 0.34 * K)}" width="${f1(0.68 * K)}" height="${f1(0.68 * K)}"/>`
+        : `<use href="#g-sea" x="${f1(cx - 0.32 * K)}" y="${f1(cy - 0.12 * K)}" width="${f1(0.64 * K)}" height="${f1(0.64 * K)}" opacity=".85"/>`),
   beach: ['#f3dea0', '#c49a52'],
   hexStroke: (t) => shade(PIXEL_TILE[t], -0.55),
   hexStrokeW: 3,
@@ -805,9 +807,9 @@ const pikmin: Theme = {
   glyphAttr: () => ' opacity=".85"',
   seaDefs: `${glyphSymbols(GLYPH)}<pattern id="ripples" width="70" height="44" patternUnits="userSpaceOnUse"><ellipse cx="18" cy="14" rx="10" ry="3.5" fill="none" stroke="#8fd3cc" stroke-width="1.4" opacity=".5"/><ellipse cx="52" cy="34" rx="7" ry="2.5" fill="none" stroke="#8fd3cc" stroke-width="1.2" opacity=".4"/></pattern><pattern id="soil" width="18" height="18" patternUnits="userSpaceOnUse"><rect width="18" height="18" fill="#6b4a2b"/><circle cx="4" cy="5" r="1.6" fill="#8a6440"/><circle cx="13" cy="12" r="1.3" fill="#4e341c"/><circle cx="10" cy="3" r="1" fill="#9a7550"/></pattern>`,
   sea: (box) => `<rect ${box} fill="#2f7f7a"/><rect ${box} fill="url(#ripples)"/>`,
-  seaHex: (cx, cy, i) =>
+  seaHex: (cx, cy, i, plain) =>
     `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#bfe9e4" stroke-width="1" opacity=".12" data-sea="${i}"/>` +
-    (i % 4 === 1
+    (!plain && i % 4 === 1
       ? `<g transform="translate(${f1(cx)} ${f1(cy)}) rotate(${(i * 47) % 360})"><path d="M0 0L${f1(0.36 * K)} -6A${f1(0.37 * K)} ${f1(0.37 * K)} 0 1 0 ${f1(0.36 * K)} 6Z" fill="#5fae4f" stroke="#2f6b2a" stroke-width="1.6"/></g>${i % 8 === 1 ? bloom(cx + 8, cy - 6, '#f8bbd0') : ''}`
       : ''),
   beach: ['url(#soil)', '#8a6a3e'],

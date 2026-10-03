@@ -157,7 +157,7 @@ export function landArtSVG(t: Terrain, cx: number, cy: number, i: number): strin
   return out.join('');
 }
 
-function staticSVG(board: BoardData, g: Geometry, vb: number[], no3to1 = false): string {
+export function staticSVG(board: BoardData, g: Geometry, vb: number[], no3to1 = false): string {
   const th = T();
   const out: string[] = [];
   out.push(seaDefs(vb));
@@ -169,6 +169,14 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[], no3to1 = false):
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.1 * K)}" fill="${th.beach[0]}"/>`);
   for (const h of landHexes)
     out.push(`<polygon points="${hexPts(h.x * K, h.y * K, 1.035 * K)}" fill="${th.beach[1]}"/>`);
+  // Open water first: harbors sit out on it, so whatever a style draws there (Pixel's solid water
+  // and boats, Pikmin's lily pads) must be under them, and the water a harbor sits on stays plain.
+  const harborWater = new Set(board.ports.flatMap((pt) => g.edges[pt.e]!.hexes));
+  board.hexes.forEach((hx, i) => {
+    const h = g.hexes[i]!;
+    // A faint outline so you can see where the pirate can go.
+    if (hx.t === 'sea') out.push(th.seaHex(h.x * K, h.y * K, i, harborWater.has(i)));
+  });
   // With "3:1 bank trades for everyone", 3:1 harbors would give nothing extra: not drawn (SPEC 8.11 D5).
   board.ports.forEach((pt, i) => {
     if (no3to1 && pt.t === 'any') return;
@@ -183,11 +191,7 @@ function staticSVG(board: BoardData, g: Geometry, vb: number[], no3to1 = false):
     const h = g.hexes[i]!;
     const cx = h.x * K;
     const cy = h.y * K;
-    if (hx.t === 'sea') {
-      // A faint outline so you can see where the pirate can go.
-      out.push(th.seaHex(cx, cy, i));
-      return;
-    }
+    if (hx.t === 'sea') return;
     if (hx.t === 'fog') {
       out.push(
         `<polygon points="${hexPts(cx, cy, 0.965 * K)}" fill="${th.tile.fog}" stroke="${th.hexStroke('fog')}" stroke-width="2" data-fog="${i}"/>`,
