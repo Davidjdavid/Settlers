@@ -54,3 +54,38 @@ describe('Four Islands (3 October: the two right islands touched)', () => {
       }
   });
 });
+
+describe('the maps added 3 October: islands and the sea between them', () => {
+  it.each([
+    // [map, island sizes (largest first), fewest sea tiles between any two islands]
+    ['classic-isles-far', [19, 3, 3, 3, 3, 3, 3, 2], 2],
+    ['archipelago', [3, 3, 3, 3, 3, 3, 3, 3, 2, 2], 1],
+    ['the-crossing', [17, 17, 2, 2, 1], 1],
+    ['atoll', [7, 7, 7, 7], 1],
+  ] as const)('%s', (id, sizes, gap) => {
+    const m = SCENARIOS[id]!;
+    expect(Object.values(m.pools ?? {}).every((p) => !p.terrain.includes('sea'))).toBe(true);
+    const parts = islandsOf(m);
+    expect(parts.map((p) => p.length).sort((a, b) => b - a)).toEqual([...sizes]);
+    for (let i = 0; i < parts.length; i++)
+      for (const b of parts.slice(i + 1)) {
+        const closest = Math.min(...parts[i]!.flatMap((x) => b.map((y) => dist(x, y))));
+        expect(closest - 1).toBeGreaterThanOrEqual(gap);
+      }
+    // Everyone can start, and the islands beyond the start are worth reaching.
+    expect(m.players).toEqual([3, 4]);
+    expect(m.specialVP?.newIsland).toBe(2);
+  });
+
+  it('the far-apart isles are two sea tiles from the home island, the Crossing’s shores three apart', () => {
+    for (const [id, gap] of [
+      ['classic-isles-far', 2],
+      ['the-crossing', 3],
+    ] as const) {
+      const parts = islandsOf(SCENARIOS[id]!).sort((a, b) => b.length - a.length);
+      const [big, second] = [parts[0]!, parts[1]!];
+      const closest = Math.min(...big.flatMap((x) => second.map((y) => dist(x, y))));
+      expect(closest - 1, id).toBeGreaterThanOrEqual(gap);
+    }
+  });
+});

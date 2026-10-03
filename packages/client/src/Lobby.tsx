@@ -389,6 +389,10 @@ const SEA_MAPS: [RoomOptions['scenario'], string][] = [
   ['four-islands-far', 'Four Islands, far apart'],
   ['treasure-fog', 'Treasure Fog'],
   ['classic-isles', 'Classic and the Isles'],
+  ['classic-isles-far', 'Classic and the Isles, far apart'],
+  ['archipelago', 'Archipelago'],
+  ['the-crossing', 'The Crossing'],
+  ['atoll', 'The Atoll'],
 ];
 const modeOf = (o: RoomOptions): Mode =>
   o.scenario === 'classic' ? (o.ck ? 'knights' : 'base') : o.ck ? 'full' : 'seafarers';

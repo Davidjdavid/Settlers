@@ -248,6 +248,10 @@ test('a new map from a copy of a premade Seafarers map', async ({ browser }) => 
     'Four Islands',
     'Four Islands, far apart',
     'Treasure Fog',
+    'Classic and the Isles, far apart',
+    'Archipelago',
+    'The Crossing',
+    'The Atoll',
   ]);
   await page.getByTestId('copy-premade').selectOption('fog-islands');
   await expect(page).toHaveURL(/\/maps\/copy-fog-islands$/);
@@ -255,6 +259,13 @@ test('a new map from a copy of a premade Seafarers map', async ({ browser }) => 
   await expect(page.getByTestId('map-name')).toHaveValue('Fog Islands (copy)');
   // The Fog Islands as they are: fog round a home island of blanks.
   expect(await page.locator('[data-kind=hex][data-t=fog]').count()).toBeGreaterThan(5);
+  // Uncovering fog pays on the Fog Islands (seafarers.md §11.5); the switch turns it off and on.
+  const pays = page.getByTestId('fog-rewards');
+  await expect(pays).toBeChecked();
+  await pays.uncheck();
+  await expect(pays).not.toBeChecked();
+  await page.getByTestId('undo-edit').click();
+  await expect(pays).toBeChecked();
   const blank = page.locator('[data-kind=hex][data-t=random]').first();
   const [q, r] = [Number(await blank.getAttribute('data-q')), Number(await blank.getAttribute('data-r'))];
   await page.getByTestId('tool-terrain-ore').click();

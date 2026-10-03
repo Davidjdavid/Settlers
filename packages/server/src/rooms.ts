@@ -14,7 +14,7 @@ import {
   COLORS, type CpuMemo, StatsFold, cpuChat, type CpuLevel, type GameStats, cpuObserve, cloneJson, type CpuBrain,
   type CpuOptions,
   type Action, type Color, type GameEvent, type GameState, type NewPlayer, type PlayerView, type MapData,
-  type GenRules, type EditOp, OUR_RULES, scenarioMap, isLogNote, logNotes, type LogNote,
+  ANYTHING_GOES, type GenRules, type EditOp, OUR_RULES, scenarioMap, isLogNote, logNotes, type LogNote,
 } from '@settlers/engine'; // prettier-ignore
 import { History, modeOf } from './history';
 import { MapLibrary } from './maps';
@@ -1352,14 +1352,30 @@ export class Rooms {
     return room.table;
   }
 
-  /** The mode's board, filled the standard way; used only if nothing else can be made. */
+  /**
+   * The mode's board when nothing else can be made: filled the standard way, or failing that with
+   * no number rules at all, or failing even that (a broken map) the mode's own standard board. A
+   * bounded number of tries: a map no seed can fill once froze the whole server here.
+   */
   private emergencyBoard(room: Room): TableBoard {
     const map = this.modeMap(room);
-    for (let i = 0; ; i++) {
-      const seed = `fallback-${i}`;
-      const r = fillBoard(map, STANDARD_FILL, seed, 4);
-      if (r.ok) return { map: r.map, source: { kind: 'default' }, seed, edited: [] };
-    }
+    const sea = map.modules.includes('seafarers');
+    const tries: [MapData, GenRules][] = [
+      [map, STANDARD_FILL],
+      [map, ANYTHING_GOES],
+      [SCENARIOS[sea ? 'heading-for-new-shores' : 'classic']!, ANYTHING_GOES],
+    ];
+    for (const [m, rules] of tries)
+      for (let i = 0; i < 20; i++) {
+        const seed = `fallback-${i}`;
+        const r = fillBoard(m, rules, seed, 4);
+        if (r.ok) {
+          if (m !== map || rules !== STANDARD_FILL)
+            this.log(`room ${room.code}: ${map.id} board filled without its rules`);
+          return { map: r.map, source: { kind: 'default' }, seed, edited: [] };
+        }
+      }
+    throw new Error(`no board can be made for ${map.id}`);
   }
 
   /** The mode's own map for the seats at the table (a 3-player layout where there is one). */
@@ -1786,7 +1802,10 @@ export function optionsFor(c: Partial<GameConfig>): RoomOptions {
   // Any Seafarers board resumes in the Seafarers modes; anything else in the base modes.
   const scenario: RoomOptions['scenario'] =
     c.map &&
-    ['fog-islands', 'four-islands', 'four-islands-far', 'treasure-fog', 'classic-isles'].includes(c.map.id)
+    [
+      'fog-islands', 'four-islands', 'four-islands-far', 'treasure-fog', 'classic-isles', 'classic-isles-far',
+      'archipelago', 'the-crossing', 'atoll',
+    ].includes(c.map.id) // prettier-ignore
       ? (c.map.id as RoomOptions['scenario'])
       : c.map?.modules.includes('seafarers')
         ? 'heading-for-new-shores'

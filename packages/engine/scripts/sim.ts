@@ -109,6 +109,30 @@ const SIMS: Record<string, Scenario> = {
     maxTurns: 3000,
     rules: ['n', 'b', 'f', 'hu'],
   },
+  'classic-isles-far': {
+    map: SCENARIOS['classic-isles-far']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu', 'k'],
+  },
+  archipelago: {
+    map: SCENARIOS['archipelago']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu', 'k'],
+  },
+  'the-crossing': {
+    map: SCENARIOS['the-crossing']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu', 'k'],
+  },
+  atoll: {
+    map: SCENARIOS['atoll']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu', 'k'],
+  },
   'treasure-fog-ck': {
     map: SCENARIOS['treasure-fog']!,
     modules: ['seafarers', 'citiesKnights'],
@@ -163,6 +187,10 @@ const DEFAULT_GAMES: Record<string, number> = {
   'four-islands-far': 200,
   'treasure-fog': 200,
   'classic-isles': 200,
+  'classic-isles-far': 200,
+  archipelago: 200,
+  'the-crossing': 200,
+  atoll: 200,
   'treasure-fog-ck': 100,
 };
 

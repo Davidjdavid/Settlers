@@ -7,6 +7,10 @@ import fourIslands from '../maps/four-islands.json';
 import fourIslandsFar from '../maps/four-islands-far.json';
 import treasureFog from '../maps/treasure-fog.json';
 import classicIsles from '../maps/classic-isles.json';
+import classicIslesFar from '../maps/classic-isles-far.json';
+import archipelago from '../maps/archipelago.json';
+import theCrossing from '../maps/the-crossing.json';
+import atoll from '../maps/atoll.json';
 import type { MapData } from './map';
 import { CLASSIC_MAP } from './rules';
 
@@ -23,6 +27,14 @@ export const SCENARIOS: Record<string, MapData> = {
   'treasure-fog': treasureFog as unknown as MapData,
   /** The classic board with a big sea to the east, where islands come up at random. */
   'classic-isles': classicIsles as unknown as MapData,
+  /** The classic board and seven small islands, at least two sea tiles from it and from each other (3 October). */
+  'classic-isles-far': classicIslesFar as unknown as MapData,
+  /** Ten small islands one sea tile apart and no home island: start anywhere (3 October). */
+  archipelago: archipelago as unknown as MapData,
+  /** Two big islands facing each other across a wide channel, gold isles in the middle (3 October). */
+  'the-crossing': theCrossing as unknown as MapData,
+  /** A ring of land around a lagoon, broken by three inlets, with a rich island in the middle (3 October). */
+  atoll: atoll as unknown as MapData,
 };
 
 /**
@@ -46,4 +58,7 @@ export function scenarioMap(scenario: string, players: number): MapData {
  * a copy would turn that sea into land (test/maps.test.ts checks every map listed here copies
  * exactly).
  */
-export const COPYABLE_MAPS = ['heading-for-new-shores', 'fog-islands', 'four-islands', 'four-islands-far', 'treasure-fog'] as const; // prettier-ignore
+export const COPYABLE_MAPS = [
+  'heading-for-new-shores', 'fog-islands', 'four-islands', 'four-islands-far', 'treasure-fog', 'classic-isles-far',
+  'archipelago', 'the-crossing', 'atoll',
+] as const; // prettier-ignore

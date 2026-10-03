@@ -12,6 +12,7 @@ import {
   checkBoard,
   legalActions,
   OUR_RULES,
+  SCENARIOS,
   seedRng,
   standardBlank,
   viewFor,
@@ -21,7 +22,7 @@ import {
 import { ClientMsgSchema, type ClientMsg, type ServerMsg, type TableInfo } from '../src/protocol';
 import { Rooms, type Conn } from '../src/rooms';
 import { Store } from '../src/store';
-import { setupSnake, turnOrder, type Luck } from '../src/table';
+import { STANDARD_FILL, fillBoard, setupSnake, turnOrder, type Luck } from '../src/table';
 import { joinAs } from './util';
 
 class FakeConn implements Conn {
@@ -444,4 +445,58 @@ describe('the table', () => {
     restart();
     expect(JSON.stringify(state(code))).toBe(before);
   });
+});
+
+describe('a board that the standard way can’t fill (3 October: a new map froze the server)', () => {
+  it('every premade map fills the standard way', () => {
+    for (const [id, map] of Object.entries(SCENARIOS))
+      expect(fillBoard(map, STANDARD_FILL, 'premade', 4).ok, `${id} fills the standard way`).toBe(true);
+  });
+
+  it('falls back instead of trying seeds forever', () => {
+    const saved = SCENARIOS.atoll!;
+    try {
+      // Three tiles that all touch, with three red numbers: no board keeps the 6s and 8s apart.
+      SCENARIOS.atoll = {
+        ...saved,
+        hexes: [
+          { q: 0, r: 0, t: 'random', pool: 'p', n: 'random' },
+          { q: 1, r: 0, t: 'random', pool: 'p', n: 'random' },
+          { q: 0, r: 1, t: 'random', pool: 'p', n: 'random' },
+          ...[
+            [-1, 0],
+            [-1, 1],
+            [0, -1],
+            [1, -1],
+            [2, -1],
+            [2, 0],
+            [1, 1],
+            [-1, 2],
+            [0, 2],
+          ].map(([q, r]) => ({ q: q!, r: r!, t: 'sea' as const })),
+        ],
+        pools: { p: { terrain: ['wood', 'brick', 'sheep'], numbers: [6, 8, 6] } },
+        harbors: [],
+        harborPool: [],
+        start: 'all',
+        robber: null,
+        pirate: null,
+      };
+      expect(fillBoard(SCENARIOS.atoll, STANDARD_FILL, 'x', 4).ok).toBe(false);
+      const { conns } = seated(['Ann', 'Bob', 'Cat']);
+      const t0 = Date.now();
+      send(conns[0]!, { t: 'setOptions', options: { scenario: 'atoll', winVP: 13, houseRules: {} } });
+      expect(Date.now() - t0).toBeLessThan(20_000);
+      const tb = info(conns[1]!);
+      // The tiles are there, numbers and all (the touching-reds rule had to give way).
+      expect(
+        tb.board.map.hexes
+          .filter((h) => h.t !== 'sea')
+          .map((h) => h.n)
+          .sort(),
+      ).toEqual([6, 6, 8]);
+    } finally {
+      SCENARIOS.atoll = saved;
+    }
+  }, 60_000);
 });

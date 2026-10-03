@@ -14,14 +14,16 @@ import { act, reject } from './helpers';
 import { seatsFor } from './simulate';
 
 /**
- * Every published scenario with Seafarers rules and a starting area. Not Four Islands (you start
- * on any island, by design) or Treasure Fog (all land outside the start is under fog at first).
+ * Every published scenario with Seafarers rules and a starting area. Not Four Islands or the
+ * Archipelago (you start on any island, by design) or Treasure Fog (all land outside the start is
+ * under fog at first).
  */
 const SEA = [...Object.values(SCENARIOS), HFNS_3_OLD].filter(
   (m) =>
     m.modules.includes('seafarers') &&
     m.id !== 'four-islands' &&
     m.id !== 'four-islands-far' &&
+    m.id !== 'archipelago' &&
     m.id !== 'treasure-fog',
 );
 

@@ -131,6 +131,10 @@ export const OptionsSchema = z.strictObject({
     'four-islands-far',
     'treasure-fog',
     'classic-isles',
+    'classic-isles-far',
+    'archipelago',
+    'the-crossing',
+    'atoll',
   ]),
   /** Cities & Knights on top of the scenario. */
   ck: z.boolean().optional(),
