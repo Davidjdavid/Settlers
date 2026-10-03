@@ -230,6 +230,7 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
 
 - **How:** if you leave a game (or lose your device), open the room code and enter **the same nickname**. If that player's seat is disconnected, you get it straight back, with no takeover warning.
 - **If the seat is open on another screen** (another tab, a page left open, a phone that dropped off without saying): your name can still be picked. One more tap ("Move my seat here") moves the seat to this screen, and the other screen is told and just watches. Changed on 2 October after a player got stuck: their own seat was held by a second copy of the page.
+- **Back by mistake** (a phone's back swipe mid-game): the start page offers **Back to your game · room CODE** for the room this browser last sat in, and the browser's Forward button returns to the game too (3 October bug hunt).
 - **The game simply waits** while someone is away, and carries on once they're back.
 - **Taking over someone else's seat** keeps its two-step warning.
 
@@ -612,7 +613,7 @@ The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 **Status: done and live (deployed 2026-10-02).** Your answers are in 8.11. Decided while building:
 
 - **The log's robber line** ("The robber blocked 1 Brick from Joe") is a note the server works out from the board after each roll, not a new game event, so every saved game replays exactly as saved and old games get the line too.
-- **Laptops and desktops** (1180px wide and up at the display size): the game fits the window and the page never scrolls. The board shrinks a little to keep the prompt in view, the log fills the bottom of the left column, and a column with more than fits (four players in Knights on a 1366×768 screen) scrolls inside itself, keeping whoever's turn it is in view.
+- **Laptops and desktops** (1180px wide and up at the display size): the game fits the window and the page never scrolls. The board shrinks a little to keep the prompt in view, the log fills the bottom of the left column, and a column with more than fits (three or four players in Knights on a 1366×768 screen) scrolls inside itself, keeping whoever's turn it is in view; anyone scrolled out of the players box is named at its foot with their points, and tapping the name scrolls to them (3 October bug hunt).
 
 ### 8.1 Bank supply
 
@@ -1088,7 +1089,8 @@ Asked for: "a way for someone to link their Spotify playlist or YouTube videos",
 - **One shared player per room**, in the lobby and in the game: what's playing, play/pause, skip to the next, Stop, and a queue (each pasted link goes on the end; the first plays at once). Anyone can press them; the log notes who ("Ann added a song", "Bob paused the music"). **Stop** stops the music for everyone and goes back to the start of the song; the queue stays. **Clear the queue** (asks first) takes off what's waiting; the song playing carries on.
 - **In sync.** The server keeps what's playing and when it started (its own clock); every screen plays the same video at the same point, and a screen that joins or reloads jumps to where everyone is. Screens more than 3 s out are put back in line; paused or stopped, every screen sits on exactly the same point. In a playlist, YouTube moves on to the next video by itself: the first screen to get there tells the server, and everyone follows (a screen already on it isn't restarted). A song's name is taken only from a player that's actually playing that song.
 - **Your own volume and a mute,** for players and watchers: a change applies on that screen at once, is kept on that device, and (when seated) on your profile like the sounds (SPEC 9.4). Mute pauses the music on your screen only (that works on every device); unmuting joins back in where everyone is. iPhones and iPads don't let a page set YouTube's volume, so there the sheet says to use the device's volume buttons.
-- **Browsers block sound until you've clicked the page;** until then the player says "Click to join the music".
+- **Browsers block sound until you've clicked the page;** until then the player says "Click to join the music" (only when the player is held back two seconds running, not while it loads or buffers on a slow connection).
+- **Song names:** the first name a screen reports stands (YouTube can give screens in other languages different names). Taking a song off the queue takes off that song, even if the queue moved on before the click arrived.
 - The game never waits for the music, and a video that won't play (removed, embedding off) is skipped for everyone, with a log note.
 
 ### 12.2 Reliability
