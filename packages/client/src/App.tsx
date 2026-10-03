@@ -22,7 +22,7 @@ export function App() {
     const onPop = () => {
       const code = roomFromPath();
       if (code) client.openRoom(code);
-      else if (client.state.roomCode) client.leaveRoom();
+      else if (client.state.roomCode) client.leaveRoom(false);
       client.popped();
     };
     const nudge = () => client.nudge();

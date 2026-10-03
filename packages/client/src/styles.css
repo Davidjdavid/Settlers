@@ -4111,3 +4111,10 @@ button.vp {
     display: none;
   }
 }
+
+/* Home: back to the room you sit in (after Back by mistake). */
+.backtogame {
+  display: block;
+  width: 100%;
+  margin-bottom: 16px;
+}

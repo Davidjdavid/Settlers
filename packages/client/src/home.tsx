@@ -68,12 +68,25 @@ export function Home({ error }: { error: string | null }) {
     if (st.status === 'live') client.loadSaved();
   }, [st.status]);
   const saved = st.saved ?? [];
+  const last = client.lastRoom();
   return (
     <div className="center">
       <div className="card">
         <Brand />
         <h2>Start or join a game</h2>
         <p className="lede">Create a room and share the code, or enter a friend’s code.</p>
+        {last ? (
+          <button
+            className="btn primary backtogame"
+            data-testid="back-to-game"
+            onClick={() => {
+              history.pushState(null, '', `/r/${last}`);
+              client.openRoom(last);
+            }}
+          >
+            Back to your game · room {last}
+          </button>
+        ) : null}
         <div className="row" style={{ marginBottom: 16 }}>
           <button className="btn primary" onClick={() => client.createRoom()} data-testid="create">
             Create a room

@@ -72,6 +72,8 @@ export interface Fresh {
 }
 
 const tokenKey = (room: string) => `settlers.token.${room}`;
+/** The last room this browser sat in, for "Back to your game" on the home page. */
+const LAST_ROOM = 'settlers.lastRoom';
 
 function storage(): Storage | null {
   try {
@@ -277,6 +279,7 @@ export class Client {
     switch (m.t) {
       case 'seat':
         setStored(tokenKey(m.room), m.token);
+        setStored(LAST_ROOM, m.room);
         return;
       case 'sync': {
         if (this.creating || this.resuming) {
@@ -386,6 +389,11 @@ export class Client {
 
   /* ---------- Room actions ---------- */
 
+  /** The room this browser last sat in, if it still holds a seat there. */
+  lastRoom(): string | null {
+    const code = getStored(LAST_ROOM);
+    return code && getStored(tokenKey(code)) ? code : null;
+  }
   openRoom(code: string) {
     this.waiting.clear();
     this.set({ roomCode: code, room: null, game: null, log: [], roomError: null, pending: 0 });
@@ -398,9 +406,11 @@ export class Client {
     this.send({ t: 'create', full: true });
   }
 
-  leaveRoom() {
+  /** Out of the room to the start page. `push` false: the browser already moved (Back), and a new
+   * history entry would drop Forward, the way back to the game. */
+  leaveRoom(push = true) {
     this.set({ roomCode: null, room: null, game: null, log: [], roomError: null, path: '/' });
-    history.pushState(null, '', '/');
+    if (push) history.pushState(null, '', '/');
     this.ws?.close();
   }
 

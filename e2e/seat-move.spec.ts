@@ -66,6 +66,22 @@ test('your seat moves to the screen you pick your name on, in the lobby and mid-
   await tab.locator('[data-testid=rejoin][data-name=Dave]').click();
   await tab.getByTestId('rejoin-move').click();
   await expect.poll(async () => (await view(tab))?.me).toBe(seat);
+
+  /* ---------- Back by mistake ---------- */
+  // Back leaves the game for the start page, which offers the way back; Forward works too.
+  const url = eve.url();
+  const eveSeat = (await view(eve)).me;
+  await eve.goBack();
+  await expect(eve.getByTestId('back-to-game')).toContainText(t.code);
+  await eve.getByTestId('back-to-game').click();
+  await expect(eve.locator('#board')).toBeVisible();
+  await expect.poll(async () => (await view(eve))?.me).toBe(eveSeat);
+  await eve.goBack();
+  await expect(eve.getByTestId('back-to-game')).toBeVisible();
+  await eve.goForward();
+  await expect(eve.locator('#board')).toBeVisible();
+  expect(eve.url()).toBe(url);
+  await expect.poll(async () => (await view(eve))?.me).toBe(eveSeat);
   expect(t.errors).toEqual([]);
 });
 
