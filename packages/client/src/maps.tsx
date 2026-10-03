@@ -289,6 +289,13 @@ export function MapBoard(props: {
   const isPicked = (t: Target) => !!picked && same(picked, t);
 
   const statics = useMemo(() => seaSVG(vb), [vb, props.style]);
+  // The water a harbor sits on stays plain (no boat or lily pad under its marker), as in the game.
+  const harborWater = new Set(
+    map.harbors.flatMap((hb) => {
+      const land = hexAt(map.hexes, hb.q, hb.r);
+      return land < 0 ? [] : g.edges[edgeOfSide(g, land, hb.side)]!.hexes;
+    }),
+  );
   return (
     <svg
       className={`mapboard${tool ? ` tool-${tool.k}` : ''} ${props.className ?? ''}`}
@@ -309,7 +316,9 @@ export function MapBoard(props: {
         if (h.t === 'sea')
           return (
             <g key={i} data-kind="hex" data-q={h.q} data-r={h.r} data-t="sea">
-              {th.id === 'classic' ? null : <g dangerouslySetInnerHTML={{ __html: th.seaHex(cx, cy, i) }} />}
+              {th.id === 'classic' ? null : (
+                <g dangerouslySetInnerHTML={{ __html: th.seaHex(cx, cy, i, harborWater.has(i)) }} />
+              )}
               <polygon
                 points={hexPts(cx, cy, 0.97 * K)}
                 fill={th.id === 'classic' ? 'rgba(255,255,255,.04)' : 'transparent'}

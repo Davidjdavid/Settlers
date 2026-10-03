@@ -219,6 +219,35 @@ export function Game({
     if (r.top < b.top) box.scrollTop += r.top - b.top - 4;
     else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 4;
   }, [v.turn]);
+  // Players scrolled out of that box are named at its foot with their points, so nobody is out of
+  // sight without a sign (a laptop's Knights game fits two of three rows).
+  const [outOfView, setOutOfView] = useState<number[]>([]);
+  useEffect(() => {
+    const box = playersBox.current;
+    const list = box?.querySelector('.players');
+    if (!box || !list) return;
+    const check = () => {
+      const b = box.getBoundingClientRect();
+      const foot = box.querySelector<HTMLElement>('.morebelow');
+      const bottom = b.bottom - (foot?.offsetHeight ?? 0);
+      const out: number[] = [];
+      for (const r of box.querySelectorAll<HTMLElement>('.players .player')) {
+        const rr = r.getBoundingClientRect();
+        if (Math.min(rr.bottom, bottom) - Math.max(rr.top, b.top) < rr.height * 0.6)
+          out.push(Number(r.dataset.seat));
+      }
+      setOutOfView((h) => (h.join() === out.join() ? h : out));
+    };
+    check();
+    box.addEventListener('scroll', check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(box);
+    ro.observe(list);
+    return () => {
+      box.removeEventListener('scroll', check);
+      ro.disconnect();
+    };
+  }, [v.players.length]);
   // The win celebration plays once, when the game ends while you're watching (SPEC 5.13).
   const [celebrating, setCelebrating] = useState(false);
   const wasPlaying = useRef(v.phase === 'play');
@@ -1509,6 +1538,31 @@ export function Game({
           </div>
         ))}
       </div>
+      {outOfView.length ? (
+        <div className="morebelow" data-testid="players-more">
+          {outOfView.map((i) => {
+            const p = v.players[i]!;
+            const pts = i === me && v.hand ? v.hand.totalVP : p.publicVP + (p.vpCards ?? 0);
+            return (
+              <button
+                key={p.pid}
+                type="button"
+                data-seat={i}
+                onClick={() => {
+                  const box = playersBox.current;
+                  const row = box?.querySelector<HTMLElement>(`.player[data-seat="${i}"]`);
+                  if (box && row)
+                    box.scrollTop += row.getBoundingClientRect().top - box.getBoundingClientRect().top - 40;
+                }}
+                title={`${p.nick}: ${pts} of ${v.winVP} points`}
+              >
+                <i style={{ background: PCOL[p.color] }} />
+                {p.nick} <b>{pts}</b>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <div className="bankline" data-bank>
         <span>Bank:</span>
         {/* SPEC 8.1: every resource and commodity in play; ∞ when it never runs out. */}

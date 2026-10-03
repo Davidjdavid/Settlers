@@ -163,7 +163,7 @@ const classicToken = (cx: number, cy: number, n: number): string => {
     const x = cx + (k - (pips - 1) / 2) * 0.085 * K;
     dots += `<circle cx="${f1(x)}" cy="${f1(cy + 0.19 * K)}" r="${0.032 * K}" fill="${red ? '#b3261e' : '#28343a'}"/>`;
   }
-  return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="url(#tokshade)" stroke="rgba(10,27,35,.45)" stroke-width="2"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.31) * K}" fill="${red ? '#b3261e' : '#1d2a30'}">${n}</text>${dots}`;
+  return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="url(#tokshade)" stroke="rgba(10,27,35,.45)" stroke-width="2"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.31) * K}" fill="${red ? '#b3261e' : '#1d2a30'}">${n}</text><g data-pips="${pips}">${dots}</g>`;
 };
 const plainText = (x: number, y: number, s: string, size: number, color: string, weight = 400) =>
   `<text x="${f1(x)}" y="${f1(y)}" text-anchor="middle" dominant-baseline="central" font-size="${f1(size)}" fill="${color}"${weight !== 400 ? ` font-weight="${weight}"` : ''}>${s}</text>`;
@@ -173,14 +173,21 @@ const glyphSymbols = (g: Record<Terrain, string>) =>
     .join('');
 const pips = (cx: number, cy: number, n: number, color: string, square = false) => {
   const count = 6 - Math.abs(7 - n);
-  let out = '';
+  let out = `<g data-pips="${count}">`;
   for (let k = 0; k < count; k++) {
     const x = cx + (k - (count - 1) / 2) * 0.085 * K;
     out += square
       ? `<rect x="${f1(x - 0.028 * K)}" y="${f1(cy - 0.028 * K)}" width="${f1(0.056 * K)}" height="${f1(0.056 * K)}" fill="${color}"/>`
       : `<circle cx="${f1(x)}" cy="${f1(cy)}" r="${0.032 * K}" fill="${color}"/>`;
   }
-  return out;
+  return `${out}</g>`;
+};
+
+/** Pips on a small dark bar under a token, for styles whose token has no room for them. */
+const pipStrip = (cx: number, y: number, n: number, bg: string, dot: string) => {
+  const count = 6 - Math.abs(7 - n);
+  const w = (count - 1) * 0.085 * K + 0.1 * K;
+  return `<rect x="${f1(cx - w / 2)}" y="${f1(y - 0.055 * K)}" width="${f1(w)}" height="${f1(0.11 * K)}" rx="${f1(0.055 * K)}" fill="${bg}"/>${pips(cx, y, n, dot)}`;
 };
 
 /** A harbor disc: a round marker with its ratio in the style's lettering. */
@@ -506,7 +513,7 @@ const smash: Theme = {
   token: (cx, cy, n) => {
     const heat = HEAT[6 - Math.abs(7 - n)]!;
     const style = `font-family="'Arial Black', 'Arial', sans-serif" font-weight="900" font-style="italic" paint-order="stroke" stroke="#0b0b14" stroke-linejoin="round"`;
-    return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.36 * K}" fill="#0b0b14" opacity=".55"/><text x="${f1(cx - 0.04 * K)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.3 : 0.36) * K}" fill="${heat}" stroke-width="5" ${style}>${n}</text><text x="${f1(cx + (n >= 10 ? 0.25 : 0.19) * K)}" y="${f1(cy + 0.1 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.16 * K}" fill="${heat}" stroke-width="3" ${style}>%</text>`;
+    return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.36 * K}" fill="#0b0b14" opacity=".55"/><text x="${f1(cx - 0.04 * K)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.3 : 0.36) * K}" fill="${heat}" stroke-width="5" ${style}>${n}</text><text x="${f1(cx + (n >= 10 ? 0.25 : 0.19) * K)}" y="${f1(cy + 0.1 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.16 * K}" fill="${heat}" stroke-width="3" ${style}>%</text>${pipStrip(cx, cy + 0.43 * K, n, 'rgba(11,11,20,.85)', heat)}`;
   },
   port: disc('rgba(11,11,20,.75)', '#6ff3ff', '#ffffff', 2),
   text: (x, y, s, size, color) =>
@@ -632,7 +639,7 @@ const platformer: Theme = {
       )
       .join(
         '',
-      )}<text x="${f1(cx)}" y="${f1(cy - 0.02 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.32) * K}" font-weight="900" fill="${red ? '#ff3b30' : '#ffffff'}" stroke="#3a1e00" stroke-width="4" paint-order="stroke" font-family="'Arial Black', Arial, sans-serif">${n}</text>`;
+      )}<text x="${f1(cx)}" y="${f1(cy - 0.02 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.32) * K}" font-weight="900" fill="${red ? '#ff3b30' : '#ffffff'}" stroke="#3a1e00" stroke-width="4" paint-order="stroke" font-family="'Arial Black', Arial, sans-serif">${n}</text>${pipStrip(cx, cy + 0.42 * K, n, '#3a1e00', red ? '#ff6a5c' : '#ffd84a')}`;
   },
   port: (x, y, label) => qblock(x, y, 0.5 * K, label),
   text: (x, y, s, size, color) =>
@@ -732,7 +739,7 @@ const american: Theme = {
   overlay: () => '',
   token: (cx, cy, n) => {
     const red = n === 6 || n === 8;
-    return `${star(cx, cy + 2, 0.42 * K, 'rgba(0,0,0,.3)')}${star(cx, cy, 0.42 * K, '#ffffff', ' stroke="#14275e" stroke-width="2.5" stroke-linejoin="round"')}<text x="${f1(cx)}" y="${f1(cy + 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.24 : 0.3) * K}" fill="${red ? '#c8102e' : '#14275e'}" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="900">${n}</text>`;
+    return `${star(cx, cy + 2, 0.42 * K, 'rgba(0,0,0,.3)')}${star(cx, cy, 0.42 * K, '#ffffff', ' stroke="#14275e" stroke-width="2.5" stroke-linejoin="round"')}<text x="${f1(cx)}" y="${f1(cy + 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.34) * K}"${n >= 10 ? ' letter-spacing="-1"' : ''} fill="${red ? '#c8102e' : '#14275e'}" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="900">${n}</text>${pipStrip(cx, cy + 0.45 * K, n, '#14275e', red ? '#ff6b7d' : '#ffffff')}`;
   },
   port: disc('#ffffff', '#14275e', '#14275e', 3),
   text: (x, y, s, size, color) => plainText(x, y, s, size, color, 800),
@@ -782,6 +789,9 @@ const pikmin: Theme = {
   decor: 'scatter',
   glyphScale: 1,
   tileArt: (t, cx, cy, i) => {
+    // Fog is a cloud, as in every style: no garden, so it can't pass for land.
+    if (t === 'fog')
+      return `<use href="#g-fog" x="${f1(cx - 0.45 * K)}" y="${f1(cy - 0.45 * K)}" width="${f1(0.9 * K)}" height="${f1(0.9 * K)}" opacity=".85"/>`;
     let out = '';
     // The resource pictures, then the garden: big leaves, a flower and, on some tiles, sprouts.
     PIK_SPOTS.forEach(([fx, fy], j) => {
@@ -823,7 +833,7 @@ const pikmin: Theme = {
   token: (cx, cy, n) => {
     // A pellet: red, yellow or blue, with its number.
     const col = n === 6 || n === 8 ? '#e53935' : n === 5 || n === 9 ? '#fbc02d' : '#1e88e5';
-    return `<circle cx="${f1(cx)}" cy="${f1(cy + 2)}" r="${0.35 * K}" fill="rgba(0,0,0,.25)"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="${col}" stroke="#2a1a1a" stroke-width="2"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.25 * K}" fill="${shade(col, 0.25)}"/><ellipse cx="${f1(cx - 0.12 * K)}" cy="${f1(cy - 0.18 * K)}" rx="${0.08 * K}" ry="${0.04 * K}" fill="#ffffff" opacity=".7"/><text x="${f1(cx)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.25 : 0.29) * K}" fill="#ffffff" stroke="#2a1a1a" stroke-width="3" paint-order="stroke" font-family="system-ui, sans-serif" font-weight="900">${n}</text>`;
+    return `<circle cx="${f1(cx)}" cy="${f1(cy + 2)}" r="${0.35 * K}" fill="rgba(0,0,0,.25)"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="${col}" stroke="#2a1a1a" stroke-width="2"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.25 * K}" fill="${shade(col, 0.25)}"/><ellipse cx="${f1(cx - 0.12 * K)}" cy="${f1(cy - 0.18 * K)}" rx="${0.08 * K}" ry="${0.04 * K}" fill="#ffffff" opacity=".7"/><text x="${f1(cx)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.25 : 0.29) * K}" fill="#ffffff" stroke="#2a1a1a" stroke-width="3" paint-order="stroke" font-family="system-ui, sans-serif" font-weight="900">${n}</text>${pipStrip(cx, cy + 0.45 * K, n, '#2a1a1a', n === 6 || n === 8 ? '#ff8a80' : '#ffffff')}`;
   },
   port: disc('#e8f5e9', '#2e7d32', '#1f5e24', 2.5),
   text: plainText,

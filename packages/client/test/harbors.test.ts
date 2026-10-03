@@ -36,4 +36,28 @@ describe('Harbors on the board', () => {
     expect(THEMES.pikmin.seaHex(0, 0, 1)).toContain('<path');
     expect(THEMES.pikmin.seaHex(0, 0, 1, true)).not.toContain('<path');
   });
+
+  it('fog looks like fog in every style, not like land (no garden on it in Pikmin)', () => {
+    // Every Pikmin tile gets a flower (bloom petals ring #5a3a3a); fog shouldn't.
+    expect(THEMES.pikmin.tileArt!('wood', 0, 0, 0)).toContain('#5a3a3a');
+    for (let i = 0; i < 9; i++) {
+      const art = THEMES.pikmin.tileArt!('fog', 0, 0, i);
+      expect(art).not.toContain('#5a3a3a');
+      expect(art).toContain('#g-fog');
+    }
+  });
+
+  it('every style shows how often a number rolls: its pips (5 on a 6, 1 on a 12)', () => {
+    for (const style of STYLES) {
+      useStyle(style);
+      for (const [n, dots] of [
+        [6, 5],
+        [8, 5],
+        [4, 3],
+        [12, 1],
+        [2, 1],
+      ] as const)
+        expect(THEMES[style].token(0, 0, n), `${style} ${n}`).toContain(`data-pips="${dots}"`);
+    }
+  });
 });
