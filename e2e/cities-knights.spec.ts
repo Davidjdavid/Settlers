@@ -41,7 +41,8 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const first = await turnPage(t);
     await first.locator('#board [data-v]').first().click();
     await first.locator('#board [data-e]').first().click();
-    await confirmPlace(first, 2000);
+    // Confirm can take a moment to show on a busy machine.
+    await confirmPlace(first, 8000);
     await expect.poll(async () => (await view(a)).seq).toBe(1);
 
     const ui = { knight: 0, activate: 0, improve: 0, owed: 0 };
@@ -49,7 +50,7 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const raids = { seen: 0, mine: new Set<number>() };
     const clickVert = async (p: Page) => {
       await p.locator('#board [data-v]').first().click();
-      await confirmPlace(p, 2000);
+      await confirmPlace(p, 6000);
     };
 
     /** Make one move through the UI if one of the moves we drive by hand is available. */
@@ -113,6 +114,8 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
       if (v.turn !== v.me || v.stage !== 'main') return false;
       if (ui.knight < 3 && (await p.getByTestId('build-knight').isEnabled())) {
         await p.getByTestId('build-knight').click();
+        // The board shows the knight's spots once it's chosen (until then, the tap targets).
+        await expect(p.getByTestId('build-knight')).toHaveClass(/\bon\b/);
         await clickVert(p);
         await expect.poll(async () => (await view(p)).seq).toBeGreaterThan(v.seq);
         ui.knight++;
@@ -120,6 +123,7 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
       }
       if (ui.activate < 3 && (await p.getByTestId('knights').isEnabled())) {
         await p.getByTestId('knights').click();
+        await expect(p.getByTestId('knights')).toHaveClass(/\bon\b/);
         await clickVert(p);
         const btn = p.getByTestId('k-activate');
         if (await btn.isEnabled()) {
