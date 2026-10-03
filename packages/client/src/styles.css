@@ -3357,19 +3357,22 @@ button.vp {
   fill: #efe7d2;
   font-size: 26px;
 }
-.fogstack .fogcounts {
+.fogstack .fogcounts,
+.seted .fogcounts {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
   margin: 4px 0 8px;
 }
-.fogstack .fogcount {
+.fogstack .fogcount,
+.seted .fogcount {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
 }
-.fogstack .fogcount button {
+.fogstack .fogcount button,
+.seted .fogcount button {
   width: 20px;
   height: 20px;
   border-radius: 5px;
@@ -3379,7 +3382,8 @@ button.vp {
   padding: 0;
   line-height: 1;
 }
-.fogstack .fogcount b {
+.fogstack .fogcount b,
+.seted .fogcount b {
   min-width: 2ch;
   text-align: center;
 }
