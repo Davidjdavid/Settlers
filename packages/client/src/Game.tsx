@@ -22,8 +22,8 @@ import { hear, notify, soundsFor } from './sound';
 import { Celebration } from './celebrate';
 import { client, getStored, type Status } from './net';
 import {
-  Chips, ConfirmTwice, DiscardSheet, GoldSheet, MenuSheet, MonoSheet, PieceSheet, PlentySheet, TradeSheet,
-  TreasureSheet,
+  Chips, ConfirmTwice, DiscardSheet, GoldSheet, MenuSheet, MonoSheet, PieceSheet, PlentySheet, TapSheet,
+  TradeSheet, TreasureSheet,
   VictimSheet,
 } from './Sheets'; // prettier-ignore
 import { listNames, nameOf, rollWithEvent, routeName } from './text';
@@ -84,6 +84,7 @@ type SheetState =
   | { k: 'owe' }
   | { k: 'cardParam'; card: Progress; plays: Play[] }
   | { k: 'piece'; options: Action[] }
+  | { k: 'tap'; at: number; options: Action[] }
   | { k: 'gold' }
   | { k: 'treasure' }
   | { k: 'menu' }
@@ -315,6 +316,18 @@ export function Game({
     return [];
   };
   const uniq = (xs: number[]) => [...new Set(xs)];
+  /** The corner an action is about, for a tap on the board with nothing chosen. */
+  const vertActs = (a: Action): number | null =>
+    a.type === 'settlement' || a.type === 'city' || a.type === 'wall' || a.type === 'knight'
+      ? a.v
+      : a.type === 'activate' || a.type === 'promote' || a.type === 'chase'
+        ? a.v
+        : a.type === 'moveKnight'
+          ? a.from
+          : a.type === 'improve' && a.v != null
+            ? a.v
+            : null;
+  const myCities = me == null ? [] : v.verts.flatMap((b, i) => (b && b[0] === me && b[1] === 2 ? [i] : []));
   let targets: Targets = NO_TARGETS;
   if (acts.length) {
     if (v.stage === 'setup') {
@@ -411,6 +424,34 @@ export function Game({
     }
   }
 
+  // "Turn down every trade a CPU offers me": answer No as soon as one is open to you.
+  const cpuOffers = settingOn(room.mySettings, 'noCpuTrades')
+    ? myActs.flatMap((a) =>
+        a.type === 'respond' && !a.yes && v.players[v.offers.find((o) => o.id === a.id)?.from ?? -1]?.cpu
+          ? [a.id]
+          : [],
+      )
+    : [];
+  const cpuOfferKey = cpuOffers.join(',');
+  useEffect(() => {
+    for (const id of cpuOffers) void client.act({ type: 'respond', id, yes: false });
+  }, [cpuOfferKey]);
+
+  // Nothing chosen on your turn: your pieces and the spots you can build on take a tap too.
+  if (v.stage === 'main' && !mode && acts.length)
+    targets = {
+      ...targets,
+      tapVerts: uniq([
+        ...acts.flatMap((a) => (vertActs(a) != null ? [vertActs(a)!] : [])),
+        ...(acts.some((a) => a.type === 'improve' && a.v == null) ? myCities : []),
+      ]),
+      tapEdges: uniq(
+        acts.flatMap((a) =>
+          a.type === 'road' || a.type === 'ship' ? [a.e] : a.type === 'moveShip' ? [a.from] : [],
+        ),
+      ),
+    };
+
   // Choices owed that are made on the board.
   if (owe && BOARD_OWES.has(owe.k) && owed.length) {
     targets = {
@@ -484,6 +525,19 @@ export function Game({
     else if (mode === 'kmove' && kFrom != null)
       place({ type: 'moveKnight', from: kFrom, to: x }, touch, done);
     else if (mode === 'card') cardPick(x, touch);
+    else if (!mode && v.stage === 'main') tapVert(x, touch);
+  };
+  /** A tap on a corner with nothing chosen: your knight's sheet, or what you can do there. */
+  const tapVert = (x: number, touch: boolean) => {
+    const k = v.ck?.knights[x];
+    if (k && k.p === me) return setSheet({ k: 'knightAct', at: x });
+    const here = acts.filter(
+      (a) =>
+        (vertActs(a) === x && a.type !== 'chase') ||
+        (a.type === 'improve' && a.v == null && myCities.includes(x)),
+    );
+    if (here.length === 1 && here[0]!.type !== 'improve') return place(here[0]!, touch);
+    if (here.length) setSheet({ k: 'tap', at: x, options: here });
   };
   const onEdge = (e: number, touch: boolean) => {
     setPlacing(null);
@@ -491,6 +545,17 @@ export function Game({
     if (mode === 'card') return cardPick(e, touch);
     if (!mine) return;
     if (mode === 'move' && moveFrom == null) return setMoveFrom(e);
+    // Nothing chosen: tap one of your ships to move it, or an open edge to build there.
+    if (!mode && v.stage === 'main') {
+      if (acts.some((a) => a.type === 'moveShip' && a.from === e)) {
+        setMode('move');
+        return setMoveFrom(e);
+      }
+      const build = acts.filter((a) => (a.type === 'road' || a.type === 'ship') && a.e === e);
+      if (build.length === 1) return place(build[0]!, touch);
+      if (build.length > 1) return setSheet({ k: 'piece', options: build });
+      return;
+    }
     const options = edgeActs(e);
     const done = () => {
       setSel(null);
@@ -1661,6 +1726,19 @@ export function Game({
       ) : null}
       {sheet?.k === 'gold' && goldOwed ? (
         <GoldSheet v={v} due={goldOwed} onClose={() => setSheet(null)} />
+      ) : null}
+      {sheet?.k === 'tap' ? (
+        <TapSheet
+          v={v}
+          options={sheet.options}
+          onPick={(a) => {
+            setSheet(null);
+            if (a.type === 'improve' && a.v == null)
+              improve(acts.filter((o) => o.type === 'improve' && o.track === a.track));
+            else place(a, false);
+          }}
+          onClose={() => setSheet(null)}
+        />
       ) : null}
       {sheet?.k === 'piece' ? (
         <PieceSheet

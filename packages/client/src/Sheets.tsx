@@ -16,7 +16,16 @@ import {
   type Resource,
   type Seat,
 } from '@settlers/engine';
-import { CARD_COLOR, CARD_LABEL, RES_LABEL, TILE_COLOR, TRACK_COLOR, TRACK_LABEL, cardIcon } from './art';
+import {
+  CARD_COLOR,
+  CARD_LABEL,
+  RES_LABEL,
+  TILE_COLOR,
+  TRACK_COLOR,
+  TRACK_LABEL,
+  TRACK_ORDER,
+  cardIcon,
+} from './art';
 import { client } from './net';
 import { cardsText, nameOf } from './text';
 
@@ -730,6 +739,74 @@ export function TreasureSheet({
 }
 
 /** When an edge could take a road or a ship, ask which. */
+/** What a tap on a corner can do, when there's more than one thing (a city: a wall or an improvement). */
+export function TapSheet({
+  v,
+  options,
+  onPick,
+  onClose,
+}: {
+  v: PlayerView;
+  options: Action[];
+  onPick: (a: Action) => void;
+  onClose: () => void;
+}) {
+  // One button per kind (an improvement is one button per track, whatever city it lands on).
+  const seen = new Set<string>();
+  const rank = (a: Action) => (a.type === 'improve' ? TRACK_ORDER.indexOf(a.track) : 9);
+  const items = options
+    .filter((a) => {
+      const key = a.type === 'improve' ? `improve:${a.track}` : a.type;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => rank(a) - rank(b));
+  const label = (a: Action): string => {
+    switch (a.type) {
+      case 'settlement':
+        return 'Build a settlement';
+      case 'city':
+        return 'Upgrade to a city';
+      case 'wall':
+        return 'Build a city wall';
+      case 'knight':
+        return 'Place a knight';
+      case 'improve': {
+        const lvl = v.ck?.lvl[v.me!]?.[a.track] ?? 0;
+        return `Improve ${TRACK_LABEL[a.track]} to ${lvl + 1}${a.v != null ? ' (metropolis here)' : ''}`;
+      }
+      default:
+        return a.type;
+    }
+  };
+  return (
+    <Sheet
+      title="What do you want to do here?"
+      onClose={onClose}
+      foot={
+        <button className="btn ghost" onClick={onClose}>
+          Back
+        </button>
+      }
+    >
+      <div className="menuitems">
+        {items.map((a) => (
+          <button
+            key={a.type === 'improve' ? `improve-${a.track}` : a.type}
+            className="btn"
+            style={a.type === 'improve' ? { borderLeft: `4px solid ${TRACK_COLOR[a.track]}` } : undefined}
+            onClick={() => onPick(a)}
+            data-testid={`tap-${a.type === 'improve' ? `improve-${a.track}` : a.type}`}
+          >
+            {label(a)}
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
 export function PieceSheet({
   options,
   onPick,

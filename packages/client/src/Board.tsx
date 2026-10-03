@@ -36,6 +36,9 @@ export interface Targets {
   ghostEdge?: number | null;
   /** A knight being moved, drawn highlighted. */
   ghostVert?: number | null;
+  /** Spots you can tap to act on with nothing chosen (no glow): your pieces and where you can build. */
+  tapVerts?: number[];
+  tapEdges?: number[];
 }
 
 export const NO_TARGETS: Targets = { verts: [], edges: [], hexes: [], ghost: null };
@@ -240,7 +243,10 @@ function pirateSVG(g: Geometry, i: number): string {
   </g>`;
 }
 
-/** A knight: a shield in the owner's colour with one pip per strength; gold ring when active. */
+/**
+ * A knight: a shield in the owner's colour, bigger for each level, with its level (1, 2 or 3) on a
+ * light badge; gold ring when active.
+ */
 function knightSVG(
   g: Geometry,
   v: number,
@@ -254,13 +260,12 @@ function knightSVG(
   const V = g.verts[v]!;
   const x = V.x * K;
   const y = V.y * K;
-  const r = 0.19 * K;
-  let pips = '';
-  for (let i = 0; i < lvl; i++) {
-    const px = x + (i - (lvl - 1) / 2) * 0.1 * K;
-    pips += `<circle cx="${f1(px)}" cy="${f1(y + 0.02 * K)}" r="${f1(0.035 * K)}" fill="${color === PCOL.black ? '#e8eaec' : '#0b1418'}"/>`;
-  }
-  // Level by shape as well as pips (SPEC 5.11): strong has a crest, mighty a crown.
+  // Basic, strong and mighty knights differ in size, so a glance tells them apart.
+  const r = [0.17, 0.17, 0.2, 0.23][lvl]! * K;
+  const bx = x + r * 0.78;
+  const by = y + r * 0.72;
+  const badge = `<circle cx="${f1(bx)}" cy="${f1(by)}" r="${f1(0.095 * K)}" fill="#fff6dc" stroke="#0b1418" stroke-width="1.8"/><text x="${f1(bx)}" y="${f1(by)}" text-anchor="middle" dominant-baseline="central" font-size="${f1(0.13 * K)}" font-weight="800" fill="#0b1418" class="klvl">${lvl}</text>`;
+  // Level by shape as well (SPEC 5.11): strong has a crest, mighty a crown.
   const top = y - r * 1.05;
   const crest =
     lvl === 2
@@ -268,7 +273,8 @@ function knightSVG(
       : lvl === 3
         ? `<path d="M${f1(x - 0.13 * K)} ${f1(top + 0.02 * K)}L${f1(x - 0.13 * K)} ${f1(top - 0.14 * K)}L${f1(x - 0.065 * K)} ${f1(top - 0.06 * K)}L${f1(x)} ${f1(top - 0.17 * K)}L${f1(x + 0.065 * K)} ${f1(top - 0.06 * K)}L${f1(x + 0.13 * K)} ${f1(top - 0.14 * K)}L${f1(x + 0.13 * K)} ${f1(top + 0.02 * K)}Z" fill="#ffd54a" stroke="#3b2a00" stroke-width="1.6" stroke-linejoin="round"/>`
         : '';
-  return `<g class="piece knight${isFresh ? ' fresh' : ''}" data-knight="${v}" data-owner="${owner}" data-lvl="${lvl}" data-on="${on ? 1 : 0}"${lifted ? ' opacity=".45"' : on ? '' : ' opacity=".55"'}>${crest}${on ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 0.07 * K)}" fill="none" stroke="#ffd54a" stroke-width="${f1(0.05 * K)}"/>` : ''}<path d="M${f1(x - r)} ${f1(y - r * 0.75)}Q${f1(x)} ${f1(y - r * 1.15)} ${f1(x + r)} ${f1(y - r * 0.75)}V${f1(y + r * 0.1)}Q${f1(x + r)} ${f1(y + r * 0.9)} ${f1(x)} ${f1(y + r * 1.15)}Q${f1(x - r)} ${f1(y + r * 0.9)} ${f1(x - r)} ${f1(y + r * 0.1)}Z" fill="${color}" stroke="${on ? '#3b2a00' : edgeOf(color)}" stroke-width="2.2"/>${pips}</g>`;
+  // An inactive knight fades; its level badge stays solid so it's still easy to read.
+  return `<g class="piece knight${isFresh ? ' fresh' : ''}" data-knight="${v}" data-owner="${owner}" data-lvl="${lvl}" data-on="${on ? 1 : 0}"${lifted ? ' opacity=".45"' : ''}><g${!lifted && !on ? ' opacity=".55"' : ''}>${crest}${on ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 0.07 * K)}" fill="none" stroke="#ffd54a" stroke-width="${f1(0.05 * K)}"/>` : ''}<path d="M${f1(x - r)} ${f1(y - r * 0.75)}Q${f1(x)} ${f1(y - r * 1.15)} ${f1(x + r)} ${f1(y - r * 0.75)}V${f1(y + r * 0.1)}Q${f1(x + r)} ${f1(y + r * 0.9)} ${f1(x)} ${f1(y + r * 1.15)}Q${f1(x - r)} ${f1(y + r * 0.9)} ${f1(x - r)} ${f1(y + r * 0.1)}Z" fill="${color}" stroke="${on ? '#3b2a00' : edgeOf(color)}" stroke-width="2.2"/></g>${badge}</g>`;
 }
 
 /** The merchant: a small figure in the owner's colour on its tile. */
@@ -520,6 +526,19 @@ export function Board(props: {
       for (const gh of props.preview(t, Number(id))) parts.push(ghostSVG(g, gh, ghostColor, false));
   }
 
+  // Tap spots: hit areas only, drawn under the glowing targets.
+  for (const e of targets.tapEdges ?? []) {
+    const l = roadLine(g, e, 0.2);
+    parts.push(
+      `<g class="target tap" data-e="${e}"><circle class="hit" cx="${f1((l.x1 + l.x2) / 2)}" cy="${f1((l.y1 + l.y2) / 2)}" r="${0.2 * K}"/><line class="hit" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke-width="${0.34 * K}" stroke-linecap="round"/></g>`,
+    );
+  }
+  for (const v of targets.tapVerts ?? []) {
+    const V = g.verts[v]!;
+    parts.push(
+      `<g class="target tap" data-v="${v}"><circle class="hit" cx="${f1(V.x * K)}" cy="${f1(V.y * K)}" r="${0.3 * K}"/></g>`,
+    );
+  }
   for (const h of targets.hexes) {
     const H = g.hexes[h]!;
     parts.push(

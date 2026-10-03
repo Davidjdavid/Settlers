@@ -421,6 +421,10 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
       delete base.keep;
       base.ck.hand = [];
       base.ck.owe = [];
+      // Nothing left over from the real game (an open offer, a turn to hand back, an undo).
+      base.offers = [];
+      delete base.back;
+      delete base.undo;
       base.ck.knights = base.ck.knights.map(() => null);
       for (let at = 0; at < base.verts.length; at++) {
         if (base.verts[at]) continue;
@@ -433,7 +437,13 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
           return { at, to: to.sort((x: number, y: number) => x - y) };
         }
       }
-      throw new Error('no corner for a knight to move from');
+      const v = structuredClone(base);
+      const at = base.verts.findIndex((b: unknown) => !b);
+      v.ck.knights[at] = { p: v.me, lvl: 1, on: true };
+      const kinds = [...new Set(s.legal(v).map((a: any) => a.type))];
+      throw new Error(
+        `no corner for a knight to move from: ${JSON.stringify(kinds)} roads ${base.edges.filter((e: unknown) => e === base.me).length} keys ${Object.keys(base).join(',')}`,
+      );
     });
     await c.getByTestId('knights').click();
     await c.locator(`#board [data-v="${kAt.at}"]`).tap();
@@ -445,6 +455,111 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await expect
       .poll(moves)
       .toEqual([expect.objectContaining({ type: 'moveKnight', from: kAt.at, to: kAt.to[0] })]);
+
+    /* ---------- Tapping the board with nothing chosen (made-up view) ---------- */
+    // My turn, plenty of cards, and the board as the game left it plus one knight of each level.
+    const tapView = (need: 'settlement' | 'city') =>
+      c.evaluate((need) => {
+        const s = (window as any).__settlers;
+        const v = structuredClone(s.state().game);
+        Object.assign(v, { phase: 'play', winner: null, stage: 'main', turn: v.me, dice: [3, 4] });
+        delete v.keep;
+        v.offers = [];
+        delete v.back;
+        delete v.undo;
+        v.ck.owe = [];
+        v.ck.hand = [];
+        for (const k of Object.keys(v.hand.res)) v.hand.res[k] = 5;
+        Object.assign(v.players[v.me].pieces, { road: 5, city: 2 });
+        v.ck.knights = v.ck.knights.map(() => null);
+        // A settlement of mine to upgrade, or a city without a wall (made from a building if need be:
+        // the game may have left none, the barbarians taking cities back).
+        const mine = (lvl: number) =>
+          v.verts.findIndex(
+            (b: any, i: number) => b && b[0] === v.me && b[1] === lvl && !v.ck.walls.includes(i),
+          );
+        let at = mine(need === 'city' ? 2 : 1);
+        if (at < 0) {
+          at = mine(need === 'city' ? 1 : 2);
+          v.verts[at] = [v.me, need === 'city' ? 2 : 1];
+        }
+        const free = v.verts
+          .flatMap((b: unknown, i: number) => (b ? [] : [i]))
+          .filter((_: number, i: number) => i % 9 === 4);
+        [1, 2, 3].forEach((lvl, i) => (v.ck.knights[free[i]] = { p: v.me, lvl, on: false }));
+        const acts = s.legal(v);
+        s.stage(v);
+        return {
+          at,
+          canCity: acts.some((a: any) => a.type === 'city' && a.v === at),
+          road: acts.find((a: any) => a.type === 'road')?.e ?? null,
+          knights: free.slice(0, 3) as number[],
+        };
+      }, need);
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    let tv = await tapView('settlement');
+    // Every knight shows its level on a badge.
+    for (const [i, at] of tv.knights.entries())
+      await expect(c.locator(`#board [data-knight="${at}"] .klvl`)).toHaveText(String(i + 1));
+    if (process.env.SHOTS)
+      await c.locator('#board').screenshot({ path: `${process.env.SHOTS}/m8-knight-levels.png` });
+    // A settlement: tap it, confirm, and it becomes a city.
+    expect(tv.canCity).toBe(true);
+    await c.locator(`#board [data-v="${tv.at}"]`).tap();
+    await confirmPlace(c, 1000);
+    await expect.poll(moves).toEqual([{ type: 'city', v: tv.at }]);
+    // An open edge: a road.
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    tv = await tapView('settlement');
+    expect(tv.road).not.toBeNull();
+    await c.locator(`#board [data-e="${tv.road}"]`).tap();
+    await confirmPlace(c, 1000);
+    await expect.poll(moves).toEqual([{ type: 'road', e: tv.road }]);
+    // A city: a menu with a wall and the three improvements; pick Science.
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    tv = await tapView('city');
+    await c.locator(`#board [data-v="${tv.at}"]`).tap();
+    await expect(c.getByRole('dialog', { name: 'What do you want to do here?' })).toBeVisible();
+    await expect(c.getByTestId('tap-wall')).toBeVisible();
+    await shot(c, 'tap-city');
+    await c.getByTestId('tap-improve-science').click();
+    await expect.poll(moves).toEqual([expect.objectContaining({ type: 'improve', track: 'science' })]);
+    // A knight: its own sheet.
+    await c.locator(`#board [data-v="${tv.knights[0]}"]`).tap();
+    await expect(c.getByTestId('k-activate')).toBeEnabled();
+    await c.keyboard.press('Escape');
+
+    /* ---------- Turning down CPU offers on my own (made-up view) ---------- */
+    const cpuOffer = () =>
+      c.evaluate(() => {
+        const s = (window as any).__settlers;
+        const v = structuredClone(s.state().game);
+        Object.assign(v, { phase: 'play', winner: null, stage: 'main', dice: [3, 4] });
+        delete v.keep;
+        v.ck.owe = [];
+        const from = (v.me + 1) % v.players.length;
+        v.turn = from;
+        v.players[from].cpu = true;
+        for (const k of Object.keys(v.hand.res)) v.hand.res[k] = 3;
+        v.offers = [{ id: 77, from, give: { wood: 1 }, want: { ore: 1 }, resp: {} }];
+        s.stage(v);
+      });
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    await cpuOffer();
+    await c.waitForTimeout(500);
+    expect(await moves()).toEqual([]);
+    await c.getByRole('button', { name: 'Menu', exact: true }).click();
+    await c.getByTestId('menu-settings').click();
+    await c.getByTestId('setting-noCpuTrades').click();
+    await c.getByTestId('settings-close').click();
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    await cpuOffer();
+    await expect.poll(moves).toEqual([{ type: 'respond', id: 77, yes: false }]);
 
     /* ---------- Play Alchemist: only before your roll (made-up view) ---------- */
     const alchemist = (stage: string) =>

@@ -208,6 +208,8 @@ export const SettingsSchema = z.strictObject({
   showBreakdown: z.boolean().optional(),
   /** SPEC 9.1: also show the dice in the board's top-right corner (off unless true). */
   diceCorner: z.boolean().optional(),
+  /** Turn down every trade a CPU offers you, at once (off unless true). */
+  noCpuTrades: z.boolean().optional(),
   /** SPEC 9.4: master volume, and each sound's switch, volume and style. */
   sounds: SoundsSchema.optional(),
   /** SPEC 9.5: the dice statistics pinned to a corner of the board, full or as a strip. */

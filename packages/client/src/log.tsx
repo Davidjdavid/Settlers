@@ -204,6 +204,8 @@ const ChatRow = memo(function ChatRow({
   );
 });
 
+const atBottom = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+
 export function Log({
   v,
   log,
@@ -248,9 +250,15 @@ export function Log({
   const lastRow = useRef<Element | null>(null);
   const firstKey = useRef<string | null>(null);
 
+  // The first row drawn last time: while the reader is scrolled up, the window keeps it.
+  const drawnFirst = useRef<string | null>(null);
   let start = Math.max(0, rows.length - show);
-  if (firstKey.current) {
-    const i = rows.findIndex((r) => r.key === firstKey.current);
+  // Scrolled up, read from the page itself: the scroll event may not have arrived before new rows
+  // did, and dropping a row off the top then would move what's being read.
+  const reading = box.current ? !atBottom(box.current) : false;
+  const keep = firstKey.current ?? (reading ? drawnFirst.current : null);
+  if (keep) {
+    const i = rows.findIndex((r) => r.key === keep);
     if (i >= 0) start = Math.min(start, i);
   }
   const shown = rows.slice(start);
@@ -281,9 +289,9 @@ export function Log({
       if (added) setUnseen((n) => n + added);
     }
     lastRow.current = el.lastElementChild;
+    drawnFirst.current = shown[0]?.key ?? null;
   }, [rows]);
 
-  const atBottom = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 24;
   const onScroll = () => {
     const el = box.current;
     if (!el) return;
