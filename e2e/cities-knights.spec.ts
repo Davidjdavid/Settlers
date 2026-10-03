@@ -39,7 +39,16 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
 
     // The first starting settlement and road by clicking.
     const first = await turnPage(t);
-    await first.locator('#board [data-v]').first().click();
+    // The board may still be settling its size just after it appears: tap again if the first
+    // tap didn't pick the corner, as a person would.
+    for (let i = 0; i < 3 && !(await first.locator('#board [data-e]').count()); i++) {
+      await first.locator('#board [data-v]').first().click();
+      await first
+        .locator('#board [data-e]')
+        .first()
+        .waitFor({ timeout: 3000 })
+        .catch(() => {});
+    }
     await first.locator('#board [data-e]').first().click();
     // Confirm can take a moment to show on a busy machine.
     await confirmPlace(first, 8000);
