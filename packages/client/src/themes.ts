@@ -96,6 +96,8 @@ export interface Theme {
   overlay: (vb: number[]) => string;
   /** A number token. */
   token: (cx: number, cy: number, n: number) => string;
+  /** A harbor's 3:1 disc, in the style (the ratio written on it). */
+  port: (x: number, y: number, label: string) => string;
   /** Text on the board (harbor ratios). */
   text: (x: number, y: number, s: string, size: number, color: string, weight?: number) => string;
   /** The outline round a piece in this colour. */
@@ -181,6 +183,13 @@ const pips = (cx: number, cy: number, n: number, color: string, square = false) 
   return out;
 };
 
+/** A harbor disc: a round marker with its ratio in the style's lettering. */
+const disc =
+  (fill: string, stroke: string, ink: string, sw = 2.5) =>
+  (x: number, y: number, label: string) =>
+    `<circle cx="${f1(x)}" cy="${f1(y)}" r="${0.3 * K}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>` +
+    T().text(x, y, label, 0.2 * K, ink);
+
 const classic: Theme = {
   id: 'classic',
   tile: TILE_COLOR,
@@ -203,6 +212,7 @@ const classic: Theme = {
   innerRing: 'rgba(255,255,255,.08)',
   overlay: () => '',
   token: classicToken,
+  port: disc('#f4ecd6', '#0a1b23', '#1b2a30'),
   text: plainText,
   edge: edgeOf,
   underlay: () => '',
@@ -251,6 +261,7 @@ const pixel: Theme = {
     const red = n === 6 || n === 8;
     return `${pixelTokenBox(cx, cy)}${pixelText(cx, cy - 0.06 * K, String(n), 0.24 * K, red ? '#c0261b' : '#1d2a30')}${pips(cx, cy + 0.19 * K, n, red ? '#c0261b' : '#1d2a30', true)}`;
   },
+  port: (x, y, label) => `${pixelTokenBox(x, y)}${pixelText(x, y, label, 0.16 * K, '#1d2a30')}`,
   text: (x, y, s, size, color) => pixelText(x, y, s, size * 0.8, color),
   edge: () => '#141821',
   underlay: () => '',
@@ -297,6 +308,7 @@ const wooden: Theme = {
     const red = n === 6 || n === 8;
     return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="url(#woodtok)" stroke="#5a3a1c" stroke-width="2.5"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.27 * K}" fill="none" stroke="#8a6034" stroke-width="1" opacity=".5"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.31) * K}" fill="${red ? '#9a2216' : '#3a2410'}" font-family="Georgia, 'Times New Roman', serif" font-weight="700">${n}</text>${pips(cx, cy + 0.19 * K, n, red ? '#9a2216' : '#3a2410')}`;
   },
+  port: disc('url(#woodtok)', '#5a3a1c', '#3a2410'),
   text: (x, y, s, size, color, weight) =>
     plainText(x, y, s, size, color, weight).replace(
       '<text ',
@@ -345,6 +357,7 @@ const flat: Theme = {
     const red = n === 6 || n === 8;
     return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.36 * K}" fill="#ffffff"/><text x="${f1(cx)}" y="${f1(cy - 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.32 : 0.38) * K}" fill="${red ? '#e53935' : '#263238'}" font-family="system-ui, sans-serif" font-weight="800">${n}</text>${pips(cx, cy + 0.22 * K, n, red ? '#e53935' : '#263238')}`;
   },
+  port: disc('#ffffff', 'none', '#263238', 0),
   text: (x, y, s, size, color) =>
     plainText(x, y, s, size, color, 800).replace('<text ', '<text font-family="system-ui, sans-serif" '),
   edge: edgeOf,
@@ -393,6 +406,7 @@ const night: Theme = {
     const red = n === 6 || n === 8;
     return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="#131b2a" stroke="#ffd27a" stroke-width="2"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.31) * K}" fill="${red ? '#ff8a78' : '#ffe7a8'}">${n}</text>${pips(cx, cy + 0.19 * K, n, red ? '#ff8a78' : '#ffe7a8')}`;
   },
+  port: disc('#131b2a', '#ffd27a', '#ffe7a8', 2),
   text: plainText,
   edge: () => NIGHT_EDGE,
   underlay: () => '',
@@ -425,7 +439,7 @@ const crayon: Theme = {
   glyphScale: 1.1,
   tileArt: null,
   glyphAttr: () => ' opacity=".9"',
-  seaDefs: `${glyphSymbols(GLYPH)}${(Object.keys(CRAYON_TILE) as Terrain[]).map((t, i) => hatch(`hatch-${t}`, CRAYON_TILE[t], 30 + (i % 3) * 25)).join('')}${hatch('hatch-water', '#4a8fd8', -20)}<filter id="crayonfx" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="7" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="1" seed="2" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 1.35" result="m"/><feComposite in="d" in2="m" operator="in"/></filter>`,
+  seaDefs: `${glyphSymbols(GLYPH)}${(Object.keys(CRAYON_TILE) as Terrain[]).map((t, i) => hatch(`hatch-${t}`, CRAYON_TILE[t], 30 + (i % 3) * 25)).join('')}${hatch('hatch-water', '#4a8fd8', -20)}<filter id="crayonpc" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".05" numOctaves="2" seed="4" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="3" xChannelSelector="R" yChannelSelector="G"/></filter><filter id="crayonfx" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="7" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="1" seed="2" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 1.35" result="m"/><feComposite in="d" in2="m" operator="in"/></filter>`,
   sea: (box) =>
     `<rect ${box.replace(/rx="[^"]*"/, 'rx="18"')} fill="#fbf6e9"/><rect ${box.replace(/rx="[^"]*"/, 'rx="18"')} fill="url(#hatch-water)" opacity=".85"/>`,
   seaHex: (cx, cy, i) =>
@@ -442,13 +456,14 @@ const crayon: Theme = {
     const red = n === 6 || n === 8;
     return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="#fffaf0" stroke="#3a3a3a" stroke-width="2.5"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.29 : 0.33) * K}" fill="${red ? '#d0281c' : '#2b2b2b'}" font-weight="700" ${handFont}>${n}</text>${pips(cx, cy + 0.2 * K, n, red ? '#d0281c' : '#2b2b2b')}`;
   },
+  port: disc('#fffaf0', '#3a3a3a', '#2b2b2b'),
   text: (x, y, s, size, color) =>
     plainText(x, y, s, size, color, 700).replace('<text ', `<text ${handFont} `),
   edge: () => '#2b2b2b',
   underlay: (box) => `<rect ${box.replace(/rx="[^"]*"/, 'rx="18"')} fill="#fbf6e9"/>`,
   boardFilter: 'url(#crayonfx)',
-  piecesOpen: '',
-  piecesClose: '',
+  piecesOpen: '<g filter="url(#crayonpc)">',
+  piecesClose: '</g>',
   crisp: false,
 };
 
@@ -491,6 +506,7 @@ const smash: Theme = {
     const style = `font-family="'Arial Black', 'Arial', sans-serif" font-weight="900" font-style="italic" paint-order="stroke" stroke="#0b0b14" stroke-linejoin="round"`;
     return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.36 * K}" fill="#0b0b14" opacity=".55"/><text x="${f1(cx - 0.04 * K)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.3 : 0.36) * K}" fill="${heat}" stroke-width="5" ${style}>${n}</text><text x="${f1(cx + (n >= 10 ? 0.25 : 0.19) * K)}" y="${f1(cy + 0.1 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.16 * K}" fill="${heat}" stroke-width="3" ${style}>%</text>`;
   },
+  port: disc('rgba(11,11,20,.75)', '#6ff3ff', '#ffffff', 2),
   text: (x, y, s, size, color) =>
     plainText(x, y, s, size, color, 900).replace(
       '<text ',
@@ -616,6 +632,7 @@ const platformer: Theme = {
         '',
       )}<text x="${f1(cx)}" y="${f1(cy - 0.02 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.32) * K}" font-weight="900" fill="${red ? '#ff3b30' : '#ffffff'}" stroke="#3a1e00" stroke-width="4" paint-order="stroke" font-family="'Arial Black', Arial, sans-serif">${n}</text>`;
   },
+  port: (x, y, label) => qblock(x, y, 0.5 * K, label),
   text: (x, y, s, size, color) =>
     plainText(x, y, s, size, color, 900).replace(
       '<text ',
@@ -713,8 +730,9 @@ const american: Theme = {
   overlay: () => '',
   token: (cx, cy, n) => {
     const red = n === 6 || n === 8;
-    return `${star(cx, cy + 2, 0.42 * K, 'rgba(0,0,0,.3)')}${star(cx, cy, 0.42 * K, '#ffffff', ' stroke="#14275e" stroke-width="2.5" stroke-linejoin="round"')}<text x="${f1(cx)}" y="${f1(cy + 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.2 : 0.25) * K}" fill="${red ? '#c8102e' : '#14275e'}" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="900">${n}</text>`;
+    return `${star(cx, cy + 2, 0.42 * K, 'rgba(0,0,0,.3)')}${star(cx, cy, 0.42 * K, '#ffffff', ' stroke="#14275e" stroke-width="2.5" stroke-linejoin="round"')}<text x="${f1(cx)}" y="${f1(cy + 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.24 : 0.3) * K}" fill="${red ? '#c8102e' : '#14275e'}" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="900">${n}</text>`;
   },
+  port: disc('#ffffff', '#14275e', '#14275e', 3),
   text: (x, y, s, size, color) => plainText(x, y, s, size, color, 800),
   edge: () => '#0a1a44',
   underlay: () => '',
@@ -746,7 +764,7 @@ const bloom = (x: number, y: number, petal: string) =>
     .join('') + `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.6" fill="#ffd54a"/>`;
 /** A little sprout creature: a coloured body and a stem with a leaf, bud or flower on top. */
 const sprout = (x: number, y: number, body: string, top: 'leaf' | 'bud' | 'flower') =>
-  `<g transform="translate(${f1(x)} ${f1(y)})"><path d="M0-9V-19" stroke="#2e7d32" stroke-width="1.6"/>${
+  `<g transform="translate(${f1(x)} ${f1(y)}) scale(1.5)"><path d="M0-9V-19" stroke="#2e7d32" stroke-width="1.6"/>${
     top === 'leaf'
       ? '<path d="M0-19c4-5 9-5 11-1c-4 3-8 3-11 1z" fill="#66bb6a" stroke="#1f5e24" stroke-width=".8"/>'
       : top === 'bud'
@@ -754,7 +772,7 @@ const sprout = (x: number, y: number, body: string, top: 'leaf' | 'bud' | 'flowe
         : bloom(0, -21, '#ffffff')
   }<ellipse cx="0" cy="-3" rx="4.2" ry="6.5" fill="${body}" stroke="#2a1a1a" stroke-width="1"/><circle cx="-1.6" cy="-6" r="1.4" fill="#fff"/><circle cx="1.6" cy="-6" r="1.4" fill="#fff"/><circle cx="-1.4" cy="-5.8" r=".7" fill="#111"/><circle cx="1.8" cy="-5.8" r=".7" fill="#111"/><path d="M-2 3.5V8M2 3.5V8" stroke="${body}" stroke-width="1.6" stroke-linecap="round"/></g>`;
 const SPROUT_COLORS = ['#e53935', '#fdd835', '#1e88e5'];
-const PIK_SPOTS: [number, number][] = [[-0.5, -0.45], [0.5, -0.45], [-0.62, 0.12], [0.62, 0.12], [-0.38, 0.58], [0.38, 0.58]]; // prettier-ignore
+const PIK_SPOTS: [number, number][] = [[-0.44, -0.42], [0.44, -0.42], [-0.58, 0.1], [0.58, 0.1], [-0.34, 0.54], [0.36, 0.54]]; // prettier-ignore
 const pikmin: Theme = {
   id: 'pikmin',
   tile: PIK_TILE,
@@ -776,12 +794,13 @@ const pikmin: Theme = {
     out += bloom(cx + 0.18 * K, cy - 0.72 * K, ['#f48fb1', '#ffffff', '#ce93d8'][i % 3]!);
     if (i % 3 === 0)
       out += sprout(
-        cx - 0.25 * K,
-        cy + 0.82 * K,
+        cx - 0.3 * K,
+        cy + 0.55 * K,
         SPROUT_COLORS[i % 9 === 0 ? 0 : i % 2 ? 1 : 2]!,
         (['leaf', 'bud', 'flower'] as const)[i % 3]!,
       );
-    return out;
+    // Kept inside the tile's outline.
+    return `<clipPath id="pkc-${i}"><polygon points="${hexPts(cx, cy, 0.93 * K)}"/></clipPath><g clip-path="url(#pkc-${i})">${out}</g>`;
   },
   glyphAttr: () => ' opacity=".85"',
   seaDefs: `${glyphSymbols(GLYPH)}<pattern id="ripples" width="70" height="44" patternUnits="userSpaceOnUse"><ellipse cx="18" cy="14" rx="10" ry="3.5" fill="none" stroke="#8fd3cc" stroke-width="1.4" opacity=".5"/><ellipse cx="52" cy="34" rx="7" ry="2.5" fill="none" stroke="#8fd3cc" stroke-width="1.2" opacity=".4"/></pattern><pattern id="soil" width="18" height="18" patternUnits="userSpaceOnUse"><rect width="18" height="18" fill="#6b4a2b"/><circle cx="4" cy="5" r="1.6" fill="#8a6440"/><circle cx="13" cy="12" r="1.3" fill="#4e341c"/><circle cx="10" cy="3" r="1" fill="#9a7550"/></pattern>`,
@@ -804,6 +823,7 @@ const pikmin: Theme = {
     const col = n === 6 || n === 8 ? '#e53935' : n === 5 || n === 9 ? '#fbc02d' : '#1e88e5';
     return `<circle cx="${f1(cx)}" cy="${f1(cy + 2)}" r="${0.35 * K}" fill="rgba(0,0,0,.25)"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="${col}" stroke="#2a1a1a" stroke-width="2"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.25 * K}" fill="${shade(col, 0.25)}"/><ellipse cx="${f1(cx - 0.12 * K)}" cy="${f1(cy - 0.18 * K)}" rx="${0.08 * K}" ry="${0.04 * K}" fill="#ffffff" opacity=".7"/><text x="${f1(cx)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.25 : 0.29) * K}" fill="#ffffff" stroke="#2a1a1a" stroke-width="3" paint-order="stroke" font-family="system-ui, sans-serif" font-weight="900">${n}</text>`;
   },
+  port: disc('#e8f5e9', '#2e7d32', '#1f5e24', 2.5),
   text: plainText,
   edge: () => '#2a1a1a',
   underlay: () => '',

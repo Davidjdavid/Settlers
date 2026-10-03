@@ -5,7 +5,7 @@
  */
 
 import type { Terrain } from '@settlers/engine';
-import { K, f1 } from './art';
+import { K, f1, hexPts } from './art';
 
 /** Rows of palette characters ('.' empty) to rects; `o` is added round shapes as an outline. */
 export function sprite(rows: string[], pal: Record<string, string>, px: number, outline = '#141821'): string {
@@ -324,11 +324,12 @@ export function pixelTile(t: Terrain, cx: number, cy: number, i: number): string
     const kind = kinds[(j + i) % kinds.length];
     if (!kind) return;
     const [rows, pal] = F[kind]!;
-    const jx = (((i * 7 + j * 3) % 5) - 2) * 0.02 * K;
-    const jy = (((i * 5 + j * 11) % 5) - 2) * 0.02 * K;
-    out += `<g transform="translate(${f1(cx + fx * K + jx)} ${f1(cy + fy * K + jy)})">${sprite(rows, pal, px)}</g>`;
+    const jx = (((i * 7 + j * 3) % 5) - 2) * 0.012 * K;
+    const jy = (((i * 5 + j * 11) % 5) - 2) * 0.012 * K;
+    out += `<g transform="translate(${f1(cx + fx * 0.9 * K + jx)} ${f1(cy + fy * 0.9 * K + jy)})">${sprite(rows, pal, px)}</g>`;
   });
-  return `<g shape-rendering="crispEdges">${out}</g>`;
+  // Kept inside the tile's outline.
+  return `<clipPath id="pxc-${i}"><polygon points="${hexPts(cx, cy, 0.92 * K)}"/></clipPath><g shape-rendering="crispEdges" clip-path="url(#pxc-${i})">${out}</g>`;
 }
 
 /** A number token: a bevelled square (light top-left, dark bottom-right). */

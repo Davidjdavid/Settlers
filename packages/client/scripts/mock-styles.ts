@@ -101,9 +101,7 @@ function board(style: (typeof STYLES)[number]): string {
   out.push(t.piecesClose);
   // A harbor-style label, to see the text.
   const h0 = g.hexes[0]!;
-  out.push(
-    `<circle cx="${f1(h0.x * K)}" cy="${f1((h0.y - 1.3) * K)}" r="${0.3 * K}" fill="#f4ecd6" stroke="#0a1b23" stroke-width="2.5"/>${t.text(h0.x * K, (h0.y - 1.3) * K, '3:1', 0.2 * K, '#1b2a30')}`,
-  );
+  out.push(t.port(h0.x * K, (h0.y - 1.3) * K, '3:1'));
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(' ')}" font-family="'Young Serif', Georgia, serif"${t.crisp ? ' shape-rendering="crispEdges"' : ''}>${out.join('')}</svg>`;
 }
 const cells = STYLES.map(
