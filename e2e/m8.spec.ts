@@ -484,6 +484,9 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
         for (const k of Object.keys(v.hand.res)) v.hand.res[k] = 5;
         Object.assign(v.players[v.me].pieces, { road: 5, city: 2 });
         v.ck.knights = v.ck.knights.map(() => null);
+        // No improvements yet: at level 3 the next one first asks which city gets the metropolis
+        // (a whole game can leave any level).
+        v.ck.lvl[v.me] = { science: 0, trade: 0, politics: 0 };
         // A settlement of mine to upgrade, or a city without a wall (made from a building if need be:
         // the game may have left none, the barbarians taking cities back).
         const mine = (lvl: number) =>
