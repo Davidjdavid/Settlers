@@ -42,6 +42,9 @@ const contents = (p: Page, sel: string) =>
         .join(','),
       knights: n('[data-knight]'),
       hexes: n('[data-kind=hex]'),
+      // Which tile is where (tokens above are only which hexes have one: a reroll that keeps the
+      // desert in place changes nothing there).
+      terrain: [...b.querySelectorAll('[data-kind=hex]')].map((x) => x.getAttribute('data-t')).join(','),
       targets: n('[data-v]') + n('[data-e]'),
     };
   }, sel);
