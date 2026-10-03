@@ -427,6 +427,17 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
       delete base.back;
       delete base.undo;
       base.ck.knights = base.ck.knights.map(() => null);
+      // A few more roads, so there's a road to move along whatever the game left (a quick game
+      // can end with only the two starting roads).
+      for (let k = 0; k < 2; k++) {
+        const v0 = structuredClone(base);
+        v0.hand.res = { ...v0.hand.res, wood: 9, brick: 9 };
+        for (const a of s
+          .legal(v0)
+          .filter((a: any) => a.type === 'road')
+          .slice(0, 6))
+          base.edges[a.e] = base.me;
+      }
       for (let at = 0; at < base.verts.length; at++) {
         if (base.verts[at]) continue;
         const v = structuredClone(base);

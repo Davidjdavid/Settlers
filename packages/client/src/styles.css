@@ -4070,3 +4070,10 @@ button.vp {
 .musicqueue li button {
   margin-left: 6px;
 }
+
+/* A tablet at the larger display sizes: the top bar keeps every button, with shorter labels. */
+@container app (max-width: 780px) {
+  .top span.wide-only {
+    display: none;
+  }
+}

@@ -226,6 +226,18 @@ test('three people play a whole game with the Milestone 5 features', async ({ br
         }
       }
     };
+    /**
+     * Done, at the foot of My settings. At the larger sizes the sheet is zoomed and scrolls, and
+     * Playwright's check before a click works out the button's centre without the zoom, so it
+     * thinks a row above covers it. Click where the button is drawn, as a person does.
+     */
+    const closeSettings = async (q: Page) => {
+      const done = q.getByTestId('settings-close');
+      await done.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+      const box = (await done.boundingBox())!;
+      await q.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(done).toHaveCount(0);
+    };
     /** Every display size on every device: no sideways scrolling, nothing cut off. */
     const checkSizes = async () => {
       for (const [i, q] of pages.entries()) {
@@ -233,7 +245,7 @@ test('three people play a whole game with the Milestone 5 features', async ({ br
           await openMenu(q);
           await q.getByTestId('menu-settings').click();
           await q.getByTestId(`size-${size}`).click();
-          await q.getByTestId('settings-close').click();
+          await closeSettings(q);
           const bad = await q.evaluate(() => {
             const out: string[] = [];
             const root = document.documentElement;
@@ -263,7 +275,7 @@ test('three people play a whole game with the Milestone 5 features', async ({ br
         await openMenu(q);
         await q.getByTestId('menu-settings').click();
         await q.getByTestId('size-medium').click();
-        await q.getByTestId('settings-close').click();
+        await closeSettings(q);
       }
     };
 
