@@ -1291,6 +1291,7 @@ export function Game({
       <div className="board-wrap">
         <Board
           view={v}
+          style={room.mySettings?.artStyle}
           targets={targets}
           myColor={me != null ? PCOL[v.players[me]!.color] : null}
           onVert={onVert}

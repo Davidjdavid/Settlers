@@ -2681,6 +2681,14 @@ button.vp {
   min-height: 220px;
   display: flex;
 }
+.tbstyle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
 .tbcontrols {
   display: grid;
   gap: 6px;

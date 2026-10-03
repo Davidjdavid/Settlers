@@ -15,6 +15,7 @@ import {
 } from '@settlers/engine';
 import type { RoomInfo, TableInfo, TableOp } from '@settlers/server/protocol';
 import { PCOL, dieSVG } from './art';
+import { StyleSelect } from './settings';
 import { Fairness, MapBoard, TERRAIN_NAME, Warnings, type Tool } from './maps';
 import { client, getStored, setStored, useClient } from './net';
 
@@ -140,8 +141,20 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
         </div>
       </div>
       <div className="tbmap">
-        <MapBoard map={map} tool={editing ? tool : null} onEdit={edit} heat={heat} highlight={hover} />
+        <MapBoard
+          map={map}
+          tool={editing ? tool : null}
+          onEdit={edit}
+          heat={heat}
+          highlight={hover}
+          style={editing ? undefined : room.mySettings?.artStyle}
+        />
       </div>
+      {seated ? (
+        <label className="tbstyle">
+          Board style <StyleSelect mine={room.mySettings} testid="table-style" />
+        </label>
+      ) : null}
       {seated ? (
         <div className="tbcontrols">
           <div className="row tight">

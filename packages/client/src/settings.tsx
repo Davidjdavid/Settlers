@@ -9,6 +9,7 @@ import { Help, RULE_HELP, SETTING_HELP, SETTING_LABEL, settingOn, type SettingKe
 import { client } from './net';
 import { Sheet } from './Sheets';
 import { RULE_LABEL } from './text';
+import { STYLES, STYLE_HELP, STYLE_LABEL, type ArtStyle } from './themes';
 
 const SETTINGS: SettingKey[] = [
   'confirmPlace',
@@ -45,6 +46,26 @@ function Switch(props: {
       <span>{props.label}</span>
       <Help text={props.help} />
     </label>
+  );
+}
+
+const STYLE_ONLY_YOU = 'Only changes your screen. Everyone else sees the board in their own style.';
+
+/** The board's art style, saved on your profile (in My settings and at the pre-game table). */
+export function StyleSelect({ mine, testid }: { mine: PlayerSettings | null; testid: string }) {
+  return (
+    <select
+      value={mine?.artStyle ?? 'classic'}
+      data-testid={testid}
+      aria-label="Board style"
+      onChange={(e) => client.saveSettings({ ...(mine ?? {}), artStyle: e.target.value as ArtStyle })}
+    >
+      {STYLES.map((id) => (
+        <option key={id} value={id} title={STYLE_HELP[id]}>
+          {STYLE_LABEL[id]}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -85,6 +106,11 @@ export function SettingsSheet({ mine, onClose }: { mine: PlayerSettings | null; 
         ))}
       </div>
       <DisplaySize />
+      <div className="switchrow">
+        <span>Board style: how the board looks on your screen</span>
+        <StyleSelect mine={mine} testid="setting-artStyle" />
+        <Help text={STYLE_ONLY_YOU} />
+      </div>
       <div className="switchrow">
         <span>Event die with rolls (Knights): “9 blue”, “blue 9”, or leave it out</span>
         <select

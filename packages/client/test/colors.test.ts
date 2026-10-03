@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { COLORS, CVD_COLORS } from '@settlers/engine';
 import { PCOL, TILE_COLOR } from '../src/art';
 import { VISIONS, diff } from '../src/colorcheck';
+import { GROUNDS as STYLE_GROUNDS, STYLES, THEMES } from '../src/themes';
 
 /** Everything a piece can stand on: every tile colour and the water around the island. */
 const GROUNDS = { ...TILE_COLOR, water: '#12404f' };
@@ -53,5 +54,21 @@ describe('piece colours (SPEC 4.2)', () => {
     expect(diff('#d62728', '#2ca02c')).toBeGreaterThan(40);
     expect(diff('#d62728', '#2ca02c', 'deutan')).toBeLessThan(diff('#d62728', '#2ca02c'));
     expect(diff('#000000', '#ffffff')).toBeGreaterThan(99);
+  });
+
+  it('in every board style, every piece stands out from every tile: by its colour or its outline', () => {
+    // The drawn styles outline every piece in a dark (or, at night, light) line, so a piece whose
+    // colour is near a tile's still has a clear edge; Classic must pass on colour alone (above).
+    const bad: string[] = [];
+    for (const s of STYLES)
+      for (const c of COLORS)
+        for (const [t, hex] of Object.entries(STYLE_GROUNDS[s]))
+          for (const v of (CVD_COLORS as readonly string[]).includes(c) ? VISIONS : (['normal'] as const)) {
+            const fill = diff(PCOL[c], hex, v);
+            const edge = diff(THEMES[s].edge(PCOL[c]), hex, v);
+            if (s === 'classic' ? fill < 8 : fill < 8 && edge < 30)
+              bad.push(`${s}: ${c} on ${t} (${v}): colour ${fill.toFixed(1)}, outline ${edge.toFixed(1)}`);
+          }
+    expect(bad).toEqual([]);
   });
 });

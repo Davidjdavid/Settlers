@@ -1,4 +1,4 @@
-/* The five art styles on one board, for a visual check: npx tsx packages/client/scripts/mock-styles.ts out.html */
+/* Every art style on one board, for a visual check: npx tsx packages/client/scripts/mock-styles.ts out.html */
 import { writeFileSync } from 'node:fs';
 import { geometryFor, newGame, SCENARIOS } from '@settlers/engine';
 import { K, PCOL, cityPath, f1, hexPts, settlementPath } from '../src/art';

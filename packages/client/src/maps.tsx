@@ -37,10 +37,20 @@ import {
 } from '@settlers/engine';
 import type { MapInfo } from '@settlers/server/protocol';
 import { GLYPH, K, RES_LABEL, TILE_COLOR, f1, hexPts } from './art';
-import { DECOR, harborMarkSVG, harborPiersSVG, harborPoint, seaSVG, tokenSVG, treasureSVG } from './Board';
+import {
+  DECOR,
+  harborMarkSVG,
+  landArtSVG,
+  harborPiersSVG,
+  harborPoint,
+  seaSVG,
+  tokenSVG,
+  treasureSVG,
+} from './Board';
 import { Brand, MapPreview } from './home';
 import { client, useClient } from './net';
 import { ConfirmTwice, Sheet } from './Sheets';
+import { THEMES, useStyle } from './themes';
 
 export type Tool =
   | { k: 'terrain'; t: Terrain | 'random' }
@@ -121,8 +131,12 @@ export function MapBoard(props: {
   pips?: Record<number, number>;
   highlight?: Violation | null;
   className?: string;
+  /** The art style to draw in (a personal setting); the editor stays Classic. */
+  style?: string;
 }) {
   const { map, tool, onEdit } = props;
+  const style = useStyle(props.style);
+  const th = THEMES[style];
   const g = useMemo(() => geometryFor(map.hexes.map((h) => ({ q: h.q, r: h.r }))), [map.hexes]);
   const ghosts = useMemo(() => {
     if (tool?.k !== 'shape') return [];
@@ -274,7 +288,7 @@ export function MapBoard(props: {
   const heat = props.heat ? cornerPips(map, props.pips) : null;
   const isPicked = (t: Target) => !!picked && same(picked, t);
 
-  const statics = useMemo(() => seaSVG(vb), [vb]);
+  const statics = useMemo(() => seaSVG(vb), [vb, props.style]);
   return (
     <svg
       className={`mapboard${tool ? ` tool-${tool.k}` : ''} ${props.className ?? ''}`}
@@ -282,6 +296,7 @@ export function MapBoard(props: {
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       data-testid="mapboard"
+      data-style={style}
       role="img"
       aria-label={`Map: ${map.name}`}
     >
@@ -294,10 +309,11 @@ export function MapBoard(props: {
         if (h.t === 'sea')
           return (
             <g key={i} data-kind="hex" data-q={h.q} data-r={h.r} data-t="sea">
+              {th.id === 'classic' ? null : <g dangerouslySetInnerHTML={{ __html: th.seaHex(cx, cy, i) }} />}
               <polygon
                 points={hexPts(cx, cy, 0.97 * K)}
-                fill="rgba(255,255,255,.04)"
-                stroke={hlHexes.has(i) ? '#ffd166' : 'rgba(160,215,225,.3)'}
+                fill={th.id === 'classic' ? 'rgba(255,255,255,.04)' : 'transparent'}
+                stroke={hlHexes.has(i) ? '#ffd166' : th.id === 'classic' ? 'rgba(160,215,225,.3)' : 'none'}
                 strokeWidth={hlHexes.has(i) ? 5 : 1.5}
               />
             </g>
@@ -312,12 +328,14 @@ export function MapBoard(props: {
             data-t={h.t}
             className={isPicked({ k: 'hex', at }) ? 'picked' : undefined}
           >
-            <polygon points={hexPts(cx, cy, 1.07 * K)} fill="#d9c69a" />
+            <polygon points={hexPts(cx, cy, 1.07 * K)} fill={th.beach[0]} />
             <polygon
               points={hexPts(cx, cy, 0.965 * K)}
-              fill={blank ? BLANK_FILL : TILE_COLOR[h.t as Terrain]}
-              stroke={hlHexes.has(i) ? '#ffd166' : blank ? 'rgba(230,240,245,.45)' : 'rgba(10,27,35,.35)'}
-              strokeWidth={hlHexes.has(i) ? 6 : 2}
+              fill={blank ? BLANK_FILL : th.tile[h.t as Terrain]}
+              stroke={
+                hlHexes.has(i) ? '#ffd166' : blank ? 'rgba(230,240,245,.45)' : th.hexStroke(h.t as Terrain)
+              }
+              strokeWidth={hlHexes.has(i) ? 6 : blank ? 2 : th.hexStrokeW}
               strokeDasharray={blank ? '8 6' : undefined}
             />
             {blank ? (
@@ -330,6 +348,8 @@ export function MapBoard(props: {
               >
                 ?
               </text>
+            ) : th.id !== 'classic' ? (
+              <g dangerouslySetInnerHTML={{ __html: landArtSVG(h.t as Terrain, cx, cy, i) }} />
             ) : (
               DECOR.map(([ang, rad], j) => {
                 if ((i + j) % 6 === 2 || !GLYPH[h.t as keyof typeof GLYPH]) return null;
