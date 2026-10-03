@@ -10,7 +10,7 @@ The site runs on one EC2 instance (Ubuntu) at **https://betteronlinesettlers.com
 
 ## One-command deploy
 
-- **From GitHub:** go to the Actions tab → **Deploy** → **Run workflow** (or push to `main`). It runs `npm run check` first. If anything fails, nothing is deployed.
+- **From GitHub:** go to the Actions tab → **Deploy** → **Run workflow** (or push to `main`). It deploys only once the full check (`npm run check`) has passed on that exact commit: it waits for CI's run on the commit (CI checks every push) instead of running the check a second time, and runs it itself if the commit has no CI run. If anything fails, nothing is deployed.
 - **From a laptop:**
   ```
   DEPLOY_HOST=98.83.141.234 DEPLOY_KEY=~/settlers_deploy SITE_PASSPHRASE='...' npm run deploy
