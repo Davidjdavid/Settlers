@@ -425,7 +425,8 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
   const o = room.options;
   const mode = modeOf(o);
   const sea = o.scenario !== 'classic';
-  const set = (next: RoomOptions) => client.setOptions(next);
+  // From the options as they are at the click (quick clicks build on each other), not this render's.
+  const set = (f: (o: RoomOptions) => RoomOptions) => client.setOptions(f(client.state.room?.options ?? o));
   const check = { display: 'flex', gap: 8, alignItems: 'center', textTransform: 'none', letterSpacing: 0, fontSize: 14, color: 'var(--ink)', fontWeight: 500 } as const; // prettier-ignore
   const on = (h: (typeof HOUSE_RULES)[number]) =>
     h.defaultOn ? o.houseRules[h.k] !== false : !!o.houseRules[h.k];
@@ -446,7 +447,16 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
               aria-pressed={mode === m}
               disabled={!editable}
               data-testid={`mode-${m}`}
-              onClick={() => set({ ...next, winVP: defaultVP(next) })}
+              onClick={() =>
+                set((o) => {
+                  const n = {
+                    ...o,
+                    scenario: x.scenario !== 'classic' && o.scenario !== 'classic' ? o.scenario : x.scenario,
+                    ck: x.ck,
+                  };
+                  return { ...n, winVP: defaultVP(n) };
+                })
+              }
             >
               <b>{x.label}</b>
               <span>{x.sub}</span>
@@ -468,10 +478,12 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
               className={`btn small${o.scenario === id ? ' on' : ''}`}
               disabled={!editable}
               data-testid={`scenario-${id}`}
-              onClick={() => {
-                const next = { ...o, scenario: id };
-                set({ ...next, winVP: defaultVP(next) });
-              }}
+              onClick={() =>
+                set((o) => {
+                  const next = { ...o, scenario: id };
+                  return { ...next, winVP: defaultVP(next) };
+                })
+              }
             >
               {name}
             </button>
@@ -490,7 +502,7 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
         <button
           type="button"
           disabled={!editable || o.winVP <= 5}
-          onClick={() => set({ ...o, winVP: o.winVP - 1 })}
+          onClick={() => set((o) => ({ ...o, winVP: Math.max(5, o.winVP - 1) }))}
           aria-label="Fewer points"
         >
           −
@@ -499,7 +511,7 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
         <button
           type="button"
           disabled={!editable || o.winVP >= 30}
-          onClick={() => set({ ...o, winVP: o.winVP + 1 })}
+          onClick={() => set((o) => ({ ...o, winVP: Math.min(30, o.winVP + 1) }))}
           aria-label="More points"
         >
           +
@@ -524,7 +536,7 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
             className={`btn small${(o.bank ?? 'limited') === b ? ' on' : ''}`}
             disabled={!editable}
             data-testid={`bank-${b}`}
-            onClick={() => set({ ...o, bank: b })}
+            onClick={() => set((o) => ({ ...o, bank: b }))}
           >
             {b === 'limited' ? 'Limited' : 'Unlimited'}
           </button>
@@ -539,7 +551,9 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
               checked={on(h)}
               disabled={!editable || (h.k === 'handBackSetup' && o.houseRules.handBack === false)}
               data-testid={`rule-${h.k}`}
-              onChange={(e) => set({ ...o, houseRules: { ...o.houseRules, [h.k]: e.target.checked } })}
+              onChange={(e) =>
+                set((o) => ({ ...o, houseRules: { ...o.houseRules, [h.k]: e.target.checked } }))
+              }
             />
             {RULE_LABEL[h.k]}
             <Help text={RULE_HELP[h.k]} />
@@ -555,13 +569,13 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
             data-testid="rule-diceDeck"
             aria-label="Dice"
             onChange={(e) =>
-              set({
+              set((o) => ({
                 ...o,
                 houseRules: {
                   ...o.houseRules,
                   diceDeck: e.target.value === 'dice' ? undefined : (e.target.value as 'full' | 'trimmed'),
                 },
-              })
+              }))
             }
           >
             {DICE_CHOICES.map(([v, label]) => (
@@ -582,10 +596,13 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
                 disabled={!editable || !o.houseRules.barbarianDelay}
                 aria-label="Earlier barbarians"
                 onClick={() =>
-                  set({
+                  set((o) => ({
                     ...o,
-                    houseRules: { ...o.houseRules, barbarianDelay: (o.houseRules.barbarianDelay ?? 0) - 1 },
-                  })
+                    houseRules: {
+                      ...o.houseRules,
+                      barbarianDelay: Math.max(0, (o.houseRules.barbarianDelay ?? 0) - 1),
+                    },
+                  }))
                 }
               >
                 −
@@ -596,10 +613,13 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
                 disabled={!editable || (o.houseRules.barbarianDelay ?? 0) >= 10}
                 aria-label="Later barbarians"
                 onClick={() =>
-                  set({
+                  set((o) => ({
                     ...o,
-                    houseRules: { ...o.houseRules, barbarianDelay: (o.houseRules.barbarianDelay ?? 0) + 1 },
-                  })
+                    houseRules: {
+                      ...o.houseRules,
+                      barbarianDelay: Math.min(10, (o.houseRules.barbarianDelay ?? 0) + 1),
+                    },
+                  }))
                 }
               >
                 +
@@ -618,7 +638,7 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
                 checked={o.cpuTrading !== false}
                 disabled={!editable}
                 data-testid="opt-cpuTrading"
-                onChange={(e) => set({ ...o, cpuTrading: e.target.checked })}
+                onChange={(e) => set((o) => ({ ...o, cpuTrading: e.target.checked }))}
               />
               CPUs trade with people
               <Help text="Medium, Hard and custom CPUs answer your offers and make fair offers of their own. Off: they never offer and turn every offer down. Easy never trades either way." />
@@ -629,7 +649,7 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
                 checked={o.cpuOneOffer !== false}
                 disabled={!editable || o.cpuTrading === false}
                 data-testid="opt-cpuOneOffer"
-                onChange={(e) => set({ ...o, cpuOneOffer: e.target.checked })}
+                onChange={(e) => set((o) => ({ ...o, cpuOneOffer: e.target.checked }))}
               />
               One offer per CPU per turn
               <Help text="Off lets a CPU make more than one offer in its turn (still only fair ones, and never the same offer twice)." />

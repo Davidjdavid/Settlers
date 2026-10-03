@@ -20,6 +20,33 @@ test('new maps in the lobby, and a game with the dice deck', async ({ browser })
     const t = await seatedTable(browser, server, ['Ann', 'Bob', 'Cat']);
     const [a, b, c] = t.pages as [Page, Page, Page];
 
+    // Quick clicks all count, even before the server has answered the first (a fast double click
+    // on a slow connection): three steps down, and two house rules ticked at once, stay.
+    const startVP = Number(await a.getByTestId('win-vp').textContent());
+    await a.evaluate(() => {
+      const fewer = document.querySelector<HTMLButtonElement>('[aria-label="Fewer points"]')!;
+      fewer.click();
+      fewer.click();
+      fewer.click();
+      document.querySelector<HTMLInputElement>('[data-testid=rule-no7FirstRound]')!.click();
+      document.querySelector<HTMLInputElement>('[data-testid=rule-bank3to1]')!.click();
+    });
+    for (const p of t.pages) {
+      await expect(p.getByTestId('win-vp')).toHaveText(String(startVP - 3));
+      await expect(p.getByTestId('rule-no7FirstRound')).toBeChecked();
+      await expect(p.getByTestId('rule-bank3to1')).toBeChecked();
+    }
+    await a.evaluate(() => {
+      document.querySelector<HTMLInputElement>('[data-testid=rule-no7FirstRound]')!.click();
+      document.querySelector<HTMLInputElement>('[data-testid=rule-bank3to1]')!.click();
+      for (let i = 0; i < 3; i++)
+        document.querySelector<HTMLButtonElement>('[aria-label="More points"]')!.click();
+    });
+    for (const p of t.pages) {
+      await expect(p.getByTestId('win-vp')).toHaveText(String(startVP));
+      await expect(p.getByTestId('rule-bank3to1')).not.toBeChecked();
+    }
+
     // Every new map can be picked, and everyone sees it on the table.
     await a.click('[data-testid=mode-seafarers]');
     for (const [id, name] of [

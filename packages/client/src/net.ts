@@ -286,7 +286,7 @@ export class Client {
         }
         this.set({
           roomCode: m.room.code,
-          room: m.room,
+          room: this.withSentOptions(m.room),
           game: this.staged ? this.state.game : m.game,
           log: m.log,
           roomError: null,
@@ -306,7 +306,7 @@ export class Client {
         const seen = new Set(this.state.log.map(itemKey));
         const items = m.log.filter((it) => !seen.has(itemKey(it)));
         this.set({
-          room: m.room,
+          room: this.withSentOptions(m.room),
           game: this.staged ? this.state.game : m.game,
           log: [...this.state.log, ...items].slice(-800),
           dice: m.dice ?? null,
@@ -527,8 +527,26 @@ export class Client {
     this.send({ t: 'removeCpu', pid });
   }
 
+  /**
+   * Room options just sent, shown at once and until the server's copy moves on from what it was
+   * (or 3 s pass), so quick clicks build on each other instead of each on the last confirmed copy.
+   */
+  private sentOptions: { o: RoomOptions; base: string; at: number } | null = null;
   setOptions(options: RoomOptions) {
+    const room = this.state.room;
+    const base = this.sentOptions?.base ?? JSON.stringify(room?.options);
+    this.sentOptions = { o: options, base, at: Date.now() };
     this.send({ t: 'setOptions', options });
+    if (room) this.set({ room: { ...room, options } });
+  }
+  private withSentOptions(room: RoomInfo): RoomInfo {
+    const p = this.sentOptions;
+    if (!p) return room;
+    if (JSON.stringify(room.options) !== p.base || Date.now() - p.at > 3000) {
+      this.sentOptions = null;
+      return room;
+    }
+    return { ...room, options: p.o };
   }
   chat(text: string) {
     this.send({ t: 'chat', text });
