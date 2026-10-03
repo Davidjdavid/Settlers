@@ -87,6 +87,13 @@ export interface MapData {
   harborPool?: PortType[];
   /** Face-down stacks for fog hexes. */
   fog?: { terrain: Terrain[]; numbers: number[] };
+  /**
+   * Uncovering fog pays (docs/rules/seafarers.md §11.5): true, land pays a card and sea or desert a
+   * treasure; false, nothing. Absent (maps from before 3 October): land pays, sea and desert don't.
+   */
+  fogRewards?: boolean;
+  /** A road or ship also uncovers fog hexes touching either end of its edge (§11.5). */
+  fogTips?: boolean;
   numberRules?: { noAdjacentRed?: boolean; noAdjacentSame?: boolean };
   /** Where starting settlements may go: 'all' land, or a list of hexes. Default 'all'. */
   start?: 'all' | [number, number][];

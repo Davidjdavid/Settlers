@@ -5,6 +5,8 @@
   "modules": ["seafarers"],
   "players": [3, 4],
   "winVP": 13,
+  "fogRewards": true,
+  "fogTips": true,
   "specialVP": {
     "newIsland": 2
   },

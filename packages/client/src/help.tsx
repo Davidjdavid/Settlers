@@ -68,6 +68,8 @@ export const RULE_HELP: Record<RuleKey, string> = {
   undo: 'Right after your own move you can ask to undo it. Everyone else at the table has to agree (CPUs always do), and one “no” cancels it. Only your most recent move, only before anyone else acts, and never a roll, a steal, a card drawn or played, or anything else that showed something hidden.',
   handBackSetup:
     'Also allows handing the dice back after a starting settlement and road are placed, so the player who just placed can take it back. When off, starting placements are final.',
+  diceDeck:
+    'Instead of rolling the two number dice, a card is drawn from a deck of 36: one for each way two dice can land, so every 36 draws give exactly the average spread (one 2, two 3s … six 7s … one 12). The deck is shuffled when it runs out. “Some cards out” takes 5 cards out at random, face down, at each shuffle, so the end of the deck can’t be counted. The event die is still rolled. This changes the odds on purpose.',
 };
 
 /** A "?" that shows a detailed explanation on hover, or on tap (focus) on touch screens. */
@@ -88,3 +90,10 @@ export const settingOn = (s: PlayerSettings | null | undefined, k: SettingKey) =
 
 /** Settings that are off unless switched on. */
 export const OFF_BY_DEFAULT: SettingKey[] = ['browserNotify', 'showBreakdown', 'diceCorner', 'noCpuTrades'];
+
+/** Rolled dice, or the dice deck (docs/rules/dice-deck.md). */
+export const DICE_CHOICES = [
+  ['dice', 'Rolled dice'],
+  ['full', 'Dice deck (36 cards)'],
+  ['trimmed', 'Dice deck, 5 cards out'],
+] as const;

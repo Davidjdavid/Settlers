@@ -22,6 +22,7 @@ export * from './modules/ckProgress';
 export * from './modules/treasures';
 export * from './scenarios';
 export * from './clone';
+export * from './diceDeck';
 export * from './stats';
 export * from './chatter';
 export * from './warnings';

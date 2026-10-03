@@ -15,6 +15,7 @@ import {
   keepMinTarget, publicVP, rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, totalVP, settlementOK, setupVertOK, snakeOrder, total,
   vertFree, vertexOK, zeroRes,
 } from './queries'; // prettier-ignore
+import { drawDice } from './diceDeck';
 import { nextInt, seedRng, shuffle, type RngState } from './rng';
 import {
   COLORS, DEV_PLAY, DEV_TYPES, RES, RULE_KEYS, isResource, type Action, type ApplyResult, type Card, type Color, type DevCounts,
@@ -58,7 +59,9 @@ export function newGame(seed: string, seats: NewPlayer[], config: Partial<GameCo
   const cfg: GameConfig = { winVP: config.map ? map.winVP : 10, ...config };
   if (config.map && !config.modules && map.modules.length) cfg.modules = map.modules;
   // A map with treasure spots plays with treasures, in every mode (docs/rules/treasures.md D8).
-  if (map.treasures?.length && !cfg.modules?.includes('treasures'))
+  // So does a map whose fog pays treasures (D9).
+  const fogPays = !!map.fogRewards && map.hexes.some((h) => h.t === 'fog');
+  if ((map.treasures?.length || fogPays) && !cfg.modules?.includes('treasures'))
     cfg.modules = [...(cfg.modules ?? []), 'treasures'];
   for (const m of mods({ config: cfg })) {
     if (m.players && !m.players.includes(seats.length))
@@ -229,8 +232,16 @@ function setRule(
     if (value <= top) return `Points to win must be more than ${top}, the top score`;
     s.config.winVP = value;
   } else {
-    if (rule === 'barbarianDelay' ? !isInt(value) || value < 0 || value > 10 : typeof value !== 'boolean')
+    if (
+      rule === 'barbarianDelay'
+        ? !isInt(value) || value < 0 || value > 10
+        : rule === 'diceDeck'
+          ? value !== false && value !== 'full' && value !== 'trimmed'
+          : typeof value !== 'boolean'
+    )
       return 'That isn’t a valid setting';
+    // Switching the dice deck on (or to the other kind) starts a fresh deck (dice-deck.md §3).
+    if (rule === 'diceDeck' && value && value !== s.config.houseRules?.diceDeck) delete s.diceDeck;
     const hr = { ...(s.config.houseRules ?? {}) } as Record<string, unknown>;
     if (value === false || value === 0) delete hr[rule];
     else hr[rule] = value;
@@ -348,6 +359,14 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     const v = (kind === 'number' ? given.d : given.e)?.[used[kind]++];
     if (v === undefined) throw new NeedDice();
     return v;
+  };
+  // The dice deck's random picks (dice-deck.md §4): the server's numbers, or the game's own.
+  let picks = 0;
+  const pick = (n: number): number => {
+    if (!given) return nextInt(s.rng, n);
+    const v = given.r?.[picks++];
+    if (v === undefined) throw new NeedDice();
+    return v % n;
   };
   const x: Ctx = { s, p, me, myTurn, events, die };
 
@@ -497,10 +516,11 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       const fixed = mods(s).reduce<[number, number] | null>((d, m) => d ?? m.fixedDice?.(s) ?? null, null);
       let d1: number;
       let d2: number;
+      const deck = !!s.config.houseRules?.diceDeck;
+      const two = (): [number, number] => (deck ? drawDice(s, pick, events) : [die('number'), die('number')]);
       if (fixed) [d1, d2] = fixed;
       else {
-        d1 = die('number');
-        d2 = die('number');
+        [d1, d2] = two();
         // House rules: no 7s while it is anyone's first turn (or while a module says so); the 7
         // is shown, then rolled again.
         const again = () =>
@@ -508,8 +528,7 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
           mods(s).some((m) => m.rerollSeven?.(s));
         while (d1 + d2 === 7 && again()) {
           events.push({ k: 'roll', p, d: [d1, d2], redo: true });
-          d1 = die('number');
-          d2 = die('number');
+          [d1, d2] = two();
         }
       }
       s.dice = [d1, d2];

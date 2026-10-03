@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { COLORS, PLAYER_COLORS, SCENARIOS, type Color } from '@settlers/engine';
 import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
 import { BRAND_SVG, PCOL, PEDGE, PNAME, K, cityPath, settlementPath } from './art';
-import { Help, RULE_HELP } from './help';
+import { DICE_CHOICES, Help, RULE_HELP } from './help';
 import { RULE_LABEL } from './text';
 import { client, useClient } from './net';
 import { Brand, ProfilePicker } from './home';
@@ -537,6 +537,32 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
             <Help text={RULE_HELP[h.k]} />
           </label>
         ))}
+        <div style={{ ...check, justifyContent: 'space-between' }}>
+          <span>
+            Dice <Help text={RULE_HELP.diceDeck} />
+          </span>
+          <select
+            value={o.houseRules.diceDeck ?? 'dice'}
+            disabled={!editable}
+            data-testid="rule-diceDeck"
+            aria-label="Dice"
+            onChange={(e) =>
+              set({
+                ...o,
+                houseRules: {
+                  ...o.houseRules,
+                  diceDeck: e.target.value === 'dice' ? undefined : (e.target.value as 'full' | 'trimmed'),
+                },
+              })
+            }
+          >
+            {DICE_CHOICES.map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
         {o.ck ? (
           <div style={{ ...check, justifyContent: 'space-between' }}>
             <span>

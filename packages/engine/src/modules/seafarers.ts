@@ -193,23 +193,36 @@ export function goldDue(s: GameState, p: Seat): number {
   return Math.min(n, bankTotal(s));
 }
 
-/** Reveal fog next to edge e, rewarding p. */
+/**
+ * Reveal fog next to edge e, rewarding p: the hexes along it, then (on maps with tips, §11.5)
+ * those touching either end, in board order.
+ */
 function discover(x: Ctx, e: number) {
   const { s, p, events } = x;
   const st = sea(s);
-  for (const h of geo(s).edges[e]!.hexes) {
+  const map = s.config.map;
+  const g = geo(s);
+  const E = g.edges[e]!;
+  const ends = map?.fogTips
+    ? [...new Set([...g.verts[E.a]!.hexes, ...g.verts[E.b]!.hexes])]
+        .filter((h) => !E.hexes.includes(h))
+        .sort((a, b) => a - b)
+    : [];
+  for (const h of [...E.hexes, ...ends]) {
     if (s.board.hexes[h]!.t !== 'fog') continue;
     const t = st.fog.terrain.shift() ?? 'sea';
     const n = produces(t) ? (st.fog.numbers.shift() ?? 0) : 0;
     // A new array, so caches keyed on the hex list (edge kinds) see the change.
     s.board.hexes = s.board.hexes.map((x, i) => (i === h ? { ...x, t, n } : x));
+    // Sea and desert pay a treasure on maps whose fog pays: the treasures module gives it (D9).
+    const pays = map?.fogRewards !== false;
     let got: PartialRes | null = null;
-    if (isResource(t) && s.bank[t] > 0) {
+    if (pays && isResource(t) && s.bank[t] > 0) {
       gain(s, p, t, 1);
       got = { [t]: 1 };
     }
     events.push({ k: 'discover', p, h, t, n, got });
-    if (t === 'gold') owe(s, { [p]: 1 }, events);
+    if (pays && t === 'gold') owe(s, { [p]: 1 }, events);
   }
 }
 

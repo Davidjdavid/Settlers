@@ -85,9 +85,9 @@ export const ActionSchema = z.discriminatedUnion('type', [
     type: z.literal('setRule'),
     rule: z.enum([
       'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
-      'barbarianDelay', 'handBack', 'handBackSetup', 'undo',
+      'barbarianDelay', 'handBack', 'handBackSetup', 'undo', 'diceDeck',
     ]), // prettier-ignore
-    value: z.union([z.boolean(), z.number().int().min(0).max(30)]),
+    value: z.union([z.boolean(), z.number().int().min(0).max(30), z.enum(['full', 'trimmed'])]),
   }),
   z.strictObject({ type: z.literal('improve'), track: TRACK, v: idx.optional() }),
   z.strictObject({ type: z.literal('wall'), v: idx }),
@@ -147,6 +147,8 @@ export const OptionsSchema = z.strictObject({
     handBackSetup: z.boolean().optional(),
     /** Asking to undo a move (SPEC 5.10); on unless set to false. */
     undo: z.boolean().optional(),
+    /** The dice deck (docs/rules/dice-deck.md); off unless set. */
+    diceDeck: z.enum(['full', 'trimmed']).optional(),
   }),
   /** CPU chatter in table talk (SPEC 5.14); on unless set to false. */
   cpuChat: z.boolean().optional(),
@@ -316,6 +318,8 @@ export const MapSchema = z.strictObject({
     .max(60),
   harborPool: z.array(PORT).max(60).optional(),
   fog: z.strictObject({ terrain: z.array(TERRAIN).max(120), numbers: z.array(token).max(120) }).optional(),
+  fogRewards: z.boolean().optional(),
+  fogTips: z.boolean().optional(),
   numberRules: z
     .strictObject({ noAdjacentRed: z.boolean().optional(), noAdjacentSame: z.boolean().optional() })
     .optional(),

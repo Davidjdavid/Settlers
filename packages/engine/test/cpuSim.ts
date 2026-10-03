@@ -215,7 +215,7 @@ export function cpuGame(
           );
       }
     }
-    const r = applyAction(s, p, withDice(a, dice));
+    const r = applyAction(s, p, withDice(a, dice, s));
     if (!r.ok) {
       fail(`${s.players[p]!.cpu ? 'CPU' : 'bot'} move rejected: ${JSON.stringify(a)} -> ${r.error}`);
       break;

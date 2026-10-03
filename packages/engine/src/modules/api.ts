@@ -95,7 +95,7 @@ export interface RuleModule {
    */
   afterRoll?(x: Ctx): boolean;
   /** Why a game rule can't change to `value` right now, or null. */
-  ruleChangeBlock?(s: GameState, rule: string, value: boolean | number): string | null;
+  ruleChangeBlock?(s: GameState, rule: string, value: boolean | number | string): string | null;
   /** Why p can't end their turn yet, or null. */
   endTurnBlock?(s: GameState, p: Seat): string | null;
   /** After normal production on a roll (e.g. gold). */

@@ -254,6 +254,12 @@ describe('editor actions', () => {
     expect(refused(m, { k: 'fogStack', terrain: ['fog'], numbers: [] })).toBe('Fog hides land, gold or sea');
     m = ok(m, { k: 'fogStack', standard: true });
     expect(m.fog!.terrain.length).toBeGreaterThanOrEqual(1);
+    // Fog follows today's rules (seafarers.md §11.5): tips uncover, uncovering pays unless off.
+    expect([m.fogRewards, m.fogTips]).toEqual([true, true]);
+    m = ok(m, { k: 'fogRewards', on: false });
+    expect([m.fogRewards, m.fogTips]).toEqual([false, true]);
+    expect(refused(blank(), { k: 'fogRewards', on: true })).toBe('Add some fog first');
+    m = ok(m, { k: 'fogRewards', on: true });
     // A game plays it: settlements only in the start area, the pirate where it was put.
     const s = newGame('sea-start', seatsFor(3), { map: m, modules: ['seafarers'], winVP: 10 });
     const setup = new Set(legalActions(s, s.turn).flatMap((a) => (a.type === 'setup' ? [a.v] : [])));

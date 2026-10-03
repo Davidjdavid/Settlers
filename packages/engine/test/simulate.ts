@@ -344,8 +344,9 @@ function randomCandidates(s: GameState, rng: RngState): [Seat, Action][] {
 /** A copy of `s` with everything `seat` cannot see changed: other hands, dev cards, deck order. */
 export function perturbHidden(s: GameState, seat: Seat, rng: RngState, decks = true): GameState {
   const t = cloneJson(s);
-  if (t.sea) {
-    // Fog stays secret: a different stack of the same size must look the same.
+  // Fog stays secret: a different stack of the same size must look the same. Like a deck, it
+  // stays as it is when checking a move's events (uncovering fog shows everyone the tile).
+  if (t.sea && decks) {
     const terr = ['sea', 'gold', ...RES, 'desert'] as const;
     t.sea.fog = {
       terrain: t.sea.fog.terrain.map(() => pick(rng, terr)),
@@ -375,6 +376,13 @@ export function perturbHidden(s: GameState, seat: Seat, rng: RngState, decks = t
   }
   // The treasure deck's order is secret too.
   if (t.tr && decks) t.tr.deck = t.tr.deck.map(() => pick(rng, TREASURES));
+  if (t.tr?.fogDeck && decks) t.tr.fogDeck = t.tr.fogDeck.map(() => pick(rng, TREASURES));
+  // Which dice cards are left (and which are out) is secret; how many isn't (dice-deck.md §4).
+  if (t.diceDeck && decks) {
+    const both = shuffle([...t.diceDeck.left, ...t.diceDeck.out], rng);
+    t.diceDeck.left = both.slice(0, t.diceDeck.left.length);
+    t.diceDeck.out = both.slice(t.diceDeck.left.length).sort((a, b) => a - b);
+  }
   const deckSize = Object.values(t.deck).reduce((a, b) => a + b, 0);
   t.deck = { knight: 0, road: 0, plenty: 0, mono: 0, vp: 0 };
   for (let i = 0; i < deckSize; i++) t.deck[pick(rng, DEV_TYPES)]++;
@@ -463,7 +471,7 @@ function eventLeakCheck(
   rng: RngState,
 ): string | null {
   if (seat === p || revealsByDesign(s, p, a)) return null;
-  // The deck stays as it is: a player's own draw shows them the top card, by design.
+  // The decks (and the fog) stay as they are: a draw shows the top card, by design.
   const t = perturbHidden(s, seat, rng, false);
   // The acting player's hand stays as it was, so the action is still legal.
   t.players[p] = cloneJson(s.players[p]!);
@@ -491,11 +499,16 @@ export function canonical(x: unknown): string {
   );
 }
 
-/** Rolls get dice from their own stream, like the server's dice function (SPEC 5.3). */
-export function withDice(a: Action, dice: RngState): Action {
+/**
+ * Rolls get dice from their own stream, like the server's dice function (SPEC 5.3); with the dice
+ * deck on, random numbers to draw cards with too (dice-deck.md §4).
+ */
+export function withDice(a: Action, dice: RngState, s?: GameState): Action {
   if (a.type !== 'roll') return a;
   const die = () => 1 + nextInt(dice, 6);
-  return { type: 'roll', dice: { d: Array.from({ length: 32 }, die), e: [die()] } };
+  const d = { d: Array.from({ length: 32 }, die), e: [die()] };
+  if (!s?.config.houseRules?.diceDeck) return { type: 'roll', dice: d };
+  return { type: 'roll', dice: { ...d, r: Array.from({ length: 32 }, () => nextInt(dice, 2 ** 30)) } };
 }
 
 const UNDO_TYPES = new Set(['askUndo', 'answerUndo', 'cancelUndo']);
@@ -676,7 +689,7 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       );
       break;
     }
-    const a = withDice(a0, dice);
+    const a = withDice(a0, dice, s);
     const before = chance(crng, deep) ? JSON.stringify(s) : null;
     const r = applyAction(s, p, a);
     if (before && before !== JSON.stringify(s)) fail('applyAction mutated its input');

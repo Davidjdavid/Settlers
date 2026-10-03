@@ -151,6 +151,15 @@ export function normalize(m0: MapData): MapData {
   const m = structuredClone(m0);
   adoptPools(m);
   for (const h of m.hexes) if (h.region !== undefined && !m.regions?.[h.region]) delete h.region;
+  // Fog in the map maker follows today's rules (seafarers.md §11.5): tips uncover, and uncovering
+  // pays unless switched off. Maps without fog don't carry the settings.
+  if (m.hexes.some((h) => h.t === 'fog')) {
+    m.fogRewards ??= true;
+    m.fogTips = true;
+  } else {
+    delete m.fogRewards;
+    delete m.fogTips;
+  }
   const set = setOf(m);
   delete m.set;
   for (const h of m.hexes) {
@@ -319,6 +328,8 @@ export type EditOp =
   /** Seafarers (10.2): what can turn up under the fog, or the standard stack. */
   | { k: 'fogStack'; terrain: Terrain[]; numbers: number[] }
   | { k: 'fogStack'; standard: true }
+  /** Whether uncovering fog pays: land a card, sea or desert a treasure (seafarers.md §11.5). */
+  | { k: 'fogRewards'; on: boolean }
   /** Regions (SPEC 10.4): add one, rename or remove it, paint a hex into one or out (null). */
   | { k: 'addRegion'; name?: string }
   | { k: 'renameRegion'; region: string; name: string }
@@ -583,6 +594,12 @@ export function applyEdit(m0: MapData, op: EditOp): EditResult {
       if (op.on) list.push([op.at[0], op.at[1]]);
       // Nothing painted means everywhere, as before.
       m.start = list.length ? list : 'all';
+      break;
+    }
+    case 'fogRewards': {
+      if (!m.hexes.some((h) => h.t === 'fog')) return fail('Add some fog first');
+      m.fogRewards = !!op.on;
+      m.fogTips = true;
       break;
     }
     case 'islandVP': {

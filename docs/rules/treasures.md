@@ -97,3 +97,4 @@ This is the contract for treasures (SPEC 10.3, Milestone 10). The engine, the si
 6. **D6 Which development card:** only the finder sees it, like a bought card.
 7. **D7 Stats:** treasures count as a new source of cards in the stats.
 8. **D8 Where treasures work:** every mode, on any map with spots (§1.3).
+9. **D9 Fog treasures (3 October):** on a map whose fog pays (docs/rules/seafarers.md §11.5), uncovering sea or desert gives a treasure from a separate fog treasure deck (one card per fog hex). It happens exactly like a treasure found on a spot (§3.3–3.5, §4), and the module is on for such maps even without spots.

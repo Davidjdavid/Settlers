@@ -190,12 +190,14 @@ export interface HouseRules {
   handBackSetup?: boolean;
   /** Players may ask everyone to undo their last move (SPEC 5.10). */
   undo?: boolean;
+  /** Draw the number dice from a deck of 36 cards (docs/rules/dice-deck.md); 'trimmed' takes 5 out. */
+  diceDeck?: 'full' | 'trimmed';
 }
 
 /** Game rules a player may change during their turn (SPEC 4.5). */
 export const RULE_KEYS = [
   'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
-  'barbarianDelay', 'handBack', 'handBackSetup', 'undo',
+  'barbarianDelay', 'handBack', 'handBackSetup', 'undo', 'diceDeck',
 ] as const; // prettier-ignore
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -319,6 +321,10 @@ export interface TreasureState {
   owe: TreasureOwe[];
   /** The stage to return to after the treasure stage. */
   back: Stage | null;
+  /** Maps whose fog pays (§11.5): the fog treasure deck, one card per fog hex. Server-only. */
+  fogDeck?: TreasureKind[];
+  /** Fog hexes that gave a treasure: which, by whom, and what. Public. */
+  fogFound?: { h: number; p: Seat; k: TreasureKind }[];
 }
 
 /** Cities & Knights state. Only present when the citiesKnights module is on. */
@@ -412,6 +418,8 @@ export interface GameState {
   tr?: TreasureState;
   /** A turn that can still be handed back; absent otherwise. */
   back?: HandBack;
+  /** The dice deck, while that house rule is on (or was). Server-only but for its size. */
+  diceDeck?: DiceDeck;
   /** The last move, while it can still be undone; absent otherwise. */
   undo?: UndoState;
   /** Keep playing after a win (SPEC 8.9); absent until someone asks. Public. */
@@ -451,6 +459,17 @@ export type SupplyKind = 'road' | 'settlement' | 'city' | 'ship' | 'knight1' | '
 export interface ServerDice {
   d: number[];
   e?: number[];
+  /** Random whole numbers for the dice deck (dice-deck.md §4): each picks among what's left. */
+  r?: number[];
+}
+
+/** The dice deck (dice-deck.md): cards 0–35 are (1 + c / 6, 1 + c % 6). Server-only. */
+export interface DiceDeck {
+  left: number[];
+  /** Taken out face down at the last shuffle (the trimmed deck). */
+  out: number[];
+  /** Drawn since the last shuffle, in order. */
+  used: number[];
 }
 
 export type Action =
@@ -496,7 +515,7 @@ export type Action =
   | { type: 'answerKeep'; yes: boolean }
   | { type: 'cancelKeep' }
   /** Change a game rule during your turn. */
-  | { type: 'setRule'; rule: RuleKey; value: boolean | number }
+  | { type: 'setRule'; rule: RuleKey; value: boolean | number | 'full' | 'trimmed' }
   /* Cities & Knights */
   | { type: 'improve'; track: Track; v?: number }
   | { type: 'wall'; v: number }
@@ -575,7 +594,7 @@ export type GameEvent =
   | { k: 'discover'; p: Seat; h: number; t: Terrain; n: number; got: PartialRes | null }
   | { k: 'islandBonus'; p: Seat; vp: number }
   /** A treasure found on edge e. `from`: it was a development card with none left to give. */
-  | { k: 'treasure'; p: Seat; e: number; kind: TreasureKind; from?: 'dev' }
+  | { k: 'treasure'; p: Seat; e: number; kind: TreasureKind; from?: 'dev'; h?: number }
   /** Cards a treasure gave (sheep, brick and wheat; or the ones picked). */
   | { k: 'treasureGot'; p: Seat; got: PartialRes }
   /** A development card from a treasure. `card` is null for everyone but the finder. */
@@ -594,7 +613,9 @@ export type GameEvent =
   /** Everyone agreed: play resumes with a new target. */
   | { k: 'keepPlaying'; target: number; from: number }
   | { k: 'undo'; p: Seat }
-  | { k: 'rule'; p: Seat; rule: RuleKey; value: boolean | number }
+  | { k: 'rule'; p: Seat; rule: RuleKey; value: boolean | number | 'full' | 'trimmed' }
+  /** The dice deck was shuffled: `left` cards to draw (dice-deck.md §1.4). */
+  | { k: 'deckShuffled'; left: number }
   /* Cities & Knights */
   | { k: 'eventDie'; face: 'ship' | Track }
   | { k: 'barbarians'; at: number }

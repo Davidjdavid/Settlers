@@ -547,8 +547,8 @@ export const citiesKnights: RuleModule = {
       const h = c.hands[p]!.length;
       const overflowing = c.owe.some((o) => o.k === 'overflow' && o.p === p);
       // On your own turn you may hold one over the limit until you put one back; each treasure
-      // that gave a progress card can add one more (docs/rules/treasures.md 4.4).
-      const extra = s.tr ? s.tr.found.filter((f) => f.k === 'dev').length : 0;
+      // that gave a progress card, on a spot or in the fog, can add one more (treasures.md 4.4, D9).
+      const extra = s.tr ? [...s.tr.found, ...(s.tr.fogFound ?? [])].filter((f) => f.k === 'dev').length : 0;
       if (h > PROGRESS_LIMIT + 1 + extra) bad.push(`player ${p} holds ${h} progress cards`);
       if (h > PROGRESS_LIMIT && p !== s.turn && !overflowing)
         bad.push(`player ${p} holds ${h} progress cards off-turn`);

@@ -206,8 +206,12 @@ Used by scenarios with fog, such as *The Fog Islands*.
      - a road becomes a coast or land edge;
      - a ship becomes a coast or sea edge.
 
-5. **Running out:** if the number-token stack is empty when land is revealed, the hex gets no number. Our maps are written so this can't happen, and the map checker requires it.
-6. **What's hidden:** the contents of the fog stacks, like the dev deck, never leave the server. Players see only how many fog hexes are left.
+5. **Map settings (3 October, D17).** A map can set two fog rules. Every premade map with fog has both on; the map maker shows the first as a switch (on for new maps) and always turns on the second:
+   - **Uncovering pays** (`fogRewards`): on, uncovering pays as in 3, except **sea or desert gives a treasure**: one of the four treasures (docs/rules/treasures.md §4), drawn from a face-down **fog treasure deck** made at the start with one card per fog hex, the four kinds dealt round in turn, then shuffled. Off, uncovering pays nothing. A map that doesn't say (one saved before this change) pays as in 3.
+   - **Tips uncover** (`fogTips`): on, a road or ship also uncovers every fog hex that has a corner at **either end** of its edge, as well as the hexes along it. Each hex uncovered pays its finder.
+   Hexes uncovered by one piece pay in this order: the hexes along it, then those at its ends, each in board order.
+6. **Running out:** if the number-token stack is empty when land is revealed, the hex gets no number. Our maps are written so this can't happen, and the map checker requires it.
+7. **What's hidden:** the contents of the fog stacks and the fog treasure deck, like the dev deck, never leave the server. Players see only how many fog hexes are left.
 
 ---
 
@@ -464,3 +468,4 @@ Your answers to the questions in the first draft:
     - The small islands are unchanged.
     - The pre-game table switches to it when 3 people sit down (and back with 4).
 16. **D16 Fog:** confirmed as D8: moving a ship next to fog uncovers it, as well as building.
+17. **D17 Fog settings (3 October):** asked for in play: "when a boat touches the tip of a fog island you uncover that hex", and uncovering sea or desert gives a treasure, both as a switch on maps, on for the Fog Islands and Treasure Fog. Built as §11.5. Games already saved keep the rules they started with (their map copy has neither setting).

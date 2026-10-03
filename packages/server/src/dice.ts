@@ -14,10 +14,16 @@ export function rollDie(): number {
 
 /**
  * Dice for one roll move: `pairs` rolls' worth of number dice (more than one only matters when a
- * 7 is rolled again) and one event die. The engine uses them in order and ignores the rest.
+ * 7 is rolled again) and one event die; with the dice deck on, random numbers to draw cards with.
+ * The engine uses them in order and ignores the rest.
  */
-export function diceForRoll(pairs = 4): ServerDice {
+export function diceForRoll(pairs = 4, deck = false): ServerDice {
   const d: number[] = [];
   for (let i = 0; i < pairs * 2; i++) d.push(rollDie());
-  return { d, e: [rollDie()] };
+  // For the dice deck house rule: each number picks a card among those left (dice-deck.md §4).
+  // Below 2^30, so taking it modulo at most 36 leaves no bias worth the name (under 1 in 10^7).
+  if (!deck) return { d, e: [rollDie()] };
+  const r: number[] = [];
+  for (let i = 0; i < pairs * 2; i++) r.push(randomInt(0, 2 ** 30));
+  return { d, e: [rollDie()], r };
 }

@@ -5,7 +5,15 @@ import type { PlayerView, RuleKey } from '@settlers/engine';
 import type { PlayerSettings, RoomInfo, SoundId, SoundPrefs } from '@settlers/server/protocol';
 import { SIZE_LABEL, applySize, currentSize, type Size } from './display';
 import { SOUNDS, askNotifyPermission, masterVolume, preview, soundPref } from './sound';
-import { Help, RULE_HELP, SETTING_HELP, SETTING_LABEL, settingOn, type SettingKey } from './help';
+import {
+  DICE_CHOICES,
+  Help,
+  RULE_HELP,
+  SETTING_HELP,
+  SETTING_LABEL,
+  settingOn,
+  type SettingKey,
+} from './help';
 import { client } from './net';
 import { Sheet } from './Sheets';
 import { RULE_LABEL } from './text';
@@ -287,7 +295,7 @@ export function RulesSheet({ v, room, onClose }: { v: PlayerView; room: RoomInfo
   const hr = v.rules.houseRules;
   const sea = v.rules.modules.includes('seafarers');
   const ck = v.rules.modules.includes('citiesKnights');
-  const set = (rule: RuleKey, value: boolean | number) =>
+  const set = (rule: RuleKey, value: boolean | number | 'full' | 'trimmed') =>
     void client.act({ type: 'setRule', rule, value }).then((r) => !r.ok && r.error && client.toast(r.error));
   const top = Math.max(v.hand?.totalVP ?? 0, ...v.players.map((p) => p.publicVP));
   const flags: { k: RuleKey; show: boolean }[] = [
@@ -365,6 +373,32 @@ export function RulesSheet({ v, room, onClose }: { v: PlayerView; room: RoomInfo
               onChange={(on) => set(k, on)}
             />
           ))}
+        <div className="switchrow">
+          <span>
+            Dice <Help text={RULE_HELP.diceDeck} />
+          </span>
+          <select
+            style={{ marginLeft: 'auto' }}
+            value={hr.diceDeck ?? 'dice'}
+            disabled={!mine}
+            data-testid="tablerule-diceDeck"
+            aria-label="Dice"
+            onChange={(e) =>
+              set('diceDeck', e.target.value === 'dice' ? false : (e.target.value as 'full' | 'trimmed'))
+            }
+          >
+            {DICE_CHOICES.map(([val, label]) => (
+              <option key={val} value={val}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {v.deckLeft != null && hr.diceDeck ? (
+          <p className="small" data-testid="deck-left">
+            {v.deckLeft} cards left in the dice deck
+          </p>
+        ) : null}
         {ck
           ? stepper(
               <>

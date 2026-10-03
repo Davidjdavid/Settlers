@@ -79,6 +79,8 @@ export interface PlayerView {
   undo?: { p: Seat; asked: boolean; ok: Seat[] };
   /** A turn that can be handed back (who ended it, whether they asked). */
   back?: { from: Seat; asked: boolean; refused: boolean };
+  /** The dice deck house rule: cards left to draw (dice-deck.md). */
+  deckLeft?: number;
   /** Keep playing after a win (SPEC 8.9): all public. */
   keep?: GameState['keep'];
   /** Seafarers (public parts only). */
@@ -94,6 +96,9 @@ export interface TreasureView {
   found: TreasureState['found'];
   owe: TreasureState['owe'];
   back: Stage | null;
+  /** Fog treasures: cards left face down, and those given. */
+  fogLeft?: number;
+  fogFound?: TreasureState['fogFound'];
 }
 
 export interface SeaView {
@@ -164,6 +169,8 @@ export function viewFor(s: GameState, seat: Seat | null): PlayerView {
   if (s.back) v.back = { from: s.back.from, asked: s.back.asked, refused: s.back.refused };
   if (s.undo) v.undo = { p: s.undo.p, asked: s.undo.asked, ok: s.undo.ok.slice() };
   if (s.keep) v.keep = cloneJson(s.keep);
+  // The dice deck: only how many cards are left (dice-deck.md §4).
+  if (s.diceDeck) v.deckLeft = s.diceDeck.left.length;
   for (const m of mods(s)) m.view?.(s, me, v);
   return v;
 }

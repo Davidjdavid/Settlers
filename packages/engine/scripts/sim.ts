@@ -37,7 +37,7 @@ interface Scenario {
 }
 const HFNS = SCENARIOS['heading-for-new-shores']!;
 const SIMS: Record<string, Scenario> = {
-  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb', 'hu', 'nH', 'u', 'I', 'O'] },
+  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb', 'hu', 'nH', 'u', 'I', 'O', 'k', 'nK'] },
   'heading-for-new-shores': {
     map: HFNS,
     players: HFNS.players,
@@ -65,7 +65,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 15,
     quickVP: 12,
     maxTurns: 5000,
-    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O'],
+    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O', 'rk', 'K'],
   },
   ck: {
     modules: ['citiesKnights'],
@@ -73,7 +73,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 13,
     quickVP: 10,
     maxTurns: 3000,
-    rules: ['r', 'd', 'w', 'b', 'nrwu', 'bdw', 'hu', 'rH', 'I', 'O', 'bO'],
+    rules: ['r', 'd', 'w', 'b', 'nrwu', 'bdw', 'hu', 'rH', 'I', 'O', 'bO', 'hK', 'k'],
   },
   'ck-sea': {
     map: HFNS,
@@ -178,6 +178,7 @@ const CPU_KINDS: CpuBrain[] = [
  * Seed format: base.scenario.index.<n>p.<house rules or ->. House rules: n no 7s in round 1,
  * b 3:1 bank, f free ship moves, r re-roll 7s / d no discards until the barbarians attack,
  * w barbarians wait 2 rounds, h dice can be handed back (H: during setup too); the bank (SPEC 8.1):
+ * k the dice deck, K the dice deck with 5 cards out (docs/rules/dice-deck.md);
  * I unlimited, O as before Milestone 8 (commodities unlimited); otherwise limited, as new games.
  */
 function makeSeed(base: string, scenario: string, i: number): string {
@@ -204,6 +205,8 @@ function parseSeed(seed: string): {
   if (hr?.includes('w')) houseRules.barbarianDelay = 2;
   if (hr?.includes('h')) houseRules.handBack = true;
   if (hr?.includes('u')) houseRules.undo = true;
+  if (hr?.includes('k')) houseRules.diceDeck = 'full';
+  if (hr?.includes('K')) houseRules.diceDeck = 'trimmed';
   if (hr?.includes('H')) Object.assign(houseRules, { handBack: true, handBackSetup: true });
   const bank = hr?.includes('I') ? 'unlimited' : hr?.includes('O') ? undefined : 'limited';
   return { scenario, n: Number(np.replace('p', '')), houseRules, bank };

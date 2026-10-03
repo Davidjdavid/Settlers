@@ -184,6 +184,36 @@ describe('room options', () => {
     expect(old.last('sync').room.options).toEqual({ scenario: 'classic', winVP: 10, houseRules: {} });
   });
 
+  it('the dice deck (docs/rules/dice-deck.md): a whole game through the server, kept across a restart', () => {
+    const { conns, code } = table(3);
+    send(conns[0]!, {
+      t: 'setOptions',
+      options: { ...DEFAULT_OPTIONS, houseRules: { diceDeck: 'trimmed' } },
+    });
+    expect(gameConfigFor(rooms.getRoom(code)!.options).houseRules?.diceDeck).toBe('trimmed');
+    send(conns[0]!, { t: 'start' });
+    expect(state(code).config.houseRules?.diceDeck).toBe('trimmed');
+    playOut(code, conns, 'deck');
+    const s = state(code);
+    expect(s.phase).toBe('over');
+    // Every roll was drawn with the server's random numbers, saved with the move.
+    const rolls = store
+      .loadActions(rooms.getRoom(code)!.game!.row.id)
+      .filter((r) => r.action.type === 'roll');
+    expect(rolls.length).toBeGreaterThan(31);
+    for (const r of rolls) expect((r.action as { dice: { r?: number[] } }).dice.r?.length).toBeGreaterThan(0);
+    expect(s.diceDeck!.out).toHaveLength(5);
+    // Players see only how many are left.
+    const view = conns[1]!.last('update').game!;
+    expect(view.deckLeft).toBe(s.diceDeck!.left.length);
+    expect(JSON.stringify(view)).not.toContain('"out"');
+    // A restart rebuilds the same deck from the saved moves.
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    rooms = new Rooms(store, { log: quiet });
+    expect(state(code).diceDeck).toEqual(s.diceDeck);
+  });
+
   it('older databases get the options column added', () => {
     store.close();
     const file = join(dir, 'old.db');

@@ -47,6 +47,47 @@ describe('the dice function (SPEC 5.3)', () => {
     );
   }, 60000);
 
+  it('each roll is independent of the one before: no streaks, no patterns', () => {
+    // 500,000 rolls in a row. The pair (this total, next total) should follow the product of
+    // the two-dice odds; chi-square over the 11 × 11 table (120 degrees of freedom: about 120
+    // on average, 99.99th percentile ≈ 185). A repeat of the same total should happen as often as chance says.
+    const N = 500_000;
+    const ways = (t: number) => (6 - Math.abs(t - 7)) / 36;
+    const table = new Array<number>(121).fill(0);
+    let prev = 0;
+    let repeats = 0;
+    let sevenRun = 0;
+    let longestSevens = 0;
+    for (let i = 0; i <= N; i++) {
+      const { d } = diceForRoll(1);
+      const t = d[0]! + d[1]!;
+      if (i) {
+        table[(prev - 2) * 11 + (t - 2)]!++;
+        if (t === prev) repeats++;
+      }
+      sevenRun = t === 7 ? sevenRun + 1 : 0;
+      longestSevens = Math.max(longestSevens, sevenRun);
+      prev = t;
+    }
+    let chi = 0;
+    for (let a = 2; a <= 12; a++)
+      for (let b = 2; b <= 12; b++) {
+        const want = N * ways(a) * ways(b);
+        chi += (table[(a - 2) * 11 + (b - 2)]! - want) ** 2 / want;
+      }
+    expect(chi).toBeLessThan(185);
+    // Same total twice in a row: the sum of each total's odds squared (≈ 11.27%).
+    let pRepeat = 0;
+    for (let t = 2; t <= 12; t++) pRepeat += ways(t) ** 2;
+    expect(within(repeats, N, pRepeat)).toBe(true);
+    // Runs of 7s: with half a million rolls the longest is usually 6–9; far more would be a fault.
+    expect(longestSevens).toBeLessThan(14);
+    console.log(
+      `500,000 rolls in a row: chi² ${chi.toFixed(1)} (about 120 expected, under 185 is fair); same total twice ` +
+        `${((100 * repeats) / N).toFixed(2)}% (chance ${(100 * pRepeat).toFixed(2)}%); longest run of 7s ${longestSevens}`,
+    );
+  }, 60000);
+
   it('only ever gives whole numbers 1 to 6', () => {
     const seen = new Set<number>();
     for (let i = 0; i < 10000; i++) seen.add(rollDie());

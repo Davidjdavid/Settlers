@@ -4,6 +4,7 @@
  * problems (empty means OK).
  */
 
+import { deckProblems } from './diceDeck';
 import { mods } from './modules/api';
 import {
   supplyOf,
@@ -42,6 +43,7 @@ export function checkInvariants(s: GameState, prev?: GameState): string[] {
   const bad: string[] = [];
   const g = geo(s);
   const n = s.players.length;
+  bad.push(...deckProblems(s));
 
   // Resources are conserved and never negative.
   for (const r of RES) {

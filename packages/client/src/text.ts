@@ -267,7 +267,9 @@ export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
       return one(
         e.from
           ? L`${P(e.p)} found a treasure: no cards left to give, so ${what} instead`
-          : L`${P(e.p)} found a treasure: ${what}`,
+          : e.h != null
+            ? L`${P(e.p)} found a treasure in the fog: ${what}`
+            : L`${P(e.p)} found a treasure: ${what}`,
         { big: true },
       );
     }
@@ -436,6 +438,8 @@ export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
       return one(L`${P(e.p)} withdrew the request to keep playing`);
     case 'keepPlaying':
       return one(L`Keep playing! First to ${e.target} points wins in overtime`, { big: true });
+    case 'deckShuffled':
+      return one(L`The dice deck was shuffled: ${String(e.left)} cards`);
   }
 }
 
@@ -469,10 +473,17 @@ export const RULE_LABEL: Record<RuleKey, string> = {
   handBack: 'Players can hand the dice back',
   handBackSetup: 'Hand the dice back during setup too',
   undo: 'Players can ask to undo a move',
+  diceDeck: 'Dice deck',
 };
 
-function ruleText(rule: RuleKey, value: boolean | number): string {
+function ruleText(rule: RuleKey, value: boolean | number | string): string {
   if (rule === 'winVP') return `set points to win to ${value}`;
+  if (rule === 'diceDeck')
+    return value === 'trimmed'
+      ? 'switched to the dice deck with some cards out'
+      : value
+        ? 'switched to the dice deck'
+        : 'switched back to dice';
   if (rule === 'barbarianDelay') return `set the barbarians to start after round ${value}`;
   return `turned ${value ? 'on' : 'off'} “${RULE_LABEL[rule]}”`;
 }

@@ -106,6 +106,28 @@ function happen(x: Ctx, p: Seat, k: TreasureKind) {
   }
 }
 
+/**
+ * Sea or desert uncovered on a map whose fog pays (docs/rules/seafarers.md §11.5, D9): the top card
+ * of the fog treasure deck, made to happen like any treasure. Its event has no edge (e -1) and
+ * names the hex.
+ */
+function fogFind(x: Ctx, h: number, p: Seat) {
+  const e = -1;
+  const { s, events } = x;
+  const t = tr(s);
+  const deck = t.fogDeck!;
+  let k = deck.shift()!;
+  let from: 'dev' | undefined;
+  if (k === 'dev' && !devAvailable(s)) {
+    const others = TREASURES.filter((x) => x !== 'dev');
+    k = others[nextInt(s.rng, others.length)]!;
+    from = 'dev';
+  }
+  t.fogFound!.push({ h, p, k });
+  events.push(from ? { k: 'treasure', p, e, kind: k, from, h } : { k: 'treasure', p, e, kind: k, h });
+  happen(x, p, k);
+}
+
 /** Choices still owed (not free pieces). */
 const choices = (t: TreasureState) => t.owe.filter((o) => o.k !== 'roads');
 
@@ -114,6 +136,15 @@ function settle(x: Ctx) {
   const { s, events } = x;
   const t = tr(s);
   if (s.phase !== 'play') return;
+  if (t.fogDeck) {
+    // This move's uncovered sea and desert, each once.
+    const done = new Set(t.fogFound!.map((f) => f.h));
+    for (const ev of events)
+      if (ev.k === 'discover' && (ev.t === 'sea' || ev.t === 'desert') && !done.has(ev.h)) {
+        done.add(ev.h);
+        fogFind(x, ev.h, ev.p);
+      }
+  }
   const ships = s.sea?.ships;
   for (const e of t.spots.slice()) {
     const owner = s.edges[e] ?? ships?.[e] ?? null;
@@ -168,6 +199,14 @@ export const treasures: RuleModule = {
       if (e != null && !spots.includes(e)) spots.push(e);
     }
     s.tr = { spots, deck: shuffle(treasureDeck(spots.length), s.rng), found: [], owe: [], back: null };
+    // Fog that pays: one treasure per fog hex (D9).
+    if (m?.fogRewards) {
+      const n = s.board.hexes.filter((h) => h.t === 'fog').length;
+      if (n) {
+        s.tr.fogDeck = shuffle(treasureDeck(n), s.rng);
+        s.tr.fogFound = [];
+      }
+    }
   },
 
   afterAction: settle,
@@ -277,6 +316,17 @@ export const treasures: RuleModule = {
     if (t.back != null && s.stage !== 'treasure' && s.stage !== 'ck')
       bad.push(`treasure back ${t.back} outside the treasure stage`);
     for (const o of t.owe) if (!(o.n > 0)) bad.push(`treasure owes ${o.n}`);
+    if (t.fogDeck) {
+      // Every fog hex left can still pay; each uncovered sea or desert paid exactly once.
+      const fog = s.board.hexes.filter((h) => h.t === 'fog').length;
+      if (t.fogDeck.length < fog) bad.push(`fog treasure deck ${t.fogDeck.length} for ${fog} fog hexes`);
+      const fh = new Set(t.fogFound!.map((f) => f.h));
+      if (fh.size !== t.fogFound!.length) bad.push('a fog treasure given twice');
+      for (const f of t.fogFound!) {
+        const tt = s.board.hexes[f.h]?.t;
+        if (tt !== 'sea' && tt !== 'desert') bad.push(`fog treasure from ${tt} hex ${f.h}`);
+      }
+    }
     return bad;
   },
 
@@ -293,6 +343,20 @@ export const treasures: RuleModule = {
       bad.push('a found treasure changed');
     if (a.spots.length + a.found.length !== b.spots.length + b.found.length)
       bad.push('treasure deck plus found changed size');
+    if (!!a.fogDeck !== !!b.fogDeck) bad.push('the fog treasure deck came or went');
+    if (a.fogDeck && b.fogDeck) {
+      if (a.fogDeck.length + a.fogFound!.length !== b.fogDeck.length + b.fogFound!.length)
+        bad.push('fog treasure deck plus found changed size');
+      if (a.fogFound!.some((f, i) => JSON.stringify(f) !== JSON.stringify(b.fogFound![i])))
+        bad.push('a fog treasure changed');
+      // Every sea or desert uncovered by this move paid (and nothing else did).
+      const uncovered = next.board.hexes
+        .map((h, i) => (prev.board.hexes[i]!.t === 'fog' && (h.t === 'sea' || h.t === 'desert') ? i : -1))
+        .filter((i) => i >= 0);
+      const paid = b.fogFound!.slice(a.fogFound!.length).map((f) => f.h);
+      if (next.phase !== 'over' && JSON.stringify(paid) !== JSON.stringify(uncovered))
+        bad.push(`fog paid ${paid} for ${uncovered}`);
+    }
     return bad;
   },
 
@@ -303,6 +367,7 @@ export const treasures: RuleModule = {
       found: t.found.map((f) => ({ ...f })),
       owe: t.owe.map((o) => ({ ...o })),
       back: t.back,
+      ...(t.fogDeck ? { fogLeft: t.fogDeck.length, fogFound: t.fogFound!.map((f) => ({ ...f })) } : {}),
     };
   },
 
@@ -315,6 +380,9 @@ export const treasures: RuleModule = {
       found: t.found.map((f) => ({ ...f })),
       owe: t.owe.map((o) => ({ ...o })),
       back: t.back,
+      ...(t.fogLeft != null
+        ? { fogDeck: Array.from({ length: t.fogLeft }, () => 'trio' as const), fogFound: t.fogFound!.slice() }
+        : {}),
     };
   },
 };

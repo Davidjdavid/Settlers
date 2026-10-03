@@ -1557,6 +1557,15 @@ function SeafarersPanel({
           >
             Standard
           </button>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={map.fogRewards !== false}
+              data-testid="fog-rewards"
+              onChange={(e) => edit({ k: 'fogRewards', on: e.target.checked })}
+            />
+            Uncovering pays: land gives its card, sea or desert a treasure
+          </label>
         </div>
       ) : null}
     </section>

@@ -1111,10 +1111,11 @@ export class Rooms {
   ): { ok: boolean; error?: string } {
     const g = room.game!;
     // Rolls get the server's dice (SPEC 5.3); they're saved with the move, so replays use them.
-    if (action.type === 'roll') action = { type: 'roll', dice: diceForRoll() };
+    const deck = !!g.state.config.houseRules?.diceDeck;
+    if (action.type === 'roll') action = { type: 'roll', dice: diceForRoll(4, deck) };
     let r = applyAction(g.state, seat, action);
     for (let pairs = 16; !r.ok && r.error === NEED_DICE && pairs <= 64; pairs *= 2) {
-      action = { type: 'roll', dice: diceForRoll(pairs) };
+      action = { type: 'roll', dice: diceForRoll(pairs, deck) };
       r = applyAction(g.state, seat, action);
     }
     if (!r.ok) return { ok: false, error: r.error };
@@ -1202,7 +1203,7 @@ export class Rooms {
     });
   }
 
-  private optionFromRule(room: Room, rule: string, value: boolean | number) {
+  private optionFromRule(room: Room, rule: string, value: boolean | number | string) {
     const o = structuredClone(room.options);
     if (rule === 'winVP') o.winVP = value as number;
     else (o.houseRules as Record<string, unknown>)[rule] = rule === 'handBack' ? value : value || undefined;
@@ -1755,6 +1756,7 @@ export function gameConfigFor(o: RoomOptions, board?: MapData): Partial<GameConf
   if (o.houseRules.handBack !== false) hr.handBack = true;
   if (o.houseRules.handBackSetup) hr.handBackSetup = true;
   if (o.houseRules.undo !== false) hr.undo = true;
+  if (o.houseRules.diceDeck) hr.diceDeck = o.houseRules.diceDeck;
   if (o.ck) {
     if (o.houseRules.rerollBeforeAttack) hr.rerollBeforeAttack = true;
     if (o.houseRules.noDiscardBeforeAttack) hr.noDiscardBeforeAttack = true;
