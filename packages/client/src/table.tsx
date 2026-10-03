@@ -4,7 +4,7 @@
  * which keeps the one true table; this screen only shows what it says.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   checkBoard,
   OUR_RULES,
@@ -86,6 +86,21 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
   const savedMaps = allMaps.filter((m) => m.seafarers === sea);
   const otherMaps = allMaps.filter((m) => m.seafarers !== sea);
   const src = t.board.source;
+  // "Saved map" picked: waiting for the server's list of maps.
+  const [wantSaved, setWantSaved] = useState(false);
+  const asked = useRef<typeof st.maps | null>(null);
+  useEffect(() => {
+    if (!wantSaved || st.maps === asked.current || !st.maps) return;
+    setWantSaved(false);
+    if (savedMaps[0]) sendTable({ k: 'source', source: 'saved', id: savedMaps[0].id });
+    else
+      client.toast(
+        otherMaps.length
+          ? `Your saved maps are for ${sea ? 'Base or Knights' : 'Seafarers or Full game'}: switch the mode to play them`
+          : `No saved ${sea ? 'Seafarers ' : ''}maps yet: make one in Maps`,
+        'err',
+      );
+  }, [wantSaved, st.maps]);
   const edit = (op: EditOp) => sendTable({ k: 'edit', op } as TableOp);
   const terrains: Terrain[] = [
     'wood',
@@ -144,14 +159,13 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
                     source: 'generated',
                     preset: presets[0]?.id ?? 'builtin:our rules',
                   });
-                else if (savedMaps[0]) sendTable({ k: 'source', source: 'saved', id: savedMaps[0].id });
-                else
-                  client.toast(
-                    otherMaps.length
-                      ? `Your saved maps are for ${sea ? 'Base or Knights' : 'Seafarers or Full game'}: switch the mode to play them`
-                      : `No saved ${sea ? 'Seafarers ' : ''}maps yet: make one in Maps`,
-                    'err',
-                  );
+                else {
+                  // Ask for the latest list and pick from it when it comes (a map just made, or
+                  // a list not loaded yet, used to read as "no saved maps").
+                  asked.current = st.maps ?? null;
+                  setWantSaved(true);
+                  client.loadMaps();
+                }
               }}
             >
               <option value="default">Standard board</option>

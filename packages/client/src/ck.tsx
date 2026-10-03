@@ -19,7 +19,10 @@ type Play = Extract<Action, { type: 'progress' }>;
 
 /** The first choice the viewer owes, if any. */
 export const myOwe = (v: PlayerView): Owe | null =>
-  v.me != null && v.stage === 'ck' ? (v.ck?.owe.find((o) => o.p === v.me) ?? null) : null;
+  // Nothing is owed once the game is over (a win can land while others still owe a choice).
+  v.me != null && v.phase === 'play' && v.stage === 'ck'
+    ? (v.ck?.owe.find((o) => o.p === v.me) ?? null)
+    : null;
 
 /** Choices made by clicking the board rather than in a sheet. */
 export const BOARD_OWES = new Set<Owe['k']>(['loseCity', 'relocate', 'desert', 'deserterPlace', 'rebuild']);

@@ -276,6 +276,24 @@ export function Game({
   // Cities & Knights choices owed: board picks glow; others open their sheet.
   const owe = myOwe(v);
   const oweKey = owe ? `${v.seq}:${JSON.stringify(owe)}` : '';
+  // When the game ends, close any sheet that asks for a move: it can't be answered any more.
+  useEffect(() => {
+    if (v.phase !== 'over') return;
+    const moves = [
+      'trade',
+      'discard',
+      'plenty',
+      'mono',
+      'victim',
+      'knightAct',
+      'owe',
+      'cardParam',
+      'piece',
+      'gold',
+      'treasure',
+    ];
+    setSheet((x) => (x && moves.includes(x.k) ? null : x));
+  }, [v.phase]);
   useEffect(() => {
     if (owe && !BOARD_OWES.has(owe.k)) setSheet({ k: 'owe' });
     else setSheet((x) => (x?.k === 'owe' ? null : x));

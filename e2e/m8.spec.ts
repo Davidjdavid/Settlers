@@ -391,6 +391,25 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await c.getByTestId('smith-go').click();
     expect([...(await moves()).at(-1)!.vs].sort()).toEqual([at[1]!, at[2]!].sort());
 
+    /* ---------- A choice left owed when the game ends doesn't stay open (made-up view) ---------- */
+    // The barbarians beaten gives the winning point while tied defenders still owe a draw.
+    const owedAt = (phase: string) =>
+      c.evaluate((phase) => {
+        const s = (window as any).__settlers;
+        const v = structuredClone(s.state().game);
+        Object.assign(v, { phase, stage: 'ck', turn: v.me });
+        v.winner = phase === 'play' ? null : v.me;
+        v.ck.owe = [{ k: 'defenderDraw', p: v.me }];
+        s.stage(v);
+      }, phase);
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    await owedAt('play');
+    await expect(c.getByRole('dialog', { name: 'You helped beat the barbarians' })).toBeVisible();
+    await owedAt('over');
+    await expect(c.getByRole('dialog', { name: 'You helped beat the barbarians' })).toHaveCount(0);
+    await expect(c.getByTestId('game-over')).toBeVisible({ timeout: 15_000 });
+
     /* ---------- Move an active knight, and chase the robber (made-up view) ---------- */
     await c.reload();
     await expect(c.locator('#board')).toBeVisible();
@@ -420,7 +439,7 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await c.locator(`#board [data-v="${kAt.at}"]`).tap();
     await c.getByTestId('k-move').click();
     // The corners it can reach light up; pick one.
-    await expect.poll(lit).toEqual(kAt.to);
+    await expect.poll(async () => (await lit()).sort((x, y) => x - y)).toEqual(kAt.to);
     await c.locator(`#board [data-v="${kAt.to[0]}"]`).tap();
     await confirmPlace(c, 1000);
     await expect
