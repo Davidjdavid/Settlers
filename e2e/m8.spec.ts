@@ -155,6 +155,35 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await confirmPlace(c, 2000);
     await expect.poll(async () => (await view(c)).seq).toBeGreaterThan(seq);
 
+    /* ---------- Every player in sight on the laptop ---------- */
+    // The players box scrolls on a short screen; whoever is scrolled out is named at its foot.
+    const inSight = () =>
+      a.evaluate(() => {
+        const box = document.querySelector('.players-box')!.getBoundingClientRect();
+        const foot = document.querySelector('[data-testid=players-more]')?.getBoundingClientRect();
+        const bottom = foot ? foot.top : box.bottom;
+        const rows = [...document.querySelectorAll<HTMLElement>('.players .player')];
+        const hidden = rows
+          .filter((r) => {
+            const b = r.getBoundingClientRect();
+            return Math.min(b.bottom, bottom) - Math.max(b.top, box.top) < b.height * 0.6;
+          })
+          .map((r) => r.dataset.seat);
+        const named = [...document.querySelectorAll<HTMLElement>('[data-testid=players-more] button')].map(
+          (x) => x.dataset.seat,
+        );
+        return { hidden, named };
+      });
+    for (const top of [0, 10_000]) {
+      await a.locator('.players-box').evaluate((el, t) => (el.scrollTop = t), top);
+      await expect
+        .poll(async () => {
+          const x = await inSight();
+          return x.hidden.join() === x.named.join();
+        })
+        .toBe(true);
+    }
+
     /* ---------- The log on the laptop ---------- */
     const lb = (await a.getByTestId('log').boundingBox())!;
     expect(lb.y).toBeGreaterThanOrEqual(0);

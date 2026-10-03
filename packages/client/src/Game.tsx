@@ -1,6 +1,6 @@
 /* The game table: board, prompt, hand and actions, players, log. */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   COMS, COST, DEV_PLAY, KEEP_MAX, KNIGHT_COST, SHIP_COST, WALL_COST, cardKinds, cardWarning, goldDue, handLimit, has,
   treasureDue,
@@ -222,8 +222,14 @@ export function Game({
   // Players scrolled out of that box are named at its foot with their points, so nobody is out of
   // sight without a sign (a laptop's Knights game fits two of three rows).
   const [outOfView, setOutOfView] = useState<number[]>([]);
+  // The box element itself (layouts rebuild it), so the watch below follows a new one.
+  const [boxEl, setBoxEl] = useState<HTMLElement | null>(null);
+  const boxRef = useCallback((el: HTMLElement | null) => {
+    playersBox.current = el;
+    setBoxEl(el);
+  }, []);
   useEffect(() => {
-    const box = playersBox.current;
+    const box = boxEl;
     const list = box?.querySelector('.players');
     if (!box || !list) return;
     const check = () => {
@@ -247,7 +253,7 @@ export function Game({
       box.removeEventListener('scroll', check);
       ro.disconnect();
     };
-  }, [v.players.length]);
+  }, [boxEl, v.players.length]);
   // The win celebration plays once, when the game ends while you're watching (SPEC 5.13).
   const [celebrating, setCelebrating] = useState(false);
   const wasPlaying = useRef(v.phase === 'play');
@@ -1460,7 +1466,7 @@ export function Game({
   );
   const barbEl = v.ck ? <BarbarianBox v={v} /> : null;
   const playersEl = (
-    <section className="box players-box" aria-label="Players" ref={playersBox}>
+    <section className="box players-box" aria-label="Players" ref={boxRef}>
       <span className="eyebrow">
         Players · first to <b data-testid="win-target">{v.winVP}</b> points
       </span>
