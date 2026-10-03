@@ -504,55 +504,124 @@ const smash: Theme = {
   crisp: false,
 };
 
+/** The sea's box (x, y, width, height) from its attributes, for styles that draw a scene in it. */
+function boxOf(box: string): [number, number, number, number] {
+  const n = (k: string) => Number(new RegExp(`${k}="([^"]*)"`).exec(box)![1]);
+  return [n('x'), n('y'), n('width'), n('height')];
+}
+
 const PLAT_TILE: Record<Terrain, string> = {
-  wood: '#2a9a3a',
-  brick: '#c8501c',
-  sheep: '#7cd23c',
-  wheat: '#f8c838',
-  ore: '#9ca3b0',
-  desert: '#f0d090',
-  gold: '#f8b800',
-  sea: '#5c94fc',
-  fog: '#a0a8c0',
+  wood: '#2fa14a',
+  brick: '#d0582a',
+  sheep: '#84d64a',
+  wheat: '#f6c93c',
+  ore: '#a3aab8',
+  desert: '#f2d596',
+  gold: '#ffbf1f',
+  sea: '#62b2ff',
+  fog: '#b4bccd',
 };
-const PIPE = ['GGGGGGGGGGGG', 'GLLgGGGGGGdG', 'GLLgGGGGGGdG', 'GGGGGGGGGGGG', '.GLgGGGGGdd.', '.GLgGGGGGdd.', '.GLgGGGGGdd.', '.GLgGGGGGdd.', '.GLgGGGGGdd.']; // prettier-ignore
-const PUFF = ['....wwww......', '..wwwwwwww.ww.', '.wwwwwwwwwwwww', 'wwwwwwwwwwwwww', 'wwwwwwwwwwwwww', '.bbbbbbbbbbbb.']; // prettier-ignore
+/** A cartoon cloud: three puffs on a flat base, outlined. */
+const puff = (x: number, y: number, s: number) =>
+  `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})"><path d="M-30 10a12 12 0 0 1 4-21a16 16 0 0 1 28-6a14 14 0 0 1 24 8a11 11 0 0 1 4 19z" fill="#fff" stroke="#1a1a2e" stroke-width="2.4" stroke-linejoin="round"/><path d="M-22 6h40" stroke="#cfe6ff" stroke-width="3" stroke-linecap="round"/></g>`;
+/** A rolling hill with a few darker spots. */
+const hill = (x: number, base: number, w: number, h: number, fill: string) =>
+  `<path d="M${f1(x - w / 2)} ${f1(base)}C${f1(x - w / 2)} ${f1(base - h)} ${f1(x + w / 2)} ${f1(base - h)} ${f1(x + w / 2)} ${f1(base)}Z" fill="${fill}" stroke="#14301a" stroke-width="2.5"/><ellipse cx="${f1(x - w * 0.12)}" cy="${f1(base - h * 0.55)}" rx="${f1(w * 0.04)}" ry="${f1(h * 0.09)}" fill="#14301a" opacity=".35"/><ellipse cx="${f1(x + w * 0.14)}" cy="${f1(base - h * 0.42)}" rx="${f1(w * 0.035)}" ry="${f1(h * 0.08)}" fill="#14301a" opacity=".35"/>`;
+/** A green warp pipe standing on the ground. */
+const pipe = (x: number, ground: number, h: number) =>
+  `<g><rect x="${f1(x - 18)}" y="${f1(ground - h)}" width="36" height="${f1(h)}" fill="#22b14c" stroke="#0b3b18" stroke-width="2.5"/><rect x="${f1(x - 13)}" y="${f1(ground - h)}" width="6" height="${f1(h)}" fill="#7be08f"/><rect x="${f1(x - 24)}" y="${f1(ground - h - 16)}" width="48" height="18" rx="2" fill="#22b14c" stroke="#0b3b18" stroke-width="2.5"/><rect x="${f1(x - 19)}" y="${f1(ground - h - 14)}" width="7" height="14" fill="#7be08f"/></g>`;
+/** A floating question-style block. */
+const qblock = (x: number, y: number, s = 30, mark = '?') =>
+  `<g><rect x="${f1(x - s / 2)}" y="${f1(y - s / 2)}" width="${s}" height="${s}" rx="3" fill="#ffc21a" stroke="#3a1e00" stroke-width="2.5"/><rect x="${f1(x - s / 2 + 2)}" y="${f1(y - s / 2 + 2)}" width="${s - 4}" height="4" fill="#ffe58a"/><rect x="${f1(x - s / 2 + 2)}" y="${f1(y + s / 2 - 6)}" width="${s - 4}" height="4" fill="#d97b00"/>${[
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ]
+    .map(
+      ([a, b]) =>
+        `<circle cx="${f1(x + a! * (s / 2 - 5))}" cy="${f1(y + b! * (s / 2 - 5))}" r="1.8" fill="#3a1e00"/>`,
+    )
+    .join(
+      '',
+    )}<text x="${f1(x)}" y="${f1(y + 1)}" text-anchor="middle" dominant-baseline="central" font-size="${f1(s * 0.62)}" font-weight="900" fill="#fff" stroke="#3a1e00" stroke-width="2.5" paint-order="stroke" font-family="'Arial Black', Arial, sans-serif">${mark}</text></g>`;
+const brickRow = (x: number, y: number, n: number) =>
+  Array.from(
+    { length: n },
+    (_, k) =>
+      `<rect x="${f1(x + k * 30)}" y="${f1(y)}" width="30" height="30" fill="#c84c0c" stroke="#3a1e00" stroke-width="2.5"/><path d="M${f1(x + k * 30)} ${f1(y + 15)}h30M${f1(x + k * 30 + 15)} ${f1(y)}v15" stroke="#3a1e00" stroke-width="1.6"/>`,
+  ).join('');
+const coin = (x: number, y: number) =>
+  `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="7" ry="10" fill="#ffd21f" stroke="#7a4a00" stroke-width="2"/><rect x="${f1(x - 1.5)}" y="${f1(y - 5)}" width="3" height="10" rx="1.5" fill="#fff3b0"/>`;
 const platformer: Theme = {
   id: 'platformer',
   tile: PLAT_TILE,
-  glyph: PIXEL_GLYPH,
+  glyph: GLYPH,
   decor: 'scatter',
-  glyphScale: 1.35,
-  tileArt: pixelTile,
+  glyphScale: 1.1,
+  tileArt: null,
   glyphAttr: () => '',
-  seaDefs: `${pixelTextures(PLAT_TILE)}${glyphSymbols(PIXEL_GLYPH)}<symbol id="pl-pipe" viewBox="-14 -12 28 24">${sprite(PIPE, { G: '#00a800', L: '#b8f818', g: '#58d854', d: '#005800' }, 2.2, '#000000')}</symbol><symbol id="pl-puff" viewBox="-16 -8 32 16">${sprite(PUFF, { w: '#ffffff', b: '#bcd8ff' }, 2.2, '#000000')}</symbol><pattern id="plbricks" width="20" height="12" patternUnits="userSpaceOnUse"><rect width="20" height="12" fill="#a84010"/><path d="M0 0h20M0 6h20M5 0v6M15 6v6" stroke="#000" stroke-width="1.4"/><path d="M1 1h3M11 7h3" stroke="#f8b080" stroke-width="1"/></pattern>`,
-  sea: (box) => `<rect ${box.replace(/rx="[^"]*"/, 'rx="6"')} fill="#5c94fc"/>`,
+  seaDefs: `${glyphSymbols(GLYPH)}<linearGradient id="plsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4aa8ff"/><stop offset="1" stop-color="#b8e4ff"/></linearGradient><pattern id="plground" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#c8641e"/><path d="M0 20h40M20 0v20M0 40h40M10 20v20M30 20v20" stroke="#5a2a08" stroke-width="2"/><path d="M2 2h14M22 22h14" stroke="#f0a060" stroke-width="2"/></pattern><pattern id="pldirt" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#a8581e"/><circle cx="4" cy="5" r="1.6" fill="#7a3a10"/><circle cx="12" cy="11" r="1.4" fill="#d08040"/></pattern>`,
+  sea: (box) => {
+    const [x, y, w, h] = boxOf(box);
+    const ground = y + h - 40;
+    // A side-scrolling stage: sky, clouds, hills, floating blocks and coins, pipes on brick ground.
+    return [
+      `<rect ${box} fill="url(#plsky)"/>`,
+      `<g clip-path="inset(0 round 18px)">`,
+      hill(x + w * 0.18, ground, w * 0.42, h * 0.32, '#5fcf5a'),
+      hill(x + w * 0.78, ground, w * 0.5, h * 0.24, '#4cbf4c'),
+      hill(x + w * 0.5, ground, w * 0.3, h * 0.16, '#79db5c'),
+      puff(x + w * 0.14, y + h * 0.1, 1.1),
+      puff(x + w * 0.62, y + h * 0.07, 0.9),
+      puff(x + w * 0.88, y + h * 0.18, 1.2),
+      puff(x + w * 0.36, y + h * 0.22, 0.8),
+      brickRow(x + w * 0.06, y + h * 0.36, 2) +
+        qblock(x + w * 0.06 + 75, y + h * 0.36 + 15) +
+        brickRow(x + w * 0.06 + 90, y + h * 0.36, 1),
+      qblock(x + w * 0.9, y + h * 0.45),
+      coin(x + w * 0.84, y + h * 0.33) + coin(x + w * 0.88, y + h * 0.31) + coin(x + w * 0.92, y + h * 0.33),
+      coin(x + w * 0.08, y + h * 0.62) + coin(x + w * 0.11, y + h * 0.6),
+      pipe(x + w * 0.1, ground, h * 0.1),
+      pipe(x + w * 0.92, ground, h * 0.16),
+      `<rect x="${x}" y="${f1(ground)}" width="${w}" height="40" fill="url(#plground)"/><path d="M${x} ${f1(ground)}h${w}" stroke="#3a1e00" stroke-width="3"/>`,
+      `</g>`,
+      `<rect ${box} fill="none" stroke="#1a1a2e" stroke-width="3"/>`,
+    ].join('');
+  },
   seaHex: (cx, cy, i) =>
-    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".12" data-sea="${i}"/>` +
-    (i % 4 === 1
-      ? `<use href="#pl-puff" x="${f1(cx - 0.42 * K)}" y="${f1(cy - 0.21 * K)}" width="${f1(0.84 * K)}" height="${f1(0.42 * K)}"/>`
-      : i % 7 === 3
-        ? `<use href="#pl-pipe" x="${f1(cx - 0.32 * K)}" y="${f1(cy - 0.28 * K)}" width="${f1(0.64 * K)}" height="${f1(0.56 * K)}"/>`
-        : ''),
-  beach: ['url(#plbricks)', '#00a800'],
-  hexStroke: () => '#000000',
-  hexStrokeW: 3,
-  tileTexture: (t) => `url(#tx-${t})`,
-  building: pixelBuilding,
-  road: pixelRoad,
-  innerRing: null,
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".18" data-sea="${i}"/>`,
+  beach: ['url(#pldirt)', '#3cbf3c'],
+  hexStroke: () => '#1a1a2e',
+  hexStrokeW: 2.5,
+  tileTexture: () => null,
+  building: null,
+  road: null,
+  innerRing: 'rgba(255,255,255,.22)',
   overlay: () => '',
   token: (cx, cy, n) => {
     const red = n === 6 || n === 8;
     const s = 0.6 * K;
-    const l = cx - s / 2;
-    const t = cy - s / 2;
-    const rivet = (x: number, y: number) =>
-      `<rect x="${f1(x - 2.5)}" y="${f1(y - 2.5)}" width="5" height="5" fill="#000"/>`;
-    return `<g shape-rendering="crispEdges"><rect x="${f1(l - 3)}" y="${f1(t - 3)}" width="${f1(s + 6)}" height="${f1(s + 6)}" fill="#000"/><rect x="${f1(l)}" y="${f1(t)}" width="${f1(s)}" height="${f1(s)}" fill="#f8b800"/><rect x="${f1(l)}" y="${f1(t)}" width="${f1(s)}" height="4" fill="#fce8a0"/><rect x="${f1(l)}" y="${f1(t + s - 4)}" width="${f1(s)}" height="4" fill="#c87000"/>${rivet(l + 6, t + 6)}${rivet(l + s - 6, t + 6)}${rivet(l + 6, t + s - 6)}${rivet(l + s - 6, t + s - 6)}</g>${pixelText(cx, cy - 0.03 * K, String(n), 0.24 * K, red ? '#c80000' : '#5a2800')}`;
+    return `<rect x="${f1(cx - s / 2)}" y="${f1(cy - s / 2)}" width="${f1(s)}" height="${f1(s)}" rx="4" fill="#ffc21a" stroke="#3a1e00" stroke-width="2.5"/><rect x="${f1(cx - s / 2 + 2)}" y="${f1(cy - s / 2 + 2)}" width="${f1(s - 4)}" height="4" fill="#ffe58a"/><rect x="${f1(cx - s / 2 + 2)}" y="${f1(cy + s / 2 - 6)}" width="${f1(s - 4)}" height="4" fill="#d97b00"/>${[
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ]
+      .map(
+        ([a, b]) =>
+          `<circle cx="${f1(cx + a! * (s / 2 - 6))}" cy="${f1(cy + b! * (s / 2 - 6))}" r="2" fill="#3a1e00"/>`,
+      )
+      .join(
+        '',
+      )}<text x="${f1(cx)}" y="${f1(cy - 0.02 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.32) * K}" font-weight="900" fill="${red ? '#ff3b30' : '#ffffff'}" stroke="#3a1e00" stroke-width="4" paint-order="stroke" font-family="'Arial Black', Arial, sans-serif">${n}</text>`;
   },
-  text: (x, y, s, size, color) => pixelText(x, y, s, size * 0.8, color),
-  edge: () => '#000000',
+  text: (x, y, s, size, color) =>
+    plainText(x, y, s, size, color, 900).replace(
+      '<text ',
+      `<text font-family="'Arial Black', Arial, sans-serif" `,
+    ),
+  edge: () => '#1a1a2e',
   underlay: () => '',
   boardFilter: null,
   piecesOpen: '',
@@ -572,22 +641,23 @@ const USA_TILE: Record<Terrain, string> = {
   fog: '#6b7486',
 };
 /** A five-pointed star of radius r at x, y. */
-const star = (x: number, y: number, r: number, fill: string) => {
+const star = (x: number, y: number, r: number, fill: string, extra = '') => {
   const pts: string[] = [];
   for (let k = 0; k < 10; k++) {
     const a = (Math.PI / 5) * k - Math.PI / 2;
     const rr = k % 2 ? r * 0.42 : r;
     pts.push(`${f1(x + Math.cos(a) * rr)},${f1(y + Math.sin(a) * rr)}`);
   }
-  return `<polygon points="${pts.join(' ')}" fill="${fill}"/>`;
+  return `<polygon points="${pts.join(' ')}" fill="${fill}"${extra}/>`;
 };
-const firework = (x: number, y: number, color: string) => {
+/** A firework: rays and sparks in one colour. */
+const firework = (x: number, y: number, color: string, r = 22) => {
   let out = '';
-  for (let k = 0; k < 12; k++) {
-    const a = (Math.PI / 6) * k;
-    out += `<line x1="${f1(x + Math.cos(a) * 5)}" y1="${f1(y + Math.sin(a) * 5)}" x2="${f1(x + Math.cos(a) * 16)}" y2="${f1(y + Math.sin(a) * 16)}" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/>`;
+  for (let k = 0; k < 16; k++) {
+    const a = (Math.PI / 8) * k;
+    out += `<line x1="${f1(x + Math.cos(a) * r * 0.3)}" y1="${f1(y + Math.sin(a) * r * 0.3)}" x2="${f1(x + Math.cos(a) * r)}" y2="${f1(y + Math.sin(a) * r)}" stroke="${color}" stroke-width="2.4" stroke-linecap="round"/><circle cx="${f1(x + Math.cos(a) * (r + 4))}" cy="${f1(y + Math.sin(a) * (r + 4))}" r="1.6" fill="${color}"/>`;
   }
-  return out + `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.5" fill="#fff"/>`;
+  return out + `<circle cx="${f1(x)}" cy="${f1(y)}" r="3" fill="#fff"/>`;
 };
 const american: Theme = {
   id: 'american',
@@ -597,13 +667,43 @@ const american: Theme = {
   glyphScale: 1,
   tileArt: null,
   glyphAttr: (t) => ` opacity="${t === 'desert' ? 0.7 : 0.85}"`,
-  seaDefs: `${glyphSymbols(GLYPH)}<pattern id="usstars" width="44" height="38" patternUnits="userSpaceOnUse">${star(10, 10, 4, '#ffffff')}${star(32, 29, 4, '#ffffff')}</pattern><pattern id="usstripes" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)"><rect width="24" height="12" fill="#c8102e"/><rect y="12" width="24" height="12" fill="#ffffff"/></pattern><pattern id="tilestars" width="36" height="32" patternUnits="userSpaceOnUse">${star(8, 9, 3, 'rgba(255,255,255,.22)')}${star(26, 25, 3, 'rgba(255,255,255,.22)')}</pattern>`,
-  sea: (box) =>
-    `<rect ${box} fill="#1b2f6b"/><rect ${box} fill="url(#usstars)" opacity=".55"/><rect ${box} fill="none" stroke="#c8102e" stroke-width="5"/>`,
+  seaDefs: `${glyphSymbols(GLYPH)}<linearGradient id="flagwave" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".18"/><stop offset=".25" stop-color="#fff" stop-opacity=".1"/><stop offset=".5" stop-color="#000" stop-opacity=".16"/><stop offset=".75" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#000" stop-opacity=".18"/></linearGradient><pattern id="tilestars" width="36" height="32" patternUnits="userSpaceOnUse">${star(8, 9, 3, 'rgba(255,255,255,.2)')}${star(26, 25, 3, 'rgba(255,255,255,.2)')}</pattern>`,
+  sea: (box) => {
+    const [x, y, w, h] = boxOf(box);
+    // The whole board on a big waving flag: 13 stripes, a starry canton, bunting along the top.
+    const sh = h / 13;
+    let out = `<g clip-path="inset(0 round 18px)">`;
+    for (let k = 0; k < 13; k++)
+      out += `<rect x="${x}" y="${f1(y + k * sh)}" width="${w}" height="${f1(sh + 0.5)}" fill="${k % 2 ? '#f4efe6' : '#a3162b'}"/>`;
+    const cw = w * 0.42;
+    const ch = sh * 7;
+    out += `<rect x="${x}" y="${y}" width="${f1(cw)}" height="${f1(ch)}" fill="#14275e"/>`;
+    for (let r = 0; r < 9; r++)
+      for (let c = 0; c < (r % 2 ? 5 : 6); c++)
+        out += star(
+          x + (c + (r % 2 ? 1 : 0.5)) * (cw / 6),
+          y + (r + 0.6) * (ch / 9.4),
+          Math.min(cw, ch) * 0.035,
+          '#ffffff',
+        );
+    out += `<rect ${box} fill="url(#flagwave)"/><rect ${box} fill="#0a1a44" opacity=".28"/>`;
+    // Bunting: swags of red, white and blue along the top.
+    const n = 8;
+    for (let k = 0; k < n; k++) {
+      const x0 = x + (k * w) / n;
+      const x1 = x0 + w / n;
+      const d = h * 0.05;
+      out += `<path d="M${f1(x0)} ${f1(y)}Q${f1((x0 + x1) / 2)} ${f1(y + d * 2.2)} ${f1(x1)} ${f1(y)}Z" fill="#14275e"/><path d="M${f1(x0)} ${f1(y)}Q${f1((x0 + x1) / 2)} ${f1(y + d * 1.5)} ${f1(x1)} ${f1(y)}Z" fill="#f4efe6"/><path d="M${f1(x0)} ${f1(y)}Q${f1((x0 + x1) / 2)} ${f1(y + d * 0.8)} ${f1(x1)} ${f1(y)}Z" fill="#c8102e"/><circle cx="${f1(x0)}" cy="${f1(y + 2)}" r="4" fill="#ffd54a"/>`;
+    }
+    out +=
+      firework(x + w * 0.9, y + h * 0.2, '#ffd54a', 30) +
+      firework(x + w * 0.1, y + h * 0.8, '#ffffff', 26) +
+      firework(x + w * 0.88, y + h * 0.82, '#6fa8ff', 24);
+    return `${out}</g><rect ${box} fill="none" stroke="#c8102e" stroke-width="5"/>`;
+  },
   seaHex: (cx, cy, i) =>
-    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".12" data-sea="${i}"/>` +
-    (i % 5 === 2 ? firework(cx, cy, ['#ff4d6d', '#ffffff', '#6fa8ff'][i % 3]!) : ''),
-  beach: ['url(#usstripes)', '#ffffff'],
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".14" data-sea="${i}"/>`,
+  beach: ['#f4efe6', '#14275e'],
   hexStroke: () => '#0a1a44',
   hexStrokeW: 2.5,
   tileTexture: () => 'url(#tilestars)',
@@ -613,11 +713,7 @@ const american: Theme = {
   overlay: () => '',
   token: (cx, cy, n) => {
     const red = n === 6 || n === 8;
-    const ring = Array.from({ length: 8 }, (_, k) => {
-      const a = (Math.PI / 4) * k - Math.PI / 2;
-      return star(cx + Math.cos(a) * 0.27 * K, cy + Math.sin(a) * 0.27 * K, 2.6, '#ffffff');
-    }).join('');
-    return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.35 * K}" fill="#1b2f6b" stroke="#c8102e" stroke-width="3"/>${ring}<text x="${f1(cx)}" y="${f1(cy - 0.02 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.24 : 0.28) * K}" fill="${red ? '#ff5a6e' : '#ffffff'}" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="800">${n}</text>`;
+    return `${star(cx, cy + 2, 0.42 * K, 'rgba(0,0,0,.3)')}${star(cx, cy, 0.42 * K, '#ffffff', ' stroke="#14275e" stroke-width="2.5" stroke-linejoin="round"')}<text x="${f1(cx)}" y="${f1(cy + 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.2 : 0.25) * K}" fill="${red ? '#c8102e' : '#14275e'}" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="900">${n}</text>`;
   },
   text: (x, y, s, size, color) => plainText(x, y, s, size, color, 800),
   edge: () => '#0a1a44',
@@ -749,8 +845,8 @@ export const GROUNDS: Record<ArtStyle, Record<string, string>> = {
   night: { ...NIGHT_TILE, water: '#050c18' },
   crayon: { ...CRAYON_TILE, water: '#4a8fd8' },
   smash: { ...SMASH_TILE, water: '#22105a' },
-  platformer: { ...PLAT_TILE, water: '#5c94fc' },
-  american: { ...USA_TILE, water: '#1b2f6b' },
+  platformer: { ...PLAT_TILE, water: '#62b2ff' },
+  american: { ...USA_TILE, water: '#a3162b', water2: '#f4efe6', water3: '#14275e' },
   pikmin: { ...PIK_TILE, water: '#2f7f7a' },
 };
 /** Styles whose pieces stand out by a light outline rather than by their colour (night). */
