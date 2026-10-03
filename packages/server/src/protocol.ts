@@ -431,7 +431,7 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('profiles') }),
   z.strictObject({ t: z.literal('newProfile'), name: nick, color: COLOR }),
   z.strictObject({ t: z.literal('mergeProfiles'), from: z.string().max(60), into: z.string().max(60) }),
-  /** Delete a profile from the list (the Stats page). Not while it's at a table. */
+  /** Delete a profile from the list (the Stats page). Not while it's playing; it leaves its old tables. */
   z.strictObject({ t: z.literal('deleteProfile'), id: z.string().max(60) }),
   /** Saved games (SPEC 5.7). */
   z.strictObject({ t: z.literal('saved') }),

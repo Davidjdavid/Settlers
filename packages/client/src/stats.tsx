@@ -642,7 +642,7 @@ export function StatsPage() {
       {del && rec ? (
         <ConfirmTwice
           title={`Delete ${rec.name}?`}
-          first={`${rec.name} comes off the list and their stats go. Games they played keep their name.`}
+          first={`${rec.name} comes off the list and their stats go. Games they played keep their name. Tables they left behind let them go: a seat at a table that hasn’t started is taken away, and a seat in a game stays as just a name anyone can take over.`}
           second="This can’t be undone. Delete for good?"
           action="Delete"
           onConfirm={() => {

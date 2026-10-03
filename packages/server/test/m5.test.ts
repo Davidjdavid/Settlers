@@ -121,7 +121,7 @@ describe('profiles (SPEC 5.1)', () => {
     table(['Ann', 'Bob']);
     const ann = store.profileByName('Ann')!;
     send(c, { t: 'deleteProfile', id: ann.id });
-    expect(c.last('error').text).toMatch(/at a table in room/);
+    expect(c.last('error').text).toMatch(/Ann is playing right now/);
     send(c, { t: 'deleteProfile', id: zed.id });
     expect(c.last('profiles').list.some((p) => p.id === zed.id)).toBe(false);
     send(c, { t: 'stats', who: zed.id });
@@ -131,6 +131,42 @@ describe('profiles (SPEC 5.1)', () => {
     expect(c.last('profile').profile.id).not.toBe(zed.id);
     send(c, { t: 'deleteProfile', id: 'p-nobody' });
     expect(c.last('error').text).toBe('No such player');
+  });
+
+  it('a person who left tables behind can still be deleted: lobby seats go, game seats stay as names', () => {
+    const c = new FakeConn();
+    // Ann sits at a table that never started and plays a game she left half done.
+    const lobby = table(['Ann', 'Bob']);
+    const game = table(['Ann', 'Cy']);
+    send(game.conns[0]!, { t: 'start' });
+    expect(rooms.getRoom(game.code)!.game).toBeTruthy();
+    const ann = store.profileByName('Ann')!;
+    // Not while she's connected to either.
+    send(c, { t: 'deleteProfile', id: ann.id });
+    expect(c.last('error').text).toMatch(/Ann is playing right now in room/);
+    rooms.disconnect(lobby.conns[0]!);
+    send(c, { t: 'deleteProfile', id: ann.id });
+    expect(c.last('error').text).toMatch(/Ann is playing right now in room/);
+    rooms.disconnect(game.conns[0]!);
+    send(c, { t: 'deleteProfile', id: ann.id });
+    expect(c.last('notice').text).toBe('Ann was deleted and taken off 2 tables');
+    expect(c.last('profiles').list.some((p) => p.id === ann.id)).toBe(false);
+    // The table that never started lost her seat; Bob is told.
+    expect(rooms.getRoom(lobby.code)!.seats.map((st) => st.nick)).toEqual(['Bob']);
+    expect(lobby.conns[1]!.last('update').room.seats.map((st) => st.nick)).toEqual(['Bob']);
+    // The game keeps her seat under her name, with no profile, so anyone can take it over.
+    const seats = rooms.getRoom(game.code)!.seats;
+    expect(seats.map((st) => st.nick)).toEqual(['Ann', 'Cy']);
+    expect(seats[0]!.profileId).toBeUndefined();
+    // Both survive a restart.
+    rooms.stop();
+    open();
+    expect(rooms.getRoom(lobby.code)!.seats.map((st) => st.nick)).toEqual(['Bob']);
+    expect(rooms.getRoom(game.code)!.seats[0]!.profileId).toBeUndefined();
+    const d = new FakeConn();
+    send(d, { t: 'hello', room: game.code });
+    send(d, { t: 'claim', seat: 0 });
+    expect(d.last('seat').pid).toBe(seats[0]!.pid);
   });
 
   it('made once per name, listed with who is using them, and merged unless they shared a game', () => {

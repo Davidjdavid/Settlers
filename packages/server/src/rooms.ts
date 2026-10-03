@@ -557,17 +557,42 @@ export class Rooms {
     conn.send({ t: 'profiles', list: this.profileList() });
   }
 
-  /** Take a person off the list. Their finished games keep their name; their stats go. */
+  /**
+   * Take a person off the list. Their games keep their name; their stats go. Not while they're
+   * connected to a table. Tables they left behind let them go: a seat at a table that hasn't
+   * started is taken away, and a seat in a game stays under their name with no profile, so anyone
+   * can take it over.
+   */
   private deleteProfile(conn: Conn, id: string) {
     const p = this.store.profileById(id);
     if (!p) return conn.send({ t: 'error', text: 'No such player' });
-    for (const room of this.rooms.values())
-      if (room.seats.some((st) => st.profileId === p.id))
-        return conn.send({ t: 'error', text: `${p.name} is at a table in room ${room.code}` });
-    this.store.tx(() => this.store.deleteProfile(p.id, this.now()));
+    const left: Room[] = [];
+    for (const room of this.rooms.values()) {
+      const seat = room.seats.find((st) => st.profileId === p.id);
+      if (!seat) continue;
+      if (this.isConnected(room, seat.pid))
+        return conn.send({ t: 'error', text: `${p.name} is playing right now in room ${room.code}` });
+      left.push(room);
+    }
+    this.store.tx(() => {
+      for (const room of left) {
+        const seat = room.seats.find((st) => st.profileId === p.id)!;
+        if (room.game) delete seat.profileId;
+        else {
+          room.seats = room.seats.filter((st) => st !== seat);
+          for (const c of room.conns) if (c.pid === seat.pid) c.pid = null;
+          this.sys(room, `${seat.nick} stood up`);
+          this.seatsChanged(room);
+        }
+        this.store.saveRoom(room.code, room.seats, room.game?.row.id ?? null);
+      }
+      this.store.deleteProfile(p.id, this.now());
+    });
+    for (const room of left) this.broadcast(room, this.takeSys(room));
     this.settings.delete(p.id);
-    this.log(`profile ${p.name} deleted`);
-    conn.send({ t: 'notice', kind: 'info', text: `${p.name} was deleted` });
+    this.log(`profile ${p.name} deleted${left.length ? `, off ${left.length} tables` : ''}`);
+    const off = left.length ? ` and taken off ${left.length} table${left.length > 1 ? 's' : ''}` : '';
+    conn.send({ t: 'notice', kind: 'info', text: `${p.name} was deleted${off}` });
     conn.send({ t: 'profiles', list: this.profileList() });
   }
 
