@@ -128,6 +128,7 @@ export const OptionsSchema = z.strictObject({
     'heading-for-new-shores',
     'fog-islands',
     'four-islands',
+    'four-islands-far',
     'treasure-fog',
     'classic-isles',
   ]),

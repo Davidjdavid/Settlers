@@ -18,7 +18,11 @@ import { seatsFor } from './simulate';
  * on any island, by design) or Treasure Fog (all land outside the start is under fog at first).
  */
 const SEA = [...Object.values(SCENARIOS), HFNS_3_OLD].filter(
-  (m) => m.modules.includes('seafarers') && m.id !== 'four-islands' && m.id !== 'treasure-fog',
+  (m) =>
+    m.modules.includes('seafarers') &&
+    m.id !== 'four-islands' &&
+    m.id !== 'four-islands-far' &&
+    m.id !== 'treasure-fog',
 );
 
 /** Corners of island hexes outside the scenario's starting area. */

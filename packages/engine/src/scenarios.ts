@@ -4,6 +4,7 @@ import hfns from '../maps/heading-for-new-shores.json';
 import hfns3 from '../maps/heading-for-new-shores-3.json';
 import fogIslands from '../maps/fog-islands.json';
 import fourIslands from '../maps/four-islands.json';
+import fourIslandsFar from '../maps/four-islands-far.json';
 import treasureFog from '../maps/treasure-fog.json';
 import classicIsles from '../maps/classic-isles.json';
 import type { MapData } from './map';
@@ -16,6 +17,8 @@ export const SCENARIOS: Record<string, MapData> = {
   'fog-islands': fogIslands as unknown as MapData,
   /** Added 2 October, from the players' wishes. Four islands; 2 points for settling another. */
   'four-islands': fourIslands as unknown as MapData,
+  /** Four Islands on a bigger sea: at least two sea tiles between islands (3 October). */
+  'four-islands-far': fourIslandsFar as unknown as MapData,
   /** The classic board, a sea full of treasure spots, and fog islands around the edge. */
   'treasure-fog': treasureFog as unknown as MapData,
   /** The classic board with a big sea to the east, where islands come up at random. */

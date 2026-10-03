@@ -1754,7 +1754,8 @@ export function gameConfigFor(o: RoomOptions, board?: MapData): Partial<GameConf
 export function optionsFor(c: Partial<GameConfig>): RoomOptions {
   // Any Seafarers board resumes in the Seafarers modes; anything else in the base modes.
   const scenario: RoomOptions['scenario'] =
-    c.map && ['fog-islands', 'four-islands', 'treasure-fog', 'classic-isles'].includes(c.map.id)
+    c.map &&
+    ['fog-islands', 'four-islands', 'four-islands-far', 'treasure-fog', 'classic-isles'].includes(c.map.id)
       ? (c.map.id as RoomOptions['scenario'])
       : c.map?.modules.includes('seafarers')
         ? 'heading-for-new-shores'

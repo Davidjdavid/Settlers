@@ -91,6 +91,12 @@ const SIMS: Record<string, Scenario> = {
     maxTurns: 3000,
     rules: ['n', 'b', 'f', 'hu'],
   },
+  'four-islands-far': {
+    map: SCENARIOS['four-islands-far']!,
+    players: [3, 4],
+    maxTurns: 3000,
+    rules: ['n', 'b', 'f', 'hu'],
+  },
   'treasure-fog': {
     map: SCENARIOS['treasure-fog']!,
     players: [3, 4],
@@ -154,6 +160,7 @@ const DEFAULT_GAMES: Record<string, number> = {
   'treasures-ck': 400,
   'cpu-treasures-ck': 100,
   'four-islands': 200,
+  'four-islands-far': 200,
   'treasure-fog': 200,
   'classic-isles': 200,
   'treasure-fog-ck': 100,

@@ -386,6 +386,7 @@ const SEA_MAPS: [RoomOptions['scenario'], string][] = [
   ['heading-for-new-shores', 'Heading for New Shores'],
   ['fog-islands', 'Fog Islands'],
   ['four-islands', 'Four Islands'],
+  ['four-islands-far', 'Four Islands, far apart'],
   ['treasure-fog', 'Treasure Fog'],
   ['classic-isles', 'Classic and the Isles'],
 ];
