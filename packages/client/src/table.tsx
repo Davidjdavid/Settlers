@@ -150,7 +150,7 @@ export function TableBoardPanel({ room }: { room: RoomInfo }) {
           style={editing ? undefined : room.mySettings?.artStyle}
         />
       </div>
-      {seated ? (
+      {seated && !editing ? (
         <label className="tbstyle">
           Board style <StyleSelect mine={room.mySettings} testid="table-style" />
         </label>

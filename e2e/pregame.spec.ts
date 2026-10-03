@@ -49,7 +49,10 @@ const lastLine = (p: Page) => p.getByTestId('board-last');
 const hexOn = (p: Page, q: number, r: number) =>
   p.locator(`[data-testid=table-board] [data-kind=hex][data-q="${q}"][data-r="${r}"]`);
 async function onTile(p: Page, q: number, r: number) {
-  await p.getByTestId('table-board').scrollIntoViewIfNeeded();
+  // The whole board in view (the panel can be taller than the screen).
+  await p
+    .locator('[data-testid=table-board] [data-testid=mapboard]')
+    .evaluate((el) => el.scrollIntoView({ block: 'center' }));
   const b = (await hexOn(p, q, r).locator('polygon').nth(1).boundingBox())!;
   return { x: b.x + b.width / 2, y: b.y + b.height * 0.22 };
 }
@@ -104,6 +107,8 @@ test('three browsers share the table, then play on a generated board', async ({ 
   for (const p of t.pages) await expect(lastLine(p)).toContainText('Sam went back a board');
   expect(await sameBoard(t)).toBe(generated);
   await joe.getByTestId('board-forward').click();
+  // Wait for Forward to reach everyone: until then they all still agree on the old board.
+  for (const p of t.pages) await expect(lastLine(p)).toContainText('Joe went forward a board');
   expect(await sameBoard(t)).toBe(rerolled);
 
   // Rerolls and Forward don't move the buttons (or the board): the mouse can stay put. Standard
