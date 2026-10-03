@@ -16,12 +16,24 @@ import {
   pixelBuilding,
   pixelRoad,
   pixelTextures,
+  sprite,
   pixelTile,
   pixelTokenBox,
   shade,
 } from './pixelart';
 
-export const STYLES = ['classic', 'pixel', 'wooden', 'flat', 'night', 'crayon', 'smash'] as const;
+export const STYLES = [
+  'classic',
+  'pixel',
+  'wooden',
+  'flat',
+  'night',
+  'crayon',
+  'smash',
+  'platformer',
+  'american',
+  'pikmin',
+] as const;
 export type ArtStyle = (typeof STYLES)[number];
 export const STYLE_LABEL: Record<ArtStyle, string> = {
   classic: 'Classic',
@@ -31,6 +43,9 @@ export const STYLE_LABEL: Record<ArtStyle, string> = {
   night: 'Night',
   crayon: 'Crayon',
   smash: 'Smash',
+  platformer: 'Platformer',
+  american: 'American',
+  pikmin: 'Pikmin',
 };
 export const STYLE_HELP: Record<ArtStyle, string> = {
   classic: 'The standard look.',
@@ -41,6 +56,12 @@ export const STYLE_HELP: Record<ArtStyle, string> = {
   crayon: 'Drawn with crayons on paper: waxy hatched colour, wobbly outlines and hand-written numbers.',
   smash:
     'A fighting-game stage: floating platforms with neon edges over a cosmic sky, and numbers as damage percentages that get hotter the more often they roll.',
+  platformer:
+    'A retro platformer: islands of grass-topped blocks floating in a bright sky with clouds and green pipes, numbers on golden blocks.',
+  american:
+    'Stars and stripes: a starry navy sea with fireworks, red-and-white shores and navy badges for the numbers.',
+  pikmin:
+    'A tiny explorer in a giant garden: a lily-pad pond, big leaves and flowers, little sprout creatures, and the numbers on round pellets.',
 };
 
 export interface Theme {
@@ -483,7 +504,231 @@ const smash: Theme = {
   crisp: false,
 };
 
-export const THEMES: Record<ArtStyle, Theme> = { classic, pixel, wooden, flat, night, crayon, smash };
+const PLAT_TILE: Record<Terrain, string> = {
+  wood: '#2a9a3a',
+  brick: '#c8501c',
+  sheep: '#7cd23c',
+  wheat: '#f8c838',
+  ore: '#9ca3b0',
+  desert: '#f0d090',
+  gold: '#f8b800',
+  sea: '#5c94fc',
+  fog: '#a0a8c0',
+};
+const PIPE = ['GGGGGGGGGGGG', 'GLLgGGGGGGdG', 'GLLgGGGGGGdG', 'GGGGGGGGGGGG', '.GLgGGGGGdd.', '.GLgGGGGGdd.', '.GLgGGGGGdd.', '.GLgGGGGGdd.', '.GLgGGGGGdd.']; // prettier-ignore
+const PUFF = ['....wwww......', '..wwwwwwww.ww.', '.wwwwwwwwwwwww', 'wwwwwwwwwwwwww', 'wwwwwwwwwwwwww', '.bbbbbbbbbbbb.']; // prettier-ignore
+const platformer: Theme = {
+  id: 'platformer',
+  tile: PLAT_TILE,
+  glyph: PIXEL_GLYPH,
+  decor: 'scatter',
+  glyphScale: 1.35,
+  tileArt: pixelTile,
+  glyphAttr: () => '',
+  seaDefs: `${pixelTextures(PLAT_TILE)}${glyphSymbols(PIXEL_GLYPH)}<symbol id="pl-pipe" viewBox="-14 -12 28 24">${sprite(PIPE, { G: '#00a800', L: '#b8f818', g: '#58d854', d: '#005800' }, 2.2, '#000000')}</symbol><symbol id="pl-puff" viewBox="-16 -8 32 16">${sprite(PUFF, { w: '#ffffff', b: '#bcd8ff' }, 2.2, '#000000')}</symbol><pattern id="plbricks" width="20" height="12" patternUnits="userSpaceOnUse"><rect width="20" height="12" fill="#a84010"/><path d="M0 0h20M0 6h20M5 0v6M15 6v6" stroke="#000" stroke-width="1.4"/><path d="M1 1h3M11 7h3" stroke="#f8b080" stroke-width="1"/></pattern>`,
+  sea: (box) => `<rect ${box.replace(/rx="[^"]*"/, 'rx="6"')} fill="#5c94fc"/>`,
+  seaHex: (cx, cy, i) =>
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".12" data-sea="${i}"/>` +
+    (i % 4 === 1
+      ? `<use href="#pl-puff" x="${f1(cx - 0.42 * K)}" y="${f1(cy - 0.21 * K)}" width="${f1(0.84 * K)}" height="${f1(0.42 * K)}"/>`
+      : i % 7 === 3
+        ? `<use href="#pl-pipe" x="${f1(cx - 0.32 * K)}" y="${f1(cy - 0.28 * K)}" width="${f1(0.64 * K)}" height="${f1(0.56 * K)}"/>`
+        : ''),
+  beach: ['url(#plbricks)', '#00a800'],
+  hexStroke: () => '#000000',
+  hexStrokeW: 3,
+  tileTexture: (t) => `url(#tx-${t})`,
+  building: pixelBuilding,
+  road: pixelRoad,
+  innerRing: null,
+  overlay: () => '',
+  token: (cx, cy, n) => {
+    const red = n === 6 || n === 8;
+    const s = 0.6 * K;
+    const l = cx - s / 2;
+    const t = cy - s / 2;
+    const rivet = (x: number, y: number) =>
+      `<rect x="${f1(x - 2.5)}" y="${f1(y - 2.5)}" width="5" height="5" fill="#000"/>`;
+    return `<g shape-rendering="crispEdges"><rect x="${f1(l - 3)}" y="${f1(t - 3)}" width="${f1(s + 6)}" height="${f1(s + 6)}" fill="#000"/><rect x="${f1(l)}" y="${f1(t)}" width="${f1(s)}" height="${f1(s)}" fill="#f8b800"/><rect x="${f1(l)}" y="${f1(t)}" width="${f1(s)}" height="4" fill="#fce8a0"/><rect x="${f1(l)}" y="${f1(t + s - 4)}" width="${f1(s)}" height="4" fill="#c87000"/>${rivet(l + 6, t + 6)}${rivet(l + s - 6, t + 6)}${rivet(l + 6, t + s - 6)}${rivet(l + s - 6, t + s - 6)}</g>${pixelText(cx, cy - 0.03 * K, String(n), 0.24 * K, red ? '#c80000' : '#5a2800')}`;
+  },
+  text: (x, y, s, size, color) => pixelText(x, y, s, size * 0.8, color),
+  edge: () => '#000000',
+  underlay: () => '',
+  boardFilter: null,
+  piecesOpen: '',
+  piecesClose: '',
+  crisp: false,
+};
+
+const USA_TILE: Record<Terrain, string> = {
+  wood: '#2e7d4a',
+  brick: '#b8452e',
+  sheep: '#8cc152',
+  wheat: '#e8b84a',
+  ore: '#8a94a6',
+  desert: '#e4d2a4',
+  gold: '#d9a62a',
+  sea: '#1b2f6b',
+  fog: '#6b7486',
+};
+/** A five-pointed star of radius r at x, y. */
+const star = (x: number, y: number, r: number, fill: string) => {
+  const pts: string[] = [];
+  for (let k = 0; k < 10; k++) {
+    const a = (Math.PI / 5) * k - Math.PI / 2;
+    const rr = k % 2 ? r * 0.42 : r;
+    pts.push(`${f1(x + Math.cos(a) * rr)},${f1(y + Math.sin(a) * rr)}`);
+  }
+  return `<polygon points="${pts.join(' ')}" fill="${fill}"/>`;
+};
+const firework = (x: number, y: number, color: string) => {
+  let out = '';
+  for (let k = 0; k < 12; k++) {
+    const a = (Math.PI / 6) * k;
+    out += `<line x1="${f1(x + Math.cos(a) * 5)}" y1="${f1(y + Math.sin(a) * 5)}" x2="${f1(x + Math.cos(a) * 16)}" y2="${f1(y + Math.sin(a) * 16)}" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/>`;
+  }
+  return out + `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.5" fill="#fff"/>`;
+};
+const american: Theme = {
+  id: 'american',
+  tile: USA_TILE,
+  glyph: GLYPH,
+  decor: 'scatter',
+  glyphScale: 1,
+  tileArt: null,
+  glyphAttr: (t) => ` opacity="${t === 'desert' ? 0.7 : 0.85}"`,
+  seaDefs: `${glyphSymbols(GLYPH)}<pattern id="usstars" width="44" height="38" patternUnits="userSpaceOnUse">${star(10, 10, 4, '#ffffff')}${star(32, 29, 4, '#ffffff')}</pattern><pattern id="usstripes" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)"><rect width="24" height="12" fill="#c8102e"/><rect y="12" width="24" height="12" fill="#ffffff"/></pattern><pattern id="tilestars" width="36" height="32" patternUnits="userSpaceOnUse">${star(8, 9, 3, 'rgba(255,255,255,.22)')}${star(26, 25, 3, 'rgba(255,255,255,.22)')}</pattern>`,
+  sea: (box) =>
+    `<rect ${box} fill="#1b2f6b"/><rect ${box} fill="url(#usstars)" opacity=".55"/><rect ${box} fill="none" stroke="#c8102e" stroke-width="5"/>`,
+  seaHex: (cx, cy, i) =>
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#ffffff" stroke-width="1" opacity=".12" data-sea="${i}"/>` +
+    (i % 5 === 2 ? firework(cx, cy, ['#ff4d6d', '#ffffff', '#6fa8ff'][i % 3]!) : ''),
+  beach: ['url(#usstripes)', '#ffffff'],
+  hexStroke: () => '#0a1a44',
+  hexStrokeW: 2.5,
+  tileTexture: () => 'url(#tilestars)',
+  building: null,
+  road: null,
+  innerRing: null,
+  overlay: () => '',
+  token: (cx, cy, n) => {
+    const red = n === 6 || n === 8;
+    const ring = Array.from({ length: 8 }, (_, k) => {
+      const a = (Math.PI / 4) * k - Math.PI / 2;
+      return star(cx + Math.cos(a) * 0.27 * K, cy + Math.sin(a) * 0.27 * K, 2.6, '#ffffff');
+    }).join('');
+    return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.35 * K}" fill="#1b2f6b" stroke="#c8102e" stroke-width="3"/>${ring}<text x="${f1(cx)}" y="${f1(cy - 0.02 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.24 : 0.28) * K}" fill="${red ? '#ff5a6e' : '#ffffff'}" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="800">${n}</text>`;
+  },
+  text: (x, y, s, size, color) => plainText(x, y, s, size, color, 800),
+  edge: () => '#0a1a44',
+  underlay: () => '',
+  boardFilter: null,
+  piecesOpen: '',
+  piecesClose: '',
+  crisp: false,
+};
+
+const PIK_TILE: Record<Terrain, string> = {
+  wood: '#3f8f3a',
+  brick: '#b86a3e',
+  sheep: '#86c94a',
+  wheat: '#d9c25a',
+  ore: '#8d8f86',
+  desert: '#d8c08c',
+  gold: '#c9a23a',
+  sea: '#3c8f8a',
+  fog: '#7b8a7e',
+};
+const leaf = (x: number, y: number, rot: number, s: number) =>
+  `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${rot}) scale(${s})"><path d="M0 0C6-10 18-10 26 0C18 10 6 10 0 0Z" fill="#4caf50" stroke="#1f5e24" stroke-width="1.4"/><path d="M1 0H24" stroke="#1f5e24" stroke-width="1" opacity=".7"/></g>`;
+const bloom = (x: number, y: number, petal: string) =>
+  [0, 72, 144, 216, 288]
+    .map((a) => {
+      const r = (Math.PI / 180) * a;
+      return `<circle cx="${f1(x + Math.cos(r) * 4.2)}" cy="${f1(y + Math.sin(r) * 4.2)}" r="3.6" fill="${petal}" stroke="#5a3a3a" stroke-width=".6"/>`;
+    })
+    .join('') + `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.6" fill="#ffd54a"/>`;
+/** A little sprout creature: a coloured body and a stem with a leaf, bud or flower on top. */
+const sprout = (x: number, y: number, body: string, top: 'leaf' | 'bud' | 'flower') =>
+  `<g transform="translate(${f1(x)} ${f1(y)})"><path d="M0-9V-19" stroke="#2e7d32" stroke-width="1.6"/>${
+    top === 'leaf'
+      ? '<path d="M0-19c4-5 9-5 11-1c-4 3-8 3-11 1z" fill="#66bb6a" stroke="#1f5e24" stroke-width=".8"/>'
+      : top === 'bud'
+        ? '<ellipse cx="0" cy="-21" rx="2.6" ry="3.6" fill="#f8bbd0" stroke="#8a4a5a" stroke-width=".8"/>'
+        : bloom(0, -21, '#ffffff')
+  }<ellipse cx="0" cy="-3" rx="4.2" ry="6.5" fill="${body}" stroke="#2a1a1a" stroke-width="1"/><circle cx="-1.6" cy="-6" r="1.4" fill="#fff"/><circle cx="1.6" cy="-6" r="1.4" fill="#fff"/><circle cx="-1.4" cy="-5.8" r=".7" fill="#111"/><circle cx="1.8" cy="-5.8" r=".7" fill="#111"/><path d="M-2 3.5V8M2 3.5V8" stroke="${body}" stroke-width="1.6" stroke-linecap="round"/></g>`;
+const SPROUT_COLORS = ['#e53935', '#fdd835', '#1e88e5'];
+const PIK_SPOTS: [number, number][] = [[-0.5, -0.45], [0.5, -0.45], [-0.62, 0.12], [0.62, 0.12], [-0.38, 0.58], [0.38, 0.58]]; // prettier-ignore
+const pikmin: Theme = {
+  id: 'pikmin',
+  tile: PIK_TILE,
+  glyph: GLYPH,
+  decor: 'scatter',
+  glyphScale: 1,
+  tileArt: (t, cx, cy, i) => {
+    let out = '';
+    // The resource pictures, then the garden: big leaves, a flower and, on some tiles, sprouts.
+    PIK_SPOTS.forEach(([fx, fy], j) => {
+      const x = cx + fx * K;
+      const y = cy + fy * K;
+      if ((i + j) % 3 === 0) out += leaf(x - 10, y, ((i * 37 + j * 61) % 120) - 60, 1.1);
+      else {
+        const sz = 0.34 * K;
+        out += `<use href="#g-${t}" x="${f1(x - sz / 2)}" y="${f1(y - sz / 2)}" width="${f1(sz)}" height="${f1(sz)}" opacity=".85"/>`;
+      }
+    });
+    out += bloom(cx + 0.18 * K, cy - 0.72 * K, ['#f48fb1', '#ffffff', '#ce93d8'][i % 3]!);
+    if (i % 3 === 0)
+      out += sprout(
+        cx - 0.25 * K,
+        cy + 0.82 * K,
+        SPROUT_COLORS[i % 9 === 0 ? 0 : i % 2 ? 1 : 2]!,
+        (['leaf', 'bud', 'flower'] as const)[i % 3]!,
+      );
+    return out;
+  },
+  glyphAttr: () => ' opacity=".85"',
+  seaDefs: `${glyphSymbols(GLYPH)}<pattern id="ripples" width="70" height="44" patternUnits="userSpaceOnUse"><ellipse cx="18" cy="14" rx="10" ry="3.5" fill="none" stroke="#8fd3cc" stroke-width="1.4" opacity=".5"/><ellipse cx="52" cy="34" rx="7" ry="2.5" fill="none" stroke="#8fd3cc" stroke-width="1.2" opacity=".4"/></pattern><pattern id="soil" width="18" height="18" patternUnits="userSpaceOnUse"><rect width="18" height="18" fill="#6b4a2b"/><circle cx="4" cy="5" r="1.6" fill="#8a6440"/><circle cx="13" cy="12" r="1.3" fill="#4e341c"/><circle cx="10" cy="3" r="1" fill="#9a7550"/></pattern>`,
+  sea: (box) => `<rect ${box} fill="#2f7f7a"/><rect ${box} fill="url(#ripples)"/>`,
+  seaHex: (cx, cy, i) =>
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="#bfe9e4" stroke-width="1" opacity=".12" data-sea="${i}"/>` +
+    (i % 4 === 1
+      ? `<g transform="translate(${f1(cx)} ${f1(cy)}) rotate(${(i * 47) % 360})"><path d="M0 0L${f1(0.36 * K)} -6A${f1(0.37 * K)} ${f1(0.37 * K)} 0 1 0 ${f1(0.36 * K)} 6Z" fill="#5fae4f" stroke="#2f6b2a" stroke-width="1.6"/></g>${i % 8 === 1 ? bloom(cx + 8, cy - 6, '#f8bbd0') : ''}`
+      : ''),
+  beach: ['url(#soil)', '#8a6a3e'],
+  hexStroke: () => '#2a3a1a',
+  hexStrokeW: 2,
+  tileTexture: () => null,
+  building: null,
+  road: null,
+  innerRing: null,
+  overlay: () => '',
+  token: (cx, cy, n) => {
+    // A pellet: red, yellow or blue, with its number.
+    const col = n === 6 || n === 8 ? '#e53935' : n === 5 || n === 9 ? '#fbc02d' : '#1e88e5';
+    return `<circle cx="${f1(cx)}" cy="${f1(cy + 2)}" r="${0.35 * K}" fill="rgba(0,0,0,.25)"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="${col}" stroke="#2a1a1a" stroke-width="2"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.25 * K}" fill="${shade(col, 0.25)}"/><ellipse cx="${f1(cx - 0.12 * K)}" cy="${f1(cy - 0.18 * K)}" rx="${0.08 * K}" ry="${0.04 * K}" fill="#ffffff" opacity=".7"/><text x="${f1(cx)}" y="${f1(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.25 : 0.29) * K}" fill="#ffffff" stroke="#2a1a1a" stroke-width="3" paint-order="stroke" font-family="system-ui, sans-serif" font-weight="900">${n}</text>`;
+  },
+  text: plainText,
+  edge: () => '#2a1a1a',
+  underlay: () => '',
+  boardFilter: null,
+  piecesOpen: '',
+  piecesClose: '',
+  crisp: false,
+};
+
+export const THEMES: Record<ArtStyle, Theme> = {
+  classic,
+  pixel,
+  wooden,
+  flat,
+  night,
+  crayon,
+  smash,
+  platformer,
+  american,
+  pikmin,
+};
 
 let current: Theme = classic;
 /** The style the board draws in now. */
@@ -504,6 +749,9 @@ export const GROUNDS: Record<ArtStyle, Record<string, string>> = {
   night: { ...NIGHT_TILE, water: '#050c18' },
   crayon: { ...CRAYON_TILE, water: '#4a8fd8' },
   smash: { ...SMASH_TILE, water: '#22105a' },
+  platformer: { ...PLAT_TILE, water: '#5c94fc' },
+  american: { ...USA_TILE, water: '#1b2f6b' },
+  pikmin: { ...PIK_TILE, water: '#2f7f7a' },
 };
 /** Styles whose pieces stand out by a light outline rather than by their colour (night). */
 export const OUTLINED: readonly ArtStyle[] = ['night', 'smash'];

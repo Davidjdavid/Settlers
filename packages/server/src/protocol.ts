@@ -209,7 +209,20 @@ export const SettingsSchema = z.strictObject({
   /** SPEC 9.1: also show the dice in the board's top-right corner (off unless true). */
   diceCorner: z.boolean().optional(),
   /** How the board looks on your screen (3 October); Classic unless set. */
-  artStyle: z.enum(['classic', 'pixel', 'wooden', 'flat', 'night', 'crayon', 'smash']).optional(),
+  artStyle: z
+    .enum([
+      'classic',
+      'pixel',
+      'wooden',
+      'flat',
+      'night',
+      'crayon',
+      'smash',
+      'platformer',
+      'american',
+      'pikmin',
+    ])
+    .optional(),
   /** Turn down every trade a CPU offers you, at once (off unless true). */
   noCpuTrades: z.boolean().optional(),
   /** SPEC 9.4: master volume, and each sound's switch, volume and style. */
