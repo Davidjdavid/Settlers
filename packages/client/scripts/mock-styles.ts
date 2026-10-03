@@ -41,8 +41,10 @@ function board(style: (typeof STYLES)[number]): string {
     const cy = h.y * K;
     if (hx.t === 'sea') return out.push(t.seaHex(cx, cy, i));
     out.push(
-      `<polygon points="${hexPts(cx, cy, 0.965 * K)}" fill="${t.tile[hx.t]}" stroke="${t.hexStroke}" stroke-width="${t.hexStrokeW}"/>`,
+      `<polygon points="${hexPts(cx, cy, 0.965 * K)}" fill="${t.tile[hx.t]}" stroke="${t.hexStroke(hx.t)}" stroke-width="${t.hexStrokeW}"/>`,
     );
+    const tex = t.tileTexture(hx.t);
+    if (tex) out.push(`<polygon points="${hexPts(cx, cy, 0.965 * K)}" fill="${tex}"/>`);
     if (t.innerRing)
       out.push(
         `<polygon points="${hexPts(cx, cy, 0.8 * K)}" fill="none" stroke="${t.innerRing}" stroke-width="2"/>`,
@@ -51,7 +53,7 @@ function board(style: (typeof STYLES)[number]): string {
     spots.forEach(([ang, rad], j) => {
       if (t.decor === 'scatter' && (i + j) % 6 === 2) return;
       const a = (Math.PI / 180) * ang;
-      const sz = (t.decor === 'single' ? 0.42 : hx.t === 'ore' ? 0.42 : 0.34) * K;
+      const sz = (t.decor === 'single' ? 0.5 : hx.t === 'ore' ? 0.42 : 0.34) * K * t.glyphScale;
       out.push(
         `<use href="#g-${hx.t}" x="${f1(cx + Math.cos(a) * rad * K - sz / 2)}" y="${f1(cy + Math.sin(a) * rad * K - sz / 2)}" width="${f1(sz)}" height="${f1(sz)}"${t.glyphAttr(hx.t)}/>`,
       );
@@ -71,13 +73,17 @@ function board(style: (typeof STYLES)[number]): string {
     const E = g.edges[e]!;
     const a = g.verts[E.a]!;
     const b = g.verts[E.b]!;
-    out.push(
-      `<line x1="${f1(a.x * K)}" y1="${f1(a.y * K)}" x2="${f1(b.x * K)}" y2="${f1(b.y * K)}" stroke="${t.edge(col)}" stroke-width="${0.22 * K}" stroke-linecap="${t.crisp ? 'butt' : 'round'}"/><line x1="${f1(a.x * K)}" y1="${f1(a.y * K)}" x2="${f1(b.x * K)}" y2="${f1(b.y * K)}" stroke="${col}" stroke-width="${0.13 * K}" stroke-linecap="${t.crisp ? 'butt' : 'round'}"/>`,
-    );
+    if (t.road) out.push(t.road(a.x * K, a.y * K, b.x * K, b.y * K, col));
+    else
+      out.push(
+        `<line x1="${f1(a.x * K)}" y1="${f1(a.y * K)}" x2="${f1(b.x * K)}" y2="${f1(b.y * K)}" stroke="${t.edge(col)}" stroke-width="${0.22 * K}" stroke-linecap="${t.crisp ? 'butt' : 'round'}"/><line x1="${f1(a.x * K)}" y1="${f1(a.y * K)}" x2="${f1(b.x * K)}" y2="${f1(b.y * K)}" stroke="${col}" stroke-width="${0.13 * K}" stroke-linecap="${t.crisp ? 'butt' : 'round'}"/>`,
+      );
     const d = k % 2 ? cityPath(V.x * K, V.y * K) : settlementPath(V.x * K, V.y * K);
-    out.push(
-      `<path d="${d}" fill="${col}" stroke="${t.edge(col)}" stroke-width="2.6" stroke-linejoin="round"/>`,
-    );
+    if (t.building) out.push(t.building(k % 2 ? 'city' : 'settlement', V.x * K, V.y * K, col));
+    else
+      out.push(
+        `<path d="${d}" fill="${col}" stroke="${t.edge(col)}" stroke-width="2.6" stroke-linejoin="round"/>`,
+      );
   });
   if (seaEdge >= 0) {
     const E = g.edges[seaEdge]!;

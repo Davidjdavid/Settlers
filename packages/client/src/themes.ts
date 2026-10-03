@@ -10,6 +10,15 @@
 
 import type { Terrain } from '@settlers/engine';
 import { GLYPH, K, TILE_COLOR, edgeOf, f1, hexPts } from './art';
+import {
+  PIXEL_BOAT,
+  PIXEL_GLYPH,
+  pixelBuilding,
+  pixelRoad,
+  pixelTextures,
+  pixelTokenBox,
+  shade,
+} from './pixelart';
 
 export const STYLES = ['classic', 'pixel', 'wooden', 'flat', 'night'] as const;
 export type ArtStyle = (typeof STYLES)[number];
@@ -35,6 +44,8 @@ export interface Theme {
   glyph: Record<Terrain, string>;
   /** Pictures scattered round the tile, or one above the number. */
   decor: 'scatter' | 'single';
+  /** How big the pictures are, against the classic size. */
+  glyphScale: number;
   /** Extra attributes on each picture (a filter, an opacity). */
   glyphAttr: (t: Terrain) => string;
   /** Definitions (patterns, filters, gradients) and the sea behind the island. */
@@ -43,8 +54,14 @@ export interface Theme {
   /** A sea hex's own outline, and anything drawn on it (pixel boats). */
   seaHex: (cx: number, cy: number, i: number) => string;
   beach: [string, string];
-  hexStroke: string;
+  /** A tile's outline colour. */
+  hexStroke: (t: Terrain) => string;
   hexStrokeW: number;
+  /** A texture drawn over a tile's colour (pixel ground), as a fill. */
+  tileTexture: (t: Terrain) => string | null;
+  /** Pieces drawn the style's own way (pixel); null draws the usual shapes. */
+  building: ((kind: 'settlement' | 'city', x: number, y: number, color: string) => string) | null;
+  road: ((x1: number, y1: number, x2: number, y2: number, color: string) => string) | null;
   innerRing: string | null;
   /** Drawn over the finished tiles (wood grain). */
   overlay: (vb: number[]) => string;
@@ -62,27 +79,6 @@ export interface Theme {
 }
 
 /* ---------- Pixel art helpers ---------- */
-
-/** A sprite from rows of characters: each character is a palette colour ('.' is empty). */
-function sprite(rows: string[], pal: Record<string, string>, px = 2.6): string {
-  const w = rows[0]!.length;
-  const h = rows.length;
-  const x0 = (-w * px) / 2;
-  const y0 = (-h * px) / 2;
-  let out = '';
-  rows.forEach((row, y) => {
-    let x = 0;
-    while (x < w) {
-      const c = row[x]!;
-      let run = 1;
-      while (x + run < w && row[x + run] === c) run++;
-      if (c !== '.')
-        out += `<rect x="${f1(x0 + x * px)}" y="${f1(y0 + y * px)}" width="${f1(run * px + 0.05)}" height="${f1(px + 0.05)}" fill="${pal[c]}"/>`;
-      x += run;
-    }
-  });
-  return out;
-}
 
 /** A 3×5 pixel font: digits and the colon of "3:1". */
 const DIGITS: Record<string, string[]> = {
@@ -122,19 +118,6 @@ export function pixelText(x: number, y: number, s: string, size: number, color: 
   return `<g class="ptext" shape-rendering="crispEdges">${out}</g>`;
 }
 
-const PIXEL_GLYPH: Record<Terrain, string> = {
-  wood: sprite(['...gg...', '..gGgg..', '.gggGgg.', '..gggg..', '.gGgggg.', 'gggggGgg', '...bb...', '...bb...'], { g: '#1d5e2c', G: '#3f9a4c', b: '#5a3a1c' }), // prettier-ignore
-  brick: sprite(['rrrr.rrr', 'RRRR.RRR', '........', 'rr.rrrr.', 'RR.RRRR.', '........', 'rrrr.rrr', 'RRRR.RRR'], { r: '#9c3418', R: '#6a200f' }), // prettier-ignore
-  sheep: sprite(['........', '..wwww..', '.wwwwwwk', 'wwwwwwkk', '.wwwwww.', '..k..k..', '..k..k..', '........'], { w: '#ffffff', k: '#2a2a2a' }), // prettier-ignore
-  wheat: sprite(['..y.y...', '.yYyYy..', '..yYy...', '.yYyYy..', '..yyy...', '...s....', '..s.s...', '.s...s..'], { y: '#a8730f', Y: '#6e4a08', s: '#8a5a14' }), // prettier-ignore
-  ore: sprite(['....w...', '...www..', '..wgggw.', '..ggggg.', '.gggggg.', '.gggGggg', 'ggggGggg', 'gggggggg'], { w: '#ffffff', g: '#4a525c', G: '#2c3138' }), // prettier-ignore
-  gold: sprite(['..yyyy..', '.yYYYYy.', '.yYyyYy.', '.yYYYYy.', '..yyyy..', '.yyyyyy.', 'yYYYYYYy', '.yyyyyy.'], { y: '#ffe066', Y: '#a87c08' }), // prettier-ignore
-  desert: sprite(['...g....', '...g..g.', 'g..g..g.', 'g..gggg.', 'gggg....', '...g....', '...g....', '..ggg...'], { g: '#4f7a2a' }), // prettier-ignore
-  fog: sprite(['........', '..ww....', '.wwww.w.', 'wwwwwwww', 'wwwwwwww', '.wwwwww.', '........', '........'], { w: '#dfe7ea' }), // prettier-ignore
-  sea: sprite(['........', '.w...w..', 'w.w.w.w.', '........'], { w: '#cfe6ff' }),
-};
-const PIXEL_BOAT = sprite(['....w...', '....ww..', '....www.', '....w...', 'bbbbbbbb', '.bbbbbb.'], { w: '#f4f1e8', b: '#6b4523' }, 2.2); // prettier-ignore
-
 /* ---------- The styles ---------- */
 
 const classicToken = (cx: number, cy: number, n: number): string => {
@@ -170,6 +153,7 @@ const classic: Theme = {
   tile: TILE_COLOR,
   glyph: GLYPH,
   decor: 'scatter',
+  glyphScale: 1,
   glyphAttr: (t) => ` opacity="${t === 'desert' ? 0.7 : 0.85}"`,
   seaDefs: `<pattern id="waves" width="54" height="26" patternUnits="userSpaceOnUse"><path d="M2 15q12.5-9 25 0t25 0" fill="none" stroke="#2a7183" stroke-width="2" stroke-linecap="round" opacity=".55"/></pattern>${glyphSymbols(GLYPH)}<radialGradient id="tokshade" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#eadfc2"/></radialGradient>`,
   sea: (box) =>
@@ -177,8 +161,11 @@ const classic: Theme = {
   seaHex: (cx, cy, i) =>
     `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="rgba(255,255,255,.025)" stroke="rgba(160,215,225,.16)" stroke-width="1.5" data-sea="${i}"/>`,
   beach: ['#d9c69a', '#c9b382'],
-  hexStroke: 'rgba(10,27,35,.35)',
+  hexStroke: () => 'rgba(10,27,35,.35)',
   hexStrokeW: 2,
+  tileTexture: () => null,
+  building: null,
+  road: null,
   innerRing: 'rgba(255,255,255,.08)',
   overlay: () => '',
   token: classicToken,
@@ -190,42 +177,45 @@ const classic: Theme = {
 };
 
 const PIXEL_TILE: Record<Terrain, string> = {
-  wood: '#3e9a48',
-  brick: '#d0603f',
-  sheep: '#94d556',
-  wheat: '#f2c94c',
-  ore: '#a3acb6',
-  desert: '#ead39a',
-  gold: '#d9a520',
-  sea: '#3f6fd8',
-  fog: '#77848c',
+  wood: '#4aa04f',
+  brick: '#d76b45',
+  sheep: '#9bd85d',
+  wheat: '#f0c65a',
+  ore: '#9aa4b0',
+  desert: '#e9d49c',
+  gold: '#d8a530',
+  sea: '#3d6fd6',
+  fog: '#7a8890',
 };
 const pixel: Theme = {
   id: 'pixel',
   tile: PIXEL_TILE,
   glyph: PIXEL_GLYPH,
   decor: 'scatter',
+  glyphScale: 1.35,
   glyphAttr: () => '',
-  seaDefs: `<pattern id="pxwaves" width="48" height="30" patternUnits="userSpaceOnUse"><rect x="4" y="6" width="10" height="3" fill="#8fb4ff" opacity=".55"/><rect x="28" y="20" width="12" height="3" fill="#8fb4ff" opacity=".45"/></pattern>${glyphSymbols(PIXEL_GLYPH)}<symbol id="px-boat" viewBox="-12 -12 24 24">${PIXEL_BOAT}</symbol>`,
+  seaDefs: `<pattern id="pxwaves" width="64" height="40" patternUnits="userSpaceOnUse"><rect x="4" y="8" width="12" height="3" fill="#7ea6ff" opacity=".6"/><rect x="8" y="5" width="4" height="3" fill="#bcd2ff" opacity=".6"/><rect x="36" y="27" width="14" height="3" fill="#7ea6ff" opacity=".5"/><rect x="41" y="24" width="4" height="3" fill="#bcd2ff" opacity=".5"/></pattern>${pixelTextures(PIXEL_TILE)}${glyphSymbols(PIXEL_GLYPH)}<symbol id="px-boat" viewBox="-12 -12 24 24">${PIXEL_BOAT}</symbol>`,
   sea: (box) =>
-    `<rect ${box.replace(/rx="[^"]*"/, 'rx="0"')} fill="#2f5ec8"/><rect ${box.replace(/rx="[^"]*"/, 'rx="0"')} fill="url(#pxwaves)"/>`,
+    `<rect ${box.replace(/rx="[^"]*"/, 'rx="0"')} fill="#2c5bc4"/><rect ${box.replace(/rx="[^"]*"/, 'rx="0"')} fill="url(#pxwaves)"/>`,
   seaHex: (cx, cy, i) =>
-    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="#3f6fd8" stroke="#2a52ad" stroke-width="3" data-sea="${i}"/>` +
+    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="#3a69d0" stroke="#2650b0" stroke-width="3" data-sea="${i}"/><polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="url(#tx-sea)" pointer-events="none"/>` +
     (i % 5 === 2
-      ? `<use href="#px-boat" x="${f1(cx - 0.3 * K)}" y="${f1(cy - 0.3 * K)}" width="${f1(0.6 * K)}" height="${f1(0.6 * K)}"/>`
-      : `<use href="#g-sea" x="${f1(cx - 0.3 * K)}" y="${f1(cy - 0.2 * K)}" width="${f1(0.6 * K)}" height="${f1(0.4 * K)}" opacity=".8"/>`),
-  beach: ['#f0dc9c', '#c9a85a'],
-  hexStroke: '#1b2633',
+      ? `<use href="#px-boat" x="${f1(cx - 0.34 * K)}" y="${f1(cy - 0.34 * K)}" width="${f1(0.68 * K)}" height="${f1(0.68 * K)}"/>`
+      : `<use href="#g-sea" x="${f1(cx - 0.32 * K)}" y="${f1(cy - 0.12 * K)}" width="${f1(0.64 * K)}" height="${f1(0.64 * K)}" opacity=".85"/>`),
+  beach: ['#f3dea0', '#c49a52'],
+  hexStroke: (t) => shade(PIXEL_TILE[t], -0.55),
   hexStrokeW: 3,
+  tileTexture: (t) => `url(#tx-${t})`,
+  building: pixelBuilding,
+  road: pixelRoad,
   innerRing: null,
   overlay: () => '',
   token: (cx, cy, n) => {
     const red = n === 6 || n === 8;
-    const s = 0.62 * K;
-    return `<rect x="${f1(cx - s / 2)}" y="${f1(cy - s / 2)}" width="${f1(s)}" height="${f1(s)}" fill="#f6e8c3" stroke="#1b2633" stroke-width="3"/>${pixelText(cx, cy - 0.06 * K, String(n), 0.24 * K, red ? '#c0261b' : '#1d2a30')}${pips(cx, cy + 0.19 * K, n, red ? '#c0261b' : '#1d2a30', true)}`;
+    return `${pixelTokenBox(cx, cy)}${pixelText(cx, cy - 0.06 * K, String(n), 0.24 * K, red ? '#c0261b' : '#1d2a30')}${pips(cx, cy + 0.19 * K, n, red ? '#c0261b' : '#1d2a30', true)}`;
   },
   text: (x, y, s, size, color) => pixelText(x, y, s, size * 0.8, color),
-  edge: () => '#1b2633',
+  edge: () => '#141821',
   piecesOpen: '<g shape-rendering="crispEdges">',
   piecesClose: '</g>',
   crisp: true,
@@ -247,6 +237,7 @@ const wooden: Theme = {
   tile: WOOD_TILE,
   glyph: GLYPH,
   decor: 'scatter',
+  glyphScale: 1,
   glyphAttr: (t) => ` opacity="${t === 'desert' ? 0.65 : 0.75}"`,
   seaDefs: `<pattern id="inkwaves" width="60" height="30" patternUnits="userSpaceOnUse"><path d="M3 17q13-9 27 0t27 0" fill="none" stroke="#2f5560" stroke-width="2" stroke-linecap="round" opacity=".5"/></pattern>${glyphSymbols(GLYPH)}<radialGradient id="woodtok" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="#f2d9a6"/><stop offset=".7" stop-color="#d8b07a"/><stop offset="1" stop-color="#b98a52"/></radialGradient><filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".75" numOctaves="2" seed="3"/><feColorMatrix type="saturate" values="0"/></filter><linearGradient id="frame" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a5a30"/><stop offset=".5" stop-color="#6e4421"/><stop offset="1" stop-color="#8a5a30"/></linearGradient>`,
   sea: (box) =>
@@ -254,8 +245,11 @@ const wooden: Theme = {
   seaHex: (cx, cy, i) =>
     `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="rgba(255,255,255,.03)" stroke="rgba(40,60,60,.18)" stroke-width="1.5" data-sea="${i}"/>`,
   beach: ['url(#frame)', '#c79c62'],
-  hexStroke: 'rgba(60,35,15,.6)',
+  hexStroke: () => 'rgba(60,35,15,.6)',
   hexStrokeW: 2.5,
+  tileTexture: () => null,
+  building: null,
+  road: null,
   innerRing: null,
   overlay: (vb) =>
     `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" filter="url(#grain)" opacity=".13" style="mix-blend-mode:multiply" pointer-events="none"/>`,
@@ -290,14 +284,18 @@ const flat: Theme = {
   tile: FLAT_TILE,
   glyph: GLYPH,
   decor: 'single',
+  glyphScale: 1,
   glyphAttr: () => ' opacity=".9"',
   seaDefs: glyphSymbols(GLYPH),
   sea: (box) => `<rect ${box} fill="#2479b8"/>`,
   seaHex: (cx, cy, i) =>
     `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5" data-sea="${i}"/>`,
-  beach: ['#f4ecd6', '#f4ecd6'],
-  hexStroke: '#ffffff',
-  hexStrokeW: 4,
+  beach: ['#e7d8ae', '#d8c591'],
+  hexStroke: (t) => shade(FLAT_TILE[t], -0.28),
+  hexStrokeW: 2.5,
+  tileTexture: () => null,
+  building: null,
+  road: null,
   innerRing: null,
   overlay: () => '',
   token: (cx, cy, n) => {
@@ -330,6 +328,7 @@ const night: Theme = {
   tile: NIGHT_TILE,
   glyph: GLYPH,
   decor: 'scatter',
+  glyphScale: 1,
   glyphAttr: () => ' filter="url(#nightglyph)" opacity=".75"',
   seaDefs: `<pattern id="stars" width="70" height="56" patternUnits="userSpaceOnUse"><circle cx="9" cy="11" r="1.3" fill="#b9c8ff" opacity=".7"/><circle cx="44" cy="31" r="1" fill="#b9c8ff" opacity=".55"/><circle cx="61" cy="6" r=".9" fill="#ffe7a8" opacity=".6"/><path d="M14 46q10-6 20 0t20 0" fill="none" stroke="#1d3a5c" stroke-width="2" stroke-linecap="round" opacity=".6"/></pattern>${glyphSymbols(GLYPH)}<filter id="nightglyph"><feFlood flood-color="#f3e2b0"/><feComposite in2="SourceAlpha" operator="in"/></filter><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/><feFlood flood-color="#ffd98a" flood-opacity=".55"/><feComposite in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`,
   sea: (box) =>
@@ -337,8 +336,11 @@ const night: Theme = {
   seaHex: (cx, cy, i) =>
     `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="rgba(80,120,200,.04)" stroke="rgba(140,170,255,.14)" stroke-width="1.5" data-sea="${i}"/>`,
   beach: ['#2b2a33', '#1f1e27'],
-  hexStroke: 'rgba(255,214,140,.4)',
+  hexStroke: () => 'rgba(255,214,140,.4)',
   hexStrokeW: 2,
+  tileTexture: () => null,
+  building: null,
+  road: null,
   innerRing: 'rgba(255,220,150,.12)',
   overlay: () => '',
   token: (cx, cy, n) => {
