@@ -4050,7 +4050,7 @@ button.vp {
   font: inherit;
   cursor: pointer;
 }
-.musicbtn.on {
+.musicbtn.playing {
   color: var(--lantern-2, #f5c04a);
 }
 .music {

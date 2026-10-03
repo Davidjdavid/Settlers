@@ -302,7 +302,7 @@ export function MusicButton({ onOpen }: { onOpen: () => void }) {
   const cur = m?.queue[0];
   return (
     <button
-      className={`btn small ghost musicbtn${cur && m?.playing ? ' on' : ''}`}
+      className={`btn small ghost musicbtn${cur && m?.playing ? ' playing' : ''}`}
       onClick={onOpen}
       data-testid="open-music"
       title={cur ? (cur.title ?? 'Music') : 'Play music for the table'}
