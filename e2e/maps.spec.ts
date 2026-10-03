@@ -231,3 +231,41 @@ test('make, edit, save and share a map', async ({ browser }) => {
   await shot(page, 'maps-5-phone');
   expect(errors).toEqual([]);
 });
+
+test('a new map from a copy of a premade Seafarers map', async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(server.url);
+  await page.fill('#pass', server.passphrase);
+  await page.click('button:has-text("Enter")');
+  await page.getByTestId('open-maps').click();
+  // Classic and the Isles isn't offered (a copy would lose its random sea).
+  await expect(page.getByTestId('copy-premade').locator('option')).toHaveText([
+    'Start from a premade map…',
+    'Heading for New Shores',
+    'Fog Islands',
+    'Four Islands',
+    'Four Islands, far apart',
+    'Treasure Fog',
+  ]);
+  await page.getByTestId('copy-premade').selectOption('fog-islands');
+  await expect(page).toHaveURL(/\/maps\/copy-fog-islands$/);
+  await expect(page.getByTestId('map-editor')).toBeVisible();
+  await expect(page.getByTestId('map-name')).toHaveValue('Fog Islands (copy)');
+  // The Fog Islands as they are: fog round a home island of blanks.
+  expect(await page.locator('[data-kind=hex][data-t=fog]').count()).toBeGreaterThan(5);
+  const blank = page.locator('[data-kind=hex][data-t=random]').first();
+  const [q, r] = [Number(await blank.getAttribute('data-q')), Number(await blank.getAttribute('data-r'))];
+  await page.getByTestId('tool-terrain-ore').click();
+  await clickTile(page, q, r);
+  await expect(hex(page, q, r)).toHaveAttribute('data-t', 'ore');
+  await shot(page, 'maps-copy');
+  await page.getByTestId('map-name').fill('Our Fog Islands');
+  await page.getByTestId('map-name').press('Enter');
+  await page.getByTestId('save-map').click();
+  await expect(page).toHaveURL(/\/maps\/m-/);
+  await page.goto(`${server.url}/maps`);
+  await expect(page.getByTestId('maps-page')).toContainText('Our Fog Islands');
+  expect(errors).toEqual([]);
+});

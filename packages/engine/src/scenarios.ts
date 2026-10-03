@@ -39,3 +39,11 @@ export const HFNS_3_OLD = hfns3 as unknown as MapData;
 export function scenarioMap(scenario: string, players: number): MapData {
   return FOR_PLAYERS[scenario]?.[players] ?? SCENARIOS[scenario]!;
 }
+
+/**
+ * The premade Seafarers maps a new map can start from in the editor (a copy; 3 October). Not
+ * Classic and the Isles: its random tiles can be sea, which the editor's tile set can't hold, so
+ * a copy would turn that sea into land (test/maps.test.ts checks every map listed here copies
+ * exactly).
+ */
+export const COPYABLE_MAPS = ['heading-for-new-shores', 'fog-islands', 'four-islands', 'four-islands-far', 'treasure-fog'] as const; // prettier-ignore

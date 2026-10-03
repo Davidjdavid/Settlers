@@ -23,6 +23,8 @@ import {
   hexAt,
   normalize,
   producing,
+  COPYABLE_MAPS,
+  SCENARIOS,
   standardBlank,
   edgeOfSide,
   type At,
@@ -692,6 +694,20 @@ export function MapsPage() {
           <button className="btn" onClick={() => client.go('/maps/empty')} data-testid="new-empty-map">
             Start from nothing
           </button>
+          <select
+            className="btn"
+            aria-label="Start from a premade map"
+            data-testid="copy-premade"
+            value=""
+            onChange={(e) => e.target.value && client.go(`/maps/copy-${e.target.value}`)}
+          >
+            <option value="">Start from a premade map…</option>
+            {COPYABLE_MAPS.map((m) => (
+              <option key={m} value={m}>
+                {SCENARIOS[m]!.name}
+              </option>
+            ))}
+          </select>
           <button className="btn" onClick={() => file.current?.click()} data-testid="import-map">
             Import…
           </button>
@@ -843,7 +859,9 @@ export function MapEditorPage({ id }: { id: string }) {
   const st = useClient();
   const hist = useRef<EditHistory | null>(null);
   const [, redraw] = useState(0);
-  const [savedId, setSavedId] = useState<string | null>(id === 'new' || id === 'empty' ? null : id);
+  const [savedId, setSavedId] = useState<string | null>(
+    id === 'new' || id === 'empty' || id.startsWith('copy-') ? null : id,
+  );
   const [dirty, setDirty] = useState(false);
   const [tool, setTool] = useState<Tool>({ k: 'terrain', t: 'wood' });
   const [heat, setHeat] = useState(true);
@@ -857,7 +875,13 @@ export function MapEditorPage({ id }: { id: string }) {
   if (!hist.current) {
     if (id === 'new') hist.current = new EditHistory(standardBlank(CLASSIC_MAP, 'new', 'New map'));
     else if (id === 'empty') hist.current = new EditHistory(emptyMap('new', 'New map'));
-    else if (st.openMap?.map.id === id) hist.current = new EditHistory(normalize(st.openMap.map));
+    else if (id.startsWith('copy-') && SCENARIOS[id.slice(5)]) {
+      // A copy of a premade Seafarers map, to change and save as your own.
+      const m = SCENARIOS[id.slice(5)]!;
+      hist.current = new EditHistory(
+        normalize({ ...structuredClone(m), id: 'new', name: `${m.name} (copy)` }),
+      );
+    } else if (st.openMap?.map.id === id) hist.current = new EditHistory(normalize(st.openMap.map));
   }
   useEffect(() => {
     if (st.status !== 'live') return;

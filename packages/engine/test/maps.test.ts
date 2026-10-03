@@ -23,6 +23,7 @@ import {
   normalize,
   OUR_RULES,
   SCENARIOS,
+  COPYABLE_MAPS,
   standardBlank,
   validateMap,
   type At,
@@ -825,4 +826,38 @@ describe('settings that can’t work fail fast, naming the rule', () => {
       expect(ms).toBeLessThan(2000);
     });
   }
+});
+
+describe('a new map from a premade Seafarers map (3 October)', () => {
+  const count = (xs: string[]) =>
+    xs.reduce<Record<string, number>>((a, x) => ((a[x] = (a[x] ?? 0) + 1), a), {});
+  const stacks = (m: MapData) => count(Object.values(m.pools ?? {}).flatMap((p) => p.terrain));
+  it.each(COPYABLE_MAPS)('%s comes into the editor exactly', (id) => {
+    const m = SCENARIOS[id]!;
+    const c = normalize({ ...m, id: 'new', name: `${m.name} (copy)` });
+    // Every fixed tile in place, the random stacks the same, and the rest of the scenario kept.
+    const fixed = (x: MapData) => x.hexes.filter((h) => h.t !== 'random').map((h) => [h.q, h.r, h.t]);
+    expect(fixed(c)).toEqual(fixed(m));
+    expect(c.hexes.map((h) => [h.q, h.r])).toEqual(m.hexes.map((h) => [h.q, h.r]));
+    expect(stacks(c)).toEqual(stacks(m));
+    for (const k of [
+      'fog',
+      'treasures',
+      'start',
+      'pirate',
+      'specialVP',
+      'modules',
+      'winVP',
+      'players',
+    ] as const)
+      expect(c[k], k).toEqual(m[k]);
+    expect(c.harbors.length).toBe(m.harbors.length);
+    // And a game starts on it.
+    expect(() => newGame('copy', seatsFor(4), { map: c })).not.toThrow();
+  });
+  it('Classic and the Isles is left out: a copy would turn its random sea into land', () => {
+    expect(COPYABLE_MAPS).not.toContain('classic-isles' as never);
+    const m = SCENARIOS['classic-isles']!;
+    expect(stacks(normalize(m)).sea ?? 0).not.toBe(stacks(m).sea);
+  });
 });
