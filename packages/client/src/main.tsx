@@ -35,6 +35,9 @@ Object.assign(window, {
     },
     musicEnd: () => (window as { __settlersMusic?: { end?: () => void } }).__settlersMusic?.end?.(),
     musicFail: () => (window as { __settlersMusic?: { fail?: () => void } }).__settlersMusic?.fail?.(),
+    // A slow connection: the stand-in player buffers (or stops buffering).
+    musicBuffer: (on: boolean) =>
+      (window as { __settlersMusic?: { buffer?: (on: boolean) => void } }).__settlersMusic?.buffer?.(on),
     // YouTube moving on to a playlist's next video by itself.
     musicAdvance: () =>
       (window as { __settlersMusic?: { advance?: () => void } }).__settlersMusic?.advance?.(),

@@ -38,7 +38,7 @@ export type MusicOp =
   | { k: 'ended'; ver: number; last?: boolean }
   | { k: 'error'; ver: number; last?: boolean }
   | { k: 'title'; ver: number; title: string; index?: number }
-  | { k: 'remove'; i: number }
+  | { k: 'remove'; i: number; id?: string }
   | { k: 'stop' }
   | { k: 'clear' };
 
@@ -153,13 +153,13 @@ export function musicOp(
       return { ok: true, st, note: `${who} added ${what}${st.queue.length > 1 ? ' to the queue' : ''}` };
     }
     case 'play':
-      if (!st.queue.length || st.playing) return { ok: true, st };
+      if (!st.queue.length || st.playing) return { ok: true, st: st0 };
       st.playing = true;
       st.started = now - st.pos * 1000;
       st.ver++;
       return { ok: true, st, note: `${who} played the music` };
     case 'pause':
-      if (!st.playing) return { ok: true, st };
+      if (!st.playing) return { ok: true, st: st0 };
       st.pos = positionAt(st, now);
       st.playing = false;
       st.ver++;
@@ -184,16 +184,25 @@ export function musicOp(
       if (cur.kind === 'playlist' && op.index !== st.index) return { ok: true, st: st0 };
       const title = op.title.replace(/\s+/g, ' ').trim().slice(0, 120);
       const at = cur.kind === 'playlist' ? st.index : undefined;
-      if (!title || (cur.title === title && cur.titleAt === at)) return { ok: true, st: st0 };
+      // The first title heard stands: screens in other languages can be told another one, and
+      // would otherwise take turns changing it.
+      if (!title || (cur.title && cur.titleAt === at)) return { ok: true, st: st0 };
       cur.title = title;
       if (at === undefined) delete cur.titleAt;
       else cur.titleAt = at;
       return { ok: true, st };
     }
-    case 'remove':
-      if (!(op.i >= 1 && op.i < st.queue.length)) return { ok: false, error: 'That isn’t in the queue' };
-      st.queue.splice(op.i, 1);
+    case 'remove': {
+      // The song the person saw there: the queue may have moved on before the click arrived.
+      let i = op.i;
+      if (op.id !== undefined && st.queue[i]?.id !== op.id) {
+        const near = st.queue.map((x, j) => (j >= 1 && x.id === op.id ? j : -1)).filter((j) => j >= 0);
+        i = near.sort((a, b) => Math.abs(a - op.i) - Math.abs(b - op.i))[0] ?? -1;
+      }
+      if (!(i >= 1 && i < st.queue.length)) return { ok: false, error: 'That isn’t in the queue' };
+      st.queue.splice(i, 1);
       return { ok: true, st, note: `${who} took a song off the queue` };
+    }
     case 'stop':
       // Stops the music for everyone and goes back to the start of the song; the queue stays.
       if (!st.queue.length || (!st.playing && st.pos === 0)) return { ok: true, st: st0 };

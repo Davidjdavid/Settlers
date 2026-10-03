@@ -451,7 +451,11 @@ export const MusicOpSchema = z.discriminatedUnion('k', [
     title: z.string().min(1).max(300),
     index: z.number().int().min(0).max(10000).optional(),
   }),
-  z.strictObject({ k: z.literal('remove'), i: z.number().int().min(0).max(100) }),
+  z.strictObject({
+    k: z.literal('remove'),
+    i: z.number().int().min(0).max(100),
+    id: z.string().max(64).optional(),
+  }),
   z.strictObject({ k: z.literal('stop') }),
   z.strictObject({ k: z.literal('clear') }),
 ]);

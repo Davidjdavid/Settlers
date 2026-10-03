@@ -148,6 +148,45 @@ describe('fog map settings (seafarers.md §11.5)', () => {
     expect(checkTransition(s, r.state)).toEqual([]);
   });
 
+  it('one road uncovering sea along it and at a lower-numbered tip: both paid, and the checks agree', () => {
+    // Hexes pay along the road first, then at its ends (§11.5), which isn't board order: the check
+    // that every uncovered sea paid mustn't care about the order.
+    const base = game(withRules({ fogTips: true, fogRewards: true }));
+    const g = geo(base);
+    const fog = (st: GameState, h: number) => st.board.hexes[h]!.t === 'fog';
+    let tried = 0;
+    for (let e = 0; e < g.edges.length; e++) {
+      const E = g.edges[e]!;
+      const along = E.hexes.filter((h) => fog(base, h));
+      if (along.length !== 1 || !E.hexes.some((h) => isLand(base.board.hexes[h]!.t))) continue;
+      for (const [from, to] of [
+        [E.a, E.b],
+        [E.b, E.a],
+      ] as const) {
+        const tip = g.verts[to]!.hexes.filter((h) => !E.hexes.includes(h) && fog(base, h));
+        if (!tip.some((h) => h < along[0]!)) continue;
+        let s = structuredClone(base);
+        s.verts[from] = [0, 1];
+        s.players[0]!.pieces.settlement--;
+        s = setHand(s, 0, { wood: 1, brick: 1 });
+        const ends = [...new Set([...g.verts[E.a]!.hexes, ...g.verts[E.b]!.hexes])].filter(
+          (h) => !E.hexes.includes(h) && fog(s, h),
+        );
+        rig(
+          s,
+          [...along, ...ends].map(() => 'sea'),
+        );
+        const r = act(s, 0, { type: 'road', e });
+        tried++;
+        expect(r.state.tr!.fogFound!.map((f) => f.h)).toEqual([...along, ...ends.sort((a, b) => a - b)]);
+        expect(checkInvariants(r.state)).toEqual([]);
+        expect(checkTransition(s, r.state)).toEqual([]);
+        return;
+      }
+    }
+    expect(tried, 'no such road on the test map').toBeGreaterThan(0);
+  });
+
   it('desert uncovered gives a treasure too', () => {
     const { s, e, ends } = tipRoad(withRules({ fogTips: true, fogRewards: true }));
     rig(

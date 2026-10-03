@@ -25,8 +25,10 @@ interface Player {
   /** Is it actually playing (false while the browser blocks sound until a click)? */
   playing(): boolean;
   volume(vol: number, muted: boolean): void;
-  /** Is the current video the last of its playlist (or not a playlist)? */
-  last(): boolean;
+  /** Is the current video the last of its playlist (or not a playlist)? null: can't tell yet. */
+  last(): boolean | null;
+  /** Loading or buffering: not playing yet, but not held back either. */
+  buffering(): boolean;
   title(): string | null;
   /** What the player itself has on: its video, and for a playlist which of its videos. */
   current(): { id: string | null; index: number };
@@ -60,7 +62,8 @@ function loadYouTube(): Promise<any> {
 
 function youTubePlayer(host: HTMLElement, ev: Events): Player {
   let yt: any = null;
-  let queued: (() => void) | null = null;
+  // Everything asked before the player is ready, in order (a load, then a seek or a pause…).
+  const queued: (() => void)[] = [];
   let vol: [number, boolean] = [60, false];
   const el = document.createElement('div');
   host.appendChild(el);
@@ -73,8 +76,7 @@ function youTubePlayer(host: HTMLElement, ev: Events): Player {
         onReady: () => {
           yt.setVolume(vol[0]);
           if (vol[1]) yt.mute();
-          queued?.();
-          queued = null;
+          for (const f of queued.splice(0)) f();
         },
         onStateChange: (e: { data: number }) => {
           if (e.data === YT.PlayerState.ENDED) ev.ended();
@@ -83,7 +85,7 @@ function youTubePlayer(host: HTMLElement, ev: Events): Player {
       },
     });
   });
-  const when = (f: () => void) => (yt?.loadVideoById ? f() : (queued = f));
+  const when = (f: () => void) => (yt?.loadVideoById ? f() : queued.push(f));
   return {
     load(item, index, at, play) {
       when(() => {
@@ -111,9 +113,12 @@ function youTubePlayer(host: HTMLElement, ev: Events): Player {
       else yt.unMute();
     },
     last() {
-      const list = yt?.getPlaylist?.();
-      return !list || yt.getPlaylistIndex() >= list.length - 1;
+      if (!yt?.getPlaylist) return null;
+      const list = yt.getPlaylist();
+      if (!list) return yt.getVideoData?.()?.video_id ? true : null;
+      return yt.getPlaylistIndex() >= list.length - 1;
     },
+    buffering: () => yt?.getPlayerState?.() === 3,
     title: () => yt?.getVideoData?.()?.title || null,
     current: () => ({
       id: yt?.getVideoData?.()?.video_id || null,
@@ -136,15 +141,16 @@ interface FakeState {
   /** Videos in each playlist (the stand-in's playlists all have 3). */
   listLength: number;
   blocked: boolean;
+  buffering: boolean;
 }
 
 function fakePlayer(
   ev: Events,
   opts: { blocked?: boolean },
-): Player & { state(): FakeState; end(): void; fail(): void; advance(): void } {
+): Player & { state(): FakeState; end(): void; fail(): void; advance(): void; buffer(on: boolean): void } {
   const s: FakeState = {
     kind: null, id: null, index: 0, playing: false, at: 0, since: Date.now(), vol: 60, muted: false,
-    listLength: 3, blocked: !!opts.blocked,
+    listLength: 3, blocked: !!opts.blocked, buffering: false,
   }; // prettier-ignore
   const now = () => (s.playing ? s.at + (Date.now() - s.since) / 1000 : s.at);
   const set = (playing: boolean, at = now()) => {
@@ -170,7 +176,8 @@ function fakePlayer(
     },
     seek: (at) => set(s.playing, at),
     time: now,
-    playing: () => s.playing,
+    playing: () => s.playing && !s.buffering,
+    buffering: () => s.buffering,
     volume(v, muted) {
       s.vol = v;
       s.muted = muted;
@@ -180,6 +187,10 @@ function fakePlayer(
     current: () => ({ id: s.id, index: s.index }),
     state: () => ({ ...s, at: Math.round(now() * 10) / 10 }),
     end: () => ev.ended(),
+    // A slow connection: the video stops to load more for a while.
+    buffer: (on) => {
+      s.buffering = on;
+    },
     fail: () => ev.error(),
     // As YouTube does at the end of a video in a playlist: on to the next one by itself.
     advance() {
@@ -259,7 +270,15 @@ export function MusicHost() {
   const m = st.room?.music;
   const host = useRef<HTMLDivElement | null>(null);
   const player = useRef<
-    (Player & Partial<{ state(): FakeState; end(): void; fail(): void; advance(): void }>) | null
+    | (Player &
+        Partial<{
+          state(): FakeState;
+          end(): void;
+          fail(): void;
+          advance(): void;
+          buffer(on: boolean): void;
+        }>)
+    | null
   >(null);
   /** What this screen loaded: the room's `ver` then, and the item and playlist video. */
   const loaded = useRef<{ ver: number; key: string } | null>(null);
@@ -282,6 +301,7 @@ export function MusicHost() {
   const latest = useRef(m);
   latest.current = m;
   const [blocked, setBlocked] = useState(false);
+  const held = useRef(0);
   const mine = useMine(st.room?.mySettings);
   const muted = useRef(mine.muted);
   muted.current = mine.muted;
@@ -353,7 +373,11 @@ export function MusicHost() {
       const p = player.current;
       if (!cur?.queue.length || !p || muted.current) return setBlocked(false);
       const item = cur.queue[0]!;
-      if (asked.current?.item !== itemKey(item) || settling()) return;
+      if (asked.current?.item !== itemKey(item)) return;
+      // Held back by the browser: should be playing, isn't, and isn't loading, two seconds running.
+      held.current = cur.playing && !p.playing() && !p.buffering() ? held.current + 1 : 0;
+      setBlocked(held.current >= 2);
+      if (settling()) return;
       const on = indexOn(p);
       if (item.kind === 'playlist' && on !== cur.index) {
         // YouTube went on to the playlist's next video: move everyone on with it (once: later
@@ -363,19 +387,21 @@ export function MusicHost() {
         else load(p, item, cur.index, expected(cur, offset.current), cur.playing);
         return;
       }
-      // A video: the player really on it (it keeps the last one a moment while loading).
-      if (item.kind === 'video' && p.current().id !== item.id) return;
+      // A video: the player really on it. Still not, well after it was asked: ask again.
+      if (item.kind === 'video' && p.current().id !== item.id) {
+        if (!p.buffering()) load(p, item, cur.index, expected(cur, offset.current), cur.playing);
+        return;
+      }
       if (cur.playing && p.playing()) {
         const want = expected(cur, offset.current);
         if (Math.abs(p.time() - want) > DRIFT) p.seek(want);
       }
-      setBlocked(cur.playing && !p.playing());
       // The name, once the player has really been on this song a moment (it keeps the last
       // song's name while loading), tidied as the server keeps it.
       const raw = p.playing() ? p.title() : null;
       const title = raw?.replace(/\s+/g, ' ').trim().slice(0, 120);
       const known = item.kind === 'video' ? item.title : item.titleAt === cur.index ? item.title : undefined;
-      if (title && title !== known)
+      if (title && known === undefined)
         send(
           item.kind === 'playlist'
             ? { k: 'title', ver: cur.ver, title, index: cur.index }
@@ -530,7 +556,12 @@ export function MusicSheet({ onClose }: { onClose: () => void }) {
                   client.music({
                     k: 'skip',
                     ver: m!.ver,
-                    last: (window as { __settlersMusic?: Player }).__settlersMusic?.last() ?? true,
+                    // A playlist moves on to its next video unless this screen knows it's on the
+                    // last (a player still loading can't tell: never drop the rest of the list).
+                    last:
+                      cur.kind === 'playlist'
+                        ? ((window as { __settlersMusic?: Player }).__settlersMusic?.last() ?? false)
+                        : true,
                   })
                 }
                 data-testid="music-skip"
@@ -588,7 +619,7 @@ export function MusicSheet({ onClose }: { onClose: () => void }) {
                   <button
                     className="btn small ghost"
                     aria-label="Take off the queue"
-                    onClick={() => client.music({ k: 'remove', i: i + 1 })}
+                    onClick={() => client.music({ k: 'remove', i: i + 1, id: x.id })}
                   >
                     ✕
                   </button>

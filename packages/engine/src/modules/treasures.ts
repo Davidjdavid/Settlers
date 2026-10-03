@@ -353,7 +353,11 @@ export const treasures: RuleModule = {
       const uncovered = next.board.hexes
         .map((h, i) => (prev.board.hexes[i]!.t === 'fog' && (h.t === 'sea' || h.t === 'desert') ? i : -1))
         .filter((i) => i >= 0);
-      const paid = b.fogFound!.slice(a.fogFound!.length).map((f) => f.h);
+      // They pay along the piece first, then at its ends (§11.5), so compare them in board order.
+      const paid = b
+        .fogFound!.slice(a.fogFound!.length)
+        .map((f) => f.h)
+        .sort((x, y) => x - y);
       if (next.phase !== 'over' && JSON.stringify(paid) !== JSON.stringify(uncovered))
         bad.push(`fog paid ${paid} for ${uncovered}`);
     }

@@ -171,6 +171,16 @@ describe('Log lines (SPEC 8.10)', () => {
       'Alex traded 4 Sheep to the bank for 1 Wheat',
     ]);
     expect(text({ k: 'steal', p: 0, from: 1, r: null })).toEqual(['Alex stole a card from Sam']);
+    // A treasure from the fog says so, also when it stands in for a development card.
+    expect(text({ k: 'treasure', p: 0, e: -1, kind: 'trio', h: 4 })[0]).toMatch(
+      /^Alex found a treasure in the fog: /,
+    );
+    expect(text({ k: 'treasure', p: 0, e: -1, kind: 'trio', from: 'dev', h: 4 })[0]).toMatch(
+      /^Alex found a treasure in the fog: no cards left to give, so .+ instead$/,
+    );
+    expect(text({ k: 'treasure', p: 0, e: 5, kind: 'trio', from: 'dev' })[0]).toMatch(
+      /^Alex found a treasure: no cards left to give, so .+ instead$/,
+    );
   });
 });
 

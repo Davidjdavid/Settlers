@@ -180,6 +180,57 @@ describe('the shared player (SPEC 12.1)', () => {
     expect([st.queue.length, st.index]).toEqual([1, 2]);
   });
 
+  it('the first title heard stands (screens in other languages can be sent another one)', () => {
+    let { st } = run([[{ k: 'add', url: V }, 0]]);
+    ({ st } = run([[{ k: 'title', ver: st.ver, title: 'Never Gonna Give You Up' }, 0]], st));
+    const again = musicOp(st, { k: 'title', ver: st.ver, title: 'Nunca te voy a dejar' }, 'Bob', 0);
+    expect(again.ok && again.st).toBe(st);
+    expect(st.queue[0]!.title).toBe('Never Gonna Give You Up');
+    // A playlist: one title per video of it, the first heard.
+    ({ st } = run(
+      [
+        [{ k: 'add', url: L }, 0],
+        [{ k: 'skip', ver: st.ver }, 0],
+      ],
+      st,
+    ));
+    ({ st } = run([[{ k: 'title', ver: st.ver, title: 'Song A', index: 0 }, 0]], st));
+    const b = musicOp(st, { k: 'title', ver: st.ver, title: 'Canción A', index: 0 }, 'Bob', 0);
+    expect(b.ok && b.st).toBe(st);
+    ({ st } = run([[{ k: 'ended', ver: st.ver, last: false }, 0]], st));
+    ({ st } = run([[{ k: 'title', ver: st.ver, title: 'Song B', index: 1 }, 0]], st));
+    expect([st.queue[0]!.title, st.queue[0]!.titleAt]).toEqual(['Song B', 1]);
+  });
+
+  it('taking a song off the queue takes off that song, even if the queue moved on first', () => {
+    let { st } = run([
+      [{ k: 'add', url: V }, 0],
+      [{ k: 'add', url: V2 }, 0],
+      [{ k: 'add', url: L }, 0],
+    ]);
+    const list = st.queue[2]!.id;
+    // The first song ends just before the click on the playlist's ✕ (shown third) arrives.
+    ({ st } = run([[{ k: 'ended', ver: st.ver }, 0]], st));
+    ({ st } = run([[{ k: 'remove', i: 2, id: list }, 0]], st));
+    expect(st.queue.map((x) => x.id)).toEqual(['9bZkp7q19f0']);
+    expect(musicOp(st, { k: 'remove', i: 1, id: list }, 'Ann', 0)).toEqual({
+      ok: false,
+      error: 'That isn’t in the queue',
+    });
+  });
+
+  it('pressing what is already so changes nothing (no save, no broadcast)', () => {
+    const { st } = run([[{ k: 'add', url: V }, 0]]);
+    const play = musicOp(st, { k: 'play' }, 'Bob', 5);
+    expect(play.ok && play.st).toBe(st);
+    const paused = run([[{ k: 'pause' }, 5]], st).st;
+    const pause = musicOp(paused, { k: 'pause' }, 'Bob', 6);
+    expect(pause.ok && pause.st).toBe(paused);
+    const empty = emptyMusic();
+    const none = musicOp(empty, { k: 'play' }, 'Bob', 0);
+    expect(none.ok && none.st).toBe(empty);
+  });
+
   it('titles, removing from the queue, and the limits', () => {
     let { st } = run([
       [{ k: 'add', url: V }, 0],

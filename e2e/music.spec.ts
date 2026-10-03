@@ -100,6 +100,15 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
     await expect(a.getByTestId('music-now')).toContainText('Song dQw4w9WgXcQ', { timeout: 15_000 });
     if (SHOTS) await a.screenshot({ path: `${SHOTS}/music-sheet.png` });
 
+    // A slow connection buffers for a while: that isn't blocked sound, so no "Click to join".
+    await b.evaluate(() => (window as any).__settlers.musicBuffer(true)); // eslint-disable-line @typescript-eslint/no-explicit-any
+    for (let i = 0; i < 8; i++) {
+      await b.waitForTimeout(500);
+      await expect(b.getByTestId('music-join')).toHaveCount(0);
+    }
+    await b.evaluate(() => (window as any).__settlers.musicBuffer(false)); // eslint-disable-line @typescript-eslint/no-explicit-any
+    await inStep([a, b, c], 'dQw4w9WgXcQ', true);
+
     /* ---------- Pause and play, from another screen ---------- */
     await openMusic(b);
     await b.getByTestId('music-pause').click();

@@ -264,12 +264,11 @@ export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
     /* Treasures */
     case 'treasure': {
       const what = TREASURE_LABEL[e.kind];
+      const where = e.h != null ? ' in the fog' : '';
       return one(
         e.from
-          ? L`${P(e.p)} found a treasure: no cards left to give, so ${what} instead`
-          : e.h != null
-            ? L`${P(e.p)} found a treasure in the fog: ${what}`
-            : L`${P(e.p)} found a treasure: ${what}`,
+          ? L`${P(e.p)} found a treasure${where}: no cards left to give, so ${what} instead`
+          : L`${P(e.p)} found a treasure${where}: ${what}`,
         { big: true },
       );
     }
