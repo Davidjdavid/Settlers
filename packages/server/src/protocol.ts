@@ -444,10 +444,16 @@ export const MusicOpSchema = z.discriminatedUnion('k', [
   z.strictObject({ k: z.literal('pause') }),
   z.strictObject({ k: z.literal('skip'), ver, last: z.boolean().optional() }),
   z.strictObject({ k: z.literal('ended'), ver, last: z.boolean().optional() }),
-  z.strictObject({ k: z.literal('error'), ver }),
-  z.strictObject({ k: z.literal('title'), ver, title: z.string().min(1).max(300) }),
+  z.strictObject({ k: z.literal('error'), ver, last: z.boolean().optional() }),
+  z.strictObject({
+    k: z.literal('title'),
+    ver,
+    title: z.string().min(1).max(300),
+    index: z.number().int().min(0).max(10000).optional(),
+  }),
   z.strictObject({ k: z.literal('remove'), i: z.number().int().min(0).max(100) }),
   z.strictObject({ k: z.literal('stop') }),
+  z.strictObject({ k: z.literal('clear') }),
 ]);
 
 export const ClientMsgSchema = z.discriminatedUnion('t', [

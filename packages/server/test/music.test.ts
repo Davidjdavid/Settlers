@@ -29,9 +29,15 @@ describe('YouTube links (SPEC 12.1)', () => {
       'https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf',
       { kind: 'playlist', id: 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf' },
     ],
+    // A song opened from a playlist or a Mix plays that song, not the list from its start
+    // (3 October: "plays the wrong songs").
     [
       'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf',
-      { kind: 'playlist', id: 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf' },
+      { kind: 'video', id: 'dQw4w9WgXcQ' },
+    ],
+    [
+      'https://www.youtube.com/watch?v=9bZkp7q19f0&list=RD9bZkp7q19f0&start_radio=1',
+      { kind: 'video', id: '9bZkp7q19f0' },
     ],
   ] as const)('%s', (url, want) => {
     expect(parseYouTube(url)).toEqual(want);
@@ -135,7 +141,46 @@ describe('the shared player (SPEC 12.1)', () => {
     expect(st.playing).toBe(true);
   });
 
-  it('titles, removing from the queue, stopping, and the limits', () => {
+  it('stop stops the music for everyone and keeps the queue; clear takes off only what waits', () => {
+    let { st, notes } = run([
+      [{ k: 'add', url: V }, 0],
+      [{ k: 'add', url: V2 }, 0],
+      [{ k: 'add', url: L }, 0],
+      [{ k: 'stop' }, 30_000],
+    ]);
+    expect(st.queue.map((x) => x.id)).toEqual([
+      'dQw4w9WgXcQ',
+      '9bZkp7q19f0',
+      'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf',
+    ]);
+    expect(st.playing).toBe(false);
+    // Back to the start of the song: Play starts it again from the top.
+    expect(positionAt(st, 99_000)).toBe(0);
+    ({ st } = run([[{ k: 'play' }, 40_000]], st));
+    expect(positionAt(st, 45_000)).toBe(5);
+    ({ st, notes } = run([[{ k: 'clear' }, 50_000]], st));
+    expect(st.queue.map((x) => x.id)).toEqual(['dQw4w9WgXcQ']);
+    expect(st.playing).toBe(true);
+    expect(notes).toEqual(['Ann cleared the queue']);
+  });
+
+  it('a title is only kept for what is playing: the video, or the playlist video it came from', () => {
+    let { st } = run([[{ k: 'add', url: L }, 0]]);
+    // A screen still showing another video of the playlist: ignored.
+    ({ st } = run([[{ k: 'title', ver: st.ver, title: 'Old song', index: 3 }, 0]], st));
+    expect(st.queue[0]!.title).toBeUndefined();
+    ({ st } = run([[{ k: 'title', ver: st.ver, title: 'First song', index: 0 }, 0]], st));
+    expect(st.queue[0]).toMatchObject({ title: 'First song', titleAt: 0 });
+    // On to the next video: its own title replaces it.
+    ({ st } = run([[{ k: 'ended', ver: st.ver, last: false }, 1000]], st));
+    ({ st } = run([[{ k: 'title', ver: st.ver, title: 'Second song', index: 1 }, 0]], st));
+    expect(st.queue[0]).toMatchObject({ title: 'Second song', titleAt: 1 });
+    // A video in a playlist that won't play: on to the playlist's next video, not past it all.
+    ({ st } = run([[{ k: 'error', ver: st.ver, last: false }, 2000]], st));
+    expect([st.queue.length, st.index]).toEqual([1, 2]);
+  });
+
+  it('titles, removing from the queue, and the limits', () => {
     let { st } = run([
       [{ k: 'add', url: V }, 0],
       [{ k: 'add', url: V2 }, 0],
@@ -148,13 +193,13 @@ describe('the shared player (SPEC 12.1)', () => {
     });
     ({ st } = run([[{ k: 'remove', i: 1 }, 0]], st));
     expect(st.queue).toHaveLength(1);
-    ({ st } = run([[{ k: 'stop' }, 0]], st));
-    expect(st.queue).toEqual([]);
+    ({ st } = run([[{ k: 'clear' }, 0]], st));
+    expect(st.queue).toHaveLength(1);
     expect(musicOp(st, { k: 'add', url: 'https://vimeo.com/1' }, 'Ann', 0)).toEqual({
       ok: false,
       error: 'That isn’t a YouTube video or playlist link',
     });
-    for (let i = 0; i < MUSIC_QUEUE_MAX; i++) ({ st } = run([[{ k: 'add', url: V }, 0]], st));
+    for (let i = st.queue.length; i < MUSIC_QUEUE_MAX; i++) ({ st } = run([[{ k: 'add', url: V }, 0]], st));
     expect(musicOp(st, { k: 'add', url: V }, 'Ann', 0)).toEqual({
       ok: false,
       error: 'The music queue is full',

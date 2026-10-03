@@ -35,6 +35,9 @@ Object.assign(window, {
     },
     musicEnd: () => (window as { __settlersMusic?: { end?: () => void } }).__settlersMusic?.end?.(),
     musicFail: () => (window as { __settlersMusic?: { fail?: () => void } }).__settlersMusic?.fail?.(),
+    // YouTube moving on to a playlist's next video by itself.
+    musicAdvance: () =>
+      (window as { __settlersMusic?: { advance?: () => void } }).__settlersMusic?.advance?.(),
     // `byHand`: move types the test will make through the UI instead (returned as 'skip:<type>').
     botStep: async (byHand: string[] = []) => {
       const v = client.state.game;

@@ -9,8 +9,9 @@ export interface MusicItem {
   id: string;
   /** Who added it (a name, for the queue). */
   by: string;
-  /** The title, once a screen has loaded it. */
+  /** The title, once a screen has loaded it (for a playlist: of its video number `titleAt`). */
   title?: string;
+  titleAt?: number;
   /** Start this far in (seconds), from a link with t=…; only for the first play. */
   start?: number;
 }
@@ -35,10 +36,11 @@ export type MusicOp =
   | { k: 'pause' }
   | { k: 'skip'; ver: number; last?: boolean }
   | { k: 'ended'; ver: number; last?: boolean }
-  | { k: 'error'; ver: number }
-  | { k: 'title'; ver: number; title: string }
+  | { k: 'error'; ver: number; last?: boolean }
+  | { k: 'title'; ver: number; title: string; index?: number }
   | { k: 'remove'; i: number }
-  | { k: 'stop' };
+  | { k: 'stop' }
+  | { k: 'clear' };
 
 export const MUSIC_QUEUE_MAX = 50;
 
@@ -88,10 +90,10 @@ export function parseYouTube(raw: string): Pick<MusicItem, 'kind' | 'id' | 'star
   const list = u.searchParams.get('list');
   const t = u.searchParams.get('t') ?? u.searchParams.get('start');
   const start = t ? parseTime(t) : 0;
-  // A playlist link plays the playlist (from its start), even if it names a video in it.
+  // A playlist's own page plays the playlist. A link to a video that happens to come from a
+  // playlist or a Mix (watch?v=…&list=…) plays that video: it's the song the person was hearing.
   if (list && LIST.test(list) && (u.pathname === '/playlist' || !video))
     return { kind: 'playlist', id: list };
-  if (list && LIST.test(list) && video && VIDEO.test(video)) return { kind: 'playlist', id: list };
   if (video && VIDEO.test(video))
     return start ? { kind: 'video', id: video, start } : { kind: 'video', id: video };
   return null;
@@ -172,15 +174,20 @@ export function musicOp(
       return { ok: true, st };
     case 'error':
       if (stale || !st.queue.length) return { ok: true, st: st0 };
-      // A video that won't play is skipped for everyone (a whole playlist that won't, too).
-      advance(st, now, true);
+      // A video that won't play is skipped for everyone: in a playlist, on to its next video.
+      advance(st, now, op.last ?? true);
       return { ok: true, st, note: 'A video couldn’t be played here, so it was skipped' };
     case 'title': {
       const cur = st.queue[0];
       if (stale || !cur) return { ok: true, st: st0 };
+      // A playlist's title is for one of its videos: only the one playing now.
+      if (cur.kind === 'playlist' && op.index !== st.index) return { ok: true, st: st0 };
       const title = op.title.replace(/\s+/g, ' ').trim().slice(0, 120);
-      if (!title || cur.title === title) return { ok: true, st: st0 };
+      const at = cur.kind === 'playlist' ? st.index : undefined;
+      if (!title || (cur.title === title && cur.titleAt === at)) return { ok: true, st: st0 };
       cur.title = title;
+      if (at === undefined) delete cur.titleAt;
+      else cur.titleAt = at;
       return { ok: true, st };
     }
     case 'remove':
@@ -188,9 +195,16 @@ export function musicOp(
       st.queue.splice(op.i, 1);
       return { ok: true, st, note: `${who} took a song off the queue` };
     case 'stop':
-      if (!st.queue.length) return { ok: true, st };
-      st.queue = [];
-      startCurrent(st, now);
+      // Stops the music for everyone and goes back to the start of the song; the queue stays.
+      if (!st.queue.length || (!st.playing && st.pos === 0)) return { ok: true, st: st0 };
+      st.playing = false;
+      st.pos = 0;
+      st.ver++;
       return { ok: true, st, note: `${who} stopped the music` };
+    case 'clear':
+      // Takes off the songs waiting their turn; what's playing carries on.
+      if (st.queue.length < 2) return { ok: true, st: st0 };
+      st.queue = st.queue.slice(0, 1);
+      return { ok: true, st, note: `${who} cleared the queue` };
   }
 }

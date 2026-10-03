@@ -2,9 +2,10 @@
  * Table music (SPEC 12) with a stand-in for YouTube's player (YouTube isn't reachable from the test
  * machines; window.__settlersFakeYT swaps it in). Three browsers in a room: one adds a link and all
  * play it at the same point; one browser's sound is blocked until it's clicked; pause, play, skip,
- * a playlist moving on, a video that won't play, a late joiner and a reload all stay in step;
- * volume and mute are each person's own and kept on their profile; the music carries on into the
- * game.
+ * a playlist moving on by itself (as YouTube does) and its titles, a video that won't play, a late
+ * joiner and a reload all stay in step; volume and mute apply on that screen at once, for a watcher
+ * too, and are kept (mute pauses only that screen); the music carries on into the game, where Stop
+ * goes back to the start of the song for everyone and keeps the queue, and Clear asks first.
  */
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
@@ -96,7 +97,7 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
     await inStep([a, b, c], 'dQw4w9WgXcQ', true);
     await expect(c.getByTestId('music-join')).toHaveCount(0);
     // The title, once a player knows it, shows for everyone.
-    await expect(a.getByTestId('music-now')).toContainText('Song dQw4w9WgXcQ');
+    await expect(a.getByTestId('music-now')).toContainText('Song dQw4w9WgXcQ', { timeout: 15_000 });
     if (SHOTS) await a.screenshot({ path: `${SHOTS}/music-sheet.png` });
 
     /* ---------- Pause and play, from another screen ---------- */
@@ -119,11 +120,19 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
     // The video won't play on one screen: skipped for everyone, once.
     await c.evaluate(() => (window as any).__settlers.musicFail()); // eslint-disable-line @typescript-eslint/no-explicit-any
     await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
-    // The playlist's first video ends: the next one, for everyone (duplicate reports from the
-    // other screens are ignored: test/music.test.ts).
-    await b.evaluate(() => (window as any).__settlers.musicEnd()); // eslint-disable-line @typescript-eslint/no-explicit-any
+    await expect(a.getByTestId('music-now')).toContainText('Song PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf #1', {
+      timeout: 15_000,
+    });
+    // YouTube goes on to the playlist's next video by itself on one screen: everyone follows it
+    // (the others' reports are ignored: test/music.test.ts), and that screen isn't restarted.
+    await a.waitForTimeout(2000);
+    await b.evaluate(() => (window as any).__settlers.musicAdvance()); // eslint-disable-line @typescript-eslint/no-explicit-any
     for (const p of t.pages) await expect.poll(async () => (await player(p))!.index).toBe(1);
     await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
+    // The title shown is the new video's, never the last one's.
+    await expect(a.getByTestId('music-title')).not.toContainText('#1');
+    await expect(a.getByTestId('music-title')).toContainText('#2', { timeout: 15_000 });
+    await expect(a.getByTestId('music-title')).toContainText('song 2 of the playlist');
 
     // A redraw long after the last message about the music (a toast, here) keeps it in step.
     await a.waitForTimeout(4000);
@@ -143,15 +152,41 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
     await b.locator('body').click({ position: { x: 5, y: 5 } });
     await inStep([a, b, c, late], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
 
-    /* ---------- Volume and mute are your own, kept on your profile ---------- */
+    /* ---------- Volume and mute are your own: at once, kept, and for a watcher too ---------- */
     await a.getByTestId('music-volume').fill('20');
+    expect((await player(a))!.vol).toBe(20); // straight away, no wait for the server
     await a.getByTestId('music-mute').check();
-    await expect.poll(async () => [(await player(a))!.vol, (await player(a))!.muted]).toEqual([20, true]);
-    expect([(await player(b))!.vol, (await player(b))!.muted]).toEqual([60, false]);
+    // Mute pauses this screen only (it works on every device); everyone else plays on.
+    await expect
+      .poll(async () => [(await player(a))!.vol, (await player(a))!.muted, (await player(a))!.playing])
+      .toEqual([20, true, false]);
+    expect([(await player(b))!.vol, (await player(b))!.muted, (await player(b))!.playing]).toEqual([
+      60,
+      false,
+      true,
+    ]);
+    await expect(a.getByTestId('music-join')).toHaveCount(0);
     await a.reload();
     await a.locator('body').click({ position: { x: 5, y: 5 } });
-    await expect.poll(async () => [(await player(a))?.vol, (await player(a))?.muted]).toEqual([20, true]);
+    await expect
+      .poll(async () => [(await player(a))?.vol, (await player(a))?.muted, (await player(a))?.playing])
+      .toEqual([20, true, false]);
+    await a.waitForTimeout(3000);
+    // Unmuted: back in, where everyone is.
+    await openMusic(a);
+    await a.getByTestId('music-mute').uncheck();
     await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
+    // Someone watching (not seated) has a volume and mute too.
+    await openMusic(late);
+    await late.getByTestId('music-volume').fill('35');
+    await late.getByTestId('music-mute').check();
+    await expect
+      .poll(async () => [(await player(late))!.vol, (await player(late))!.playing])
+      .toEqual([35, false]);
+    await late.getByTestId('music-mute').uncheck();
+    await inStep([a, b, late], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
+    await late.close();
+    await a.getByTestId('music-close').click();
 
     /* ---------- Into the game: the music carries on ---------- */
     await a.getByTestId('start').click();
@@ -159,8 +194,24 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
     await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
     await openMusic(c);
     if (SHOTS) await c.screenshot({ path: `${SHOTS}/music-game.png` });
+    // Stop: everyone back to the start of the song, stopped; the queue stays, and Play goes on.
+    for (const url of [SONG, SONG2]) {
+      await c.getByTestId('music-link').fill(url);
+      await c.getByTestId('music-add').click();
+    }
+    await expect(c.getByTestId('music-queue').locator('li')).toHaveCount(2);
     await c.getByTestId('music-stop').click();
-    for (const p of t.pages) await expect.poll(async () => (await player(p))?.id ?? null).toBeNull();
+    expect(await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', false)).toBe(0);
+    await expect(c.getByTestId('music-now')).toContainText('Stopped');
+    await expect(c.getByTestId('music-queue').locator('li')).toHaveCount(2);
+    await c.getByTestId('music-play').click();
+    await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
+    // Clear takes off what waits, once confirmed; the song playing carries on.
+    await c.getByTestId('music-clear').click();
+    await expect(c.getByTestId('music-queue').locator('li')).toHaveCount(2);
+    await c.getByTestId('music-clear-yes').click();
+    await expect(c.getByTestId('music-queue')).toHaveCount(0);
+    await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
     // The log (shown in the game) has what happened, before the game and in it.
     const log = c.getByTestId('log');
     for (const line of [
@@ -168,6 +219,7 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
       'Bob paused the music',
       'A video couldn’t be played here, so it was skipped',
       'Cat stopped the music',
+      'Cat cleared the queue',
     ])
       await expect(log).toContainText(line);
     expect(t.errors).toEqual([]);

@@ -1084,10 +1084,10 @@ Asked for: "a way for someone to link their Spotify playlist or YouTube videos",
 
 ### 12.1 What it does
 
-- **YouTube only.** Anyone at the table (players and watchers) pastes a YouTube link: a video, or a playlist. Spotify isn't offered: its web player needs every listener to have Premium and log in to Spotify, so it can't be shared like this.
-- **One shared player per room**, in the lobby and in the game: what's playing, play/pause, skip to the next, and a queue (each pasted link goes on the end; the first plays at once). Anyone can press them; the log notes who ("Ann added a song", "Bob paused the music").
-- **In sync.** The server keeps what's playing and when it started (its own clock); every screen plays the same video at the same point, and a screen that joins or reloads jumps to where everyone is. Screens more than 2 s out are put back in line.
-- **Your own volume and a mute,** saved on your profile like the sounds (SPEC 9.4). Muting doesn't stop it for anyone else.
+- **YouTube only.** Anyone at the table (players and watchers) pastes a YouTube link: a video, or a playlist. A link to a video opened from a playlist or a Mix (`watch?v=…&list=…`) plays that video; only a playlist's own page (`/playlist?list=…`) plays the playlist. Spotify isn't offered: its web player needs every listener to have Premium and log in to Spotify, so it can't be shared like this.
+- **One shared player per room**, in the lobby and in the game: what's playing, play/pause, skip to the next, Stop, and a queue (each pasted link goes on the end; the first plays at once). Anyone can press them; the log notes who ("Ann added a song", "Bob paused the music"). **Stop** stops the music for everyone and goes back to the start of the song; the queue stays. **Clear the queue** (asks first) takes off what's waiting; the song playing carries on.
+- **In sync.** The server keeps what's playing and when it started (its own clock); every screen plays the same video at the same point, and a screen that joins or reloads jumps to where everyone is. Screens more than 3 s out are put back in line; paused or stopped, every screen sits on exactly the same point. In a playlist, YouTube moves on to the next video by itself: the first screen to get there tells the server, and everyone follows (a screen already on it isn't restarted). A song's name is taken only from a player that's actually playing that song.
+- **Your own volume and a mute,** for players and watchers: a change applies on that screen at once, is kept on that device, and (when seated) on your profile like the sounds (SPEC 9.4). Mute pauses the music on your screen only (that works on every device); unmuting joins back in where everyone is. iPhones and iPads don't let a page set YouTube's volume, so there the sheet says to use the device's volume buttons.
 - **Browsers block sound until you've clicked the page;** until then the player says "Click to join the music".
 - The game never waits for the music, and a video that won't play (removed, embedding off) is skipped for everyone, with a log note.
 
@@ -1095,7 +1095,7 @@ Asked for: "a way for someone to link their Spotify playlist or YouTube videos",
 
 - The music is room state on the server, saved with the room, validated with zod (a link must be a YouTube video or playlist id; the queue holds at most 50).
 - YouTube's player is loaded only once someone adds music, so a room without music loads nothing from YouTube.
-- Tests: the server's music state and its timing on a fake clock (`music.test.ts`); in the browser, three screens with a stand-in player (YouTube isn't reachable from the test machines): one adds a link, all play it at the same point, pause and skip reach everyone, a late joiner and a reload land in sync, volume and mute are each person's own.
+- Tests: the server's music state and its timing on a fake clock (`music.test.ts`); in the browser, three screens with a stand-in player (YouTube isn't reachable from the test machines): one adds a link, all play it at the same point, pause and skip reach everyone, a playlist moving on by itself is followed by everyone and named right, a late joiner and a reload land in sync, volume and mute apply at once (for a watcher too) and are each person's own, Stop keeps the queue and Clear asks first.
 
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
