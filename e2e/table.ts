@@ -123,6 +123,9 @@ export async function playUntil(
         continue;
       }
       const r: string = await p.evaluate(() => (window as any).__settlers.botStep());
+      // A CPU on the server can take its trade offer back (it gives up after 20 s) while a
+      // browser's bot is answering it: the engine rightly refuses, and the bot tries again.
+      if (r === 'rejected:That offer is gone') continue;
       if (r.startsWith('rejected')) throw new Error(`bot move ${r}`);
       if (r !== 'idle' && r !== 'busy') moved = true;
     }
