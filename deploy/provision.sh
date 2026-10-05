@@ -101,6 +101,9 @@ WantedBy=timers.target
 UNIT
 
 # Caddy: HTTPS certificates from Let's Encrypt, proxying to the game server (WebSockets included).
+# Other sites on this server (Sarah Crossing) keep their own files in /etc/caddy/sites/, which
+# this file imports, so writing it here never takes them down.
+mkdir -p /etc/caddy/sites
 cat > /etc/caddy/Caddyfile <<CADDY
 $DOMAIN {
 	encode zstd gzip
@@ -110,6 +113,8 @@ $DOMAIN {
 www.$DOMAIN {
 	redir https://$DOMAIN{uri} permanent
 }
+
+import /etc/caddy/sites/*.caddy
 CADDY
 
 systemctl daemon-reload

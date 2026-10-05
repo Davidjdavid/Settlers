@@ -7,6 +7,7 @@ The site runs on one EC2 instance (Ubuntu) at **https://betteronlinesettlers.com
 - **Data:** `/var/lib/settlers/settlers.db` (SQLite). There's a nightly backup to `/var/backups/settlers/`, keeping 14 days.
 - **Releases:** in `/opt/settlers/releases/<version>`, with `/opt/settlers/current` pointing at the live one. The 5 newest are kept.
 - **Secrets:** `/etc/settlers.env` (root only), written on each deploy from the GitHub secrets.
+- **Other sites:** the Caddyfile written on each deploy also imports every file in `/etc/caddy/sites/`, where other sites on this server keep their own config (Sarah Crossing deploys `sarah-crossing.caddy` there). A Settlers deploy never touches them.
 
 ## One-command deploy
 
