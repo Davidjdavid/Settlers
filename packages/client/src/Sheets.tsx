@@ -597,7 +597,7 @@ export function MenuSheet({
                 <div>
                   City wall <Chips c={{ brick: 2 }} />
                 </div>
-                <div>Improvement level n: n paper (science), linen (trade) or coin (politics)</div>
+                <div>Improvement level n: n books (science), linen (trade) or coin (politics)</div>
               </>
             ) : (
               <div>

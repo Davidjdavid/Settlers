@@ -1,7 +1,7 @@
 /*
  * Milestone 13 (after the first game night): undo a whole turn, asked and answered by clicking,
  * with the question listing what it takes back; several bank trades at once through the bank
- * basket; your cards arranged by dragging and by tapping, kept through a reload, and reset.
+ * basket; the dice panel; your cards in their spots.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -18,7 +18,7 @@ const botStep = (p: Page, byHand: string[] = []): Promise<string> =>
 const legal = (p: Page): Promise<{ type: string; turn?: boolean }[]> =>
   p.evaluate(() => (window as any).__settlers.legal());
 
-test('undo a whole turn, the bank basket, and arranging your cards', async ({ browser }) => {
+test('undo a whole turn, the dice panel, the bank basket and your cards', async ({ browser }) => {
   const server = new TestServer(await freePort(), 'm13');
   await server.start();
   try {
@@ -146,40 +146,11 @@ test('undo a whole turn, the bank basket, and arranging your cards', async ({ br
     await b.reload();
     await expect(b.locator('#board')).toBeVisible();
 
-    // Arranging cards: drag ore onto wood's spot, tap brick then sheep, reload, reset.
+    // Your cards always sit in the same spots: one row of five in a base game (SPEC 13.2).
     const order = () =>
       b.locator('[data-testid=hand] .rcard').evaluateAll((els) => els.map((e) => e.getAttribute('data-res')));
-    await expect.poll(order).toEqual(['wood', 'brick', 'sheep', 'wheat', 'ore']);
-    const from = (await b.locator('[data-testid=hand] [data-res=ore]').boundingBox())!;
-    const to = (await b.getByTestId('hand-slot-0').boundingBox())!;
-    await b.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-    await b.mouse.down();
-    for (let i = 1; i <= 8; i++)
-      await b.mouse.move(
-        from.x + from.width / 2 + ((to.x - from.x) * i) / 8,
-        from.y + from.height / 2 + ((to.y - from.y) * i) / 8,
-      );
-    await b.mouse.up();
-    await expect.poll(order).toEqual(['ore', 'brick', 'sheep', 'wheat', 'wood']);
-    await b.locator('[data-testid=hand] [data-res=brick]').click();
-    await expect(b.getByTestId('hand-hint')).toContainText('Tap another spot');
-    await b.locator('[data-testid=hand] [data-res=sheep]').click();
-    await expect.poll(order).toEqual(['ore', 'sheep', 'brick', 'wheat', 'wood']);
+    await expect.poll(order).toEqual(['wood', 'sheep', 'ore', 'brick', 'wheat']);
     if (SHOTS) await b.locator('[data-box=hand]').screenshot({ path: `${SHOTS}/m13-hand.png` });
-    await b.reload();
-    await expect(b.locator('#board')).toBeVisible();
-    await expect.poll(order).toEqual(['ore', 'sheep', 'brick', 'wheat', 'wood']);
-    // Only this screen changed.
-    await expect
-      .poll(() =>
-        others[1]!
-          .locator('[data-testid=hand] .rcard')
-          .evaluateAll((els) => els.map((e) => e.getAttribute('data-res'))),
-      )
-      .toEqual(['wood', 'brick', 'sheep', 'wheat', 'ore']);
-    await b.getByTestId('hand-reset').click();
-    await expect.poll(order).toEqual(['wood', 'brick', 'sheep', 'wheat', 'ore']);
-    await expect(b.getByTestId('hand-reset')).toHaveCount(0);
 
     const seats = await Promise.all(t.pages.map(async (p) => (await view(p)).me));
     checkFrames(t, seats, 20);

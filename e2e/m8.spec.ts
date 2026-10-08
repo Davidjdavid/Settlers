@@ -108,6 +108,26 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
     const seats = [(await view(a)).me, (await view(b)).me, (await view(c)).me];
     expect((await view(a)).rules.bank).toBe('limited');
+    // Your hand (SPEC 13.2): two rows of four, books, linen and coin under wood, sheep and ore,
+    // brick and wheat in the last column; on every screen.
+    for (const p of pages) {
+      const cards = p.locator('[data-testid=hand] .rcard');
+      await expect
+        .poll(() => cards.evaluateAll((els) => els.map((e) => e.getAttribute('data-res'))))
+        .toEqual(['wood', 'sheep', 'ore', 'brick', 'paper', 'cloth', 'coin', 'wheat']);
+      const box = await cards.evaluateAll((els) =>
+        els.map((e) => {
+          const r = e.getBoundingClientRect();
+          return { x: Math.round(r.x), y: Math.round(r.y) };
+        }),
+      );
+      for (let i = 0; i < 4; i++) {
+        expect(box[i]!.y, 'top row').toBe(box[0]!.y);
+        expect(box[i + 4]!.y, 'bottom row').toBeGreaterThan(box[0]!.y);
+        expect(box[i + 4]!.x, 'under its resource').toBe(box[i]!.x);
+      }
+    }
+    await expect(a.locator('[data-testid=hand] [data-res=paper]')).toHaveAttribute('title', 'Books');
     // Commodities are counted (12 each), not ∞.
     await expect(a.getByTestId('bank-paper')).toHaveText(/\b12\b/);
 

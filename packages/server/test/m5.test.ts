@@ -404,11 +404,14 @@ describe('undo a whole turn through the server (SPEC 13.2)', () => {
     expect(mover.last('ack').ok).toBe(true);
     expect(other.last('update').game!.undo).toEqual({ p: start.turn, asked: true, ok: [], turn: true });
     send(other, { t: 'act', id: 'y', action: { type: 'answerUndo', yes: true } });
-    // Everything as it was but the move count (and the random numbers, had any been used).
+    // Everything as it was but the move count (and the random numbers, had any been used). The
+    // turn's starting point never keeps an Undo on offer for a single move (after a 7, moving the
+    // robber where it robs nobody offers one): a turn undo takes that move back too (SPEC 13.2).
     const s = state(t.code);
     const keys = [...new Set([...Object.keys(s), ...Object.keys(start)])];
     const diff = keys.filter((k) => JSON.stringify((s as never)[k]) !== JSON.stringify((start as never)[k]));
-    expect(diff.filter((k) => k !== 'rng')).toEqual(['seq']);
+    expect(diff.filter((k) => k !== 'rng')).toEqual(start.undo ? ['seq', 'undo'] : ['seq']);
+    expect(s.undo).toBeUndefined();
     expect(s.offers).toEqual([]);
     for (const c of t.conns) for (const m of c.msgs) expect(JSON.stringify(m)).not.toContain('turnStart');
     // Saved and replayed exactly.

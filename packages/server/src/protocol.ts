@@ -251,13 +251,6 @@ export const SettingsSchema = z.strictObject({
     .optional(),
   /** Table talk's size: folded to its title, short, normal (default) or tall. */
   talk: z.enum(['min', 'short', 'normal', 'tall']).optional(),
-  /** SPEC 13.2: your cards' spots in your hand, one arrangement for base games and one for Knights. */
-  handOrder: z
-    .strictObject({
-      base: z.array(CARD.nullable()).max(10).optional(),
-      ck: z.array(CARD.nullable()).max(10).optional(),
-    })
-    .optional(),
   /** SPEC 11: your own screen layout, one per kind of screen (none: the standard screen). */
   layout: z
     .strictObject({

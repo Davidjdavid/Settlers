@@ -100,8 +100,9 @@ export const iconSVG = (r: Terrain) => `<svg viewBox="-12 -12 24 24" aria-hidden
 /* ---------- Cities & Knights ---------- */
 
 export const COM_GLYPH: Record<Commodity, string> = {
+  // Books (SPEC 13.2: the group calls paper books): a little stack of three.
   paper:
-    '<rect x="-7" y="-9" width="14" height="18" rx="1.5" fill="#fbf4dc" stroke="#6b5a2e" stroke-width="1.2"/><path d="M-4-4h8M-4 0h8M-4 4h5" stroke="#6b5a2e" stroke-width="1.3" stroke-linecap="round"/>',
+    '<rect x="-9.5" y="2.5" width="19" height="6" rx="1.2" fill="#3fa34d" stroke="#1d3a22" stroke-width="1.2"/><path d="M6 3.6v3.8" stroke="#f6f0dc" stroke-width="1.6"/><rect x="-7.5" y="-3.5" width="16" height="6" rx="1.2" fill="#c9443a" stroke="#4a1a14" stroke-width="1.2"/><path d="M5 -2.4v3.8" stroke="#f6f0dc" stroke-width="1.6"/><rect x="-8.5" y="-9.5" width="15" height="6" rx="1.2" fill="#3b6fc9" stroke="#18305c" stroke-width="1.2"/><path d="M3 -8.4v3.8" stroke="#f6f0dc" stroke-width="1.6"/>',
   cloth:
     '<path d="M-9-6c3-2 6 2 9 0s6-2 9 0v12c-3-2-6 2-9 0s-6-2-9 0z" fill="#e9c7ee" stroke="#5c2a63" stroke-width="1.2"/><path d="M-9-1c3-2 6 2 9 0s6-2 9 0" fill="none" stroke="#5c2a63" stroke-width="1" opacity=".6"/>',
   // Silver (SPEC 13.2), with a bright rim and a shine so it doesn't pass for ore.
@@ -109,7 +110,7 @@ export const COM_GLYPH: Record<Commodity, string> = {
 };
 export const CARD_LABEL: Record<Card, string> = {
   ...RES_LABEL,
-  paper: 'Paper',
+  paper: 'Books',
   cloth: 'Linen',
   coin: 'Coin',
 };
