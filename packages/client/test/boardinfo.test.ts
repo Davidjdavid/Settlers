@@ -54,11 +54,8 @@ describe('Board labels (SPEC 8.3)', () => {
       );
     expect(text('knight', 30)).toBe("Sam's strong knight (strength 2) · active");
     expect(text('knight', 31)).toBe("Joe's basic knight (strength 1) · not active");
-    // What it sits on and what it brings in (SPEC 13.4), then the wall.
-    expect(text('building', 10)).toMatch(
-      /^Sam's city · 2 points · on [A-Za-z]+ \d+(, [A-Za-z]+ \d+)* · about \d+ cards? every 10 rolls · city wall: adds 2 to their hand limit$/,
-    );
-    expect(text('building', 20)).toMatch(/^Joe's settlement · 1 point · on /);
+    expect(text('building', 10)).toBe("Sam's city · 2 points · city wall: adds 2 to their hand limit");
+    expect(text('building', 20)).toBe("Joe's settlement · 1 point");
     expect(text('merchant')).toBe("Joe's merchant · Joe trades Wheat 2:1 · worth 1 point");
     // Before the first barbarian attack the robber can't move in Knights.
     expect(text('robber')).toMatch(/^The robber · .* stays put until the barbarians first attack$/);
@@ -80,39 +77,11 @@ describe('Board labels (SPEC 8.3)', () => {
     const k = g.verts[30]!;
     expect(spotAt(spots, k.x + 0.05, k.y - 0.05)?.spot).toEqual({ k: 'knight', v: 30 });
     // The middle of an empty land hex far from everything.
-    // A point on land out of every labelled piece's reach (number tokens included).
-    const points = g.hexes.flatMap((h, i) =>
-      game().board.hexes[i]!.t === 'sea'
-        ? []
-        : [
-            [h.x + 0.45, h.y],
-            [h.x - 0.45, h.y],
-            [h.x, h.y + 0.45],
-            [h.x, h.y - 0.45],
-          ],
+    const empty = g.hexes.findIndex(
+      (h, i) =>
+        game().board.hexes[i]!.t !== 'sea' && spots.every((x) => Math.hypot(x.x - h.x, x.y - h.y) > 0.6),
     );
-    const empty = points.find(([x, y]) => spots.every((s) => Math.hypot(s.x - x!, s.y - y!) > s.r + 0.05));
-    expect(empty).toBeDefined();
-    expect(spotAt(spots, empty![0]!, empty![1]!)).toBeNull();
-  });
-
-  it('a number token says how often it comes up, how often it has, and whom it pays (SPEC 13.4)', () => {
-    const s = game();
-    const { v, g, spots } = labels(s);
-    // The tile under Sam's walled city at corner 10 that has a number.
-    const h = g.verts[10]!.hexes.find((x) => v.board.hexes[x]!.n > 0 && x !== v.board.robber)!;
-    const tile = spots.find((x) => x.spot.k === 'tile' && x.spot.h === h)!;
-    const n = v.board.hexes[h]!.n;
-    const ways = 6 - Math.abs(n - 7);
-    const rolled = new Array<number>(13).fill(0);
-    rolled[n] = 3;
-    const text = spotLabel(v, tile.spot, rolled);
-    expect(text).toContain(
-      `${n} · comes up ${ways} in 36 rolls (${Math.round((ways / 36) * 100)}%) · rolled 3 times so far · pays `,
-    );
-    expect(text).toContain("Sam's city (2)");
-    // With the robber on it, it pays nothing.
-    s.board.robber = h;
-    expect(spotLabel(viewFor(s, 2), tile.spot)).toMatch(/the robber is on it: it pays nothing$/);
+    expect(empty).toBeGreaterThanOrEqual(0);
+    expect(spotAt(spots, g.hexes[empty]!.x, g.hexes[empty]!.y)).toBeNull();
   });
 });

@@ -37,24 +37,11 @@ export async function sitAs(page: Page, name: string, color?: string) {
   await expect(page.locator('[data-testid=sit]')).toHaveCount(0);
 }
 
-/** Open a step of the lobby (SPEC 13.5): players, the game, the board, or start. */
-export async function lobbyStep(page: Page, step: 'players' | 'game' | 'board' | 'start') {
-  await page.getByTestId(`step-${step}`).click();
-  await expect(page.getByTestId(`step-${step}`)).toHaveAttribute('aria-current', 'step');
-}
-
-/** Press Start game, from the lobby's last step. */
-export async function startGame(page: Page) {
-  await lobbyStep(page, 'start');
-  await page.click('[data-testid=start]');
-}
-
 /**
  * New rooms start on the Full game (3 October); tests that play the base game pick it, once the
  * host is seated.
  */
 export async function baseGame(host: Page) {
-  await lobbyStep(host, 'game');
   await expect(host.getByTestId('mode-full')).toHaveClass(/on/);
   await host.click('[data-testid=mode-base]');
   await expect(host.getByTestId('mode-base')).toHaveClass(/on/);
@@ -86,8 +73,6 @@ export async function seatedTable(browser: Browser, server: TestServer, nicks: s
     await sitAs(pages[i]!, nicks[i]!);
   }
   await expect(host.locator('.seat:not(.open)')).toHaveCount(nicks.length);
-  // Every screen on the first step (each starts at the first step not done).
-  for (const p of pages) await lobbyStep(p, 'players');
   return { pages, frames, errors, code };
 }
 

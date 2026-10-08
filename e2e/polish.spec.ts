@@ -13,7 +13,7 @@
 
 import { expect, test, type BrowserContextOptions, type Locator, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, lobbyStep, sitAs, startGame, view, type Frame } from './table';
+import { checkFrames, sitAs, view, type Frame } from './table';
 
 // A click that can't happen should fail the test quickly, not wait for the 10-minute limit.
 test.use({ actionTimeout: 15000 });
@@ -74,7 +74,6 @@ test('three players use the table polish features through a whole game', async (
     }
     await expect(a.locator('.seat:not(.open)')).toHaveCount(3);
     // The four game modes, picked by anyone seated and shown to everyone.
-    for (const p of pages) await lobbyStep(p, 'game');
     await expect(a.locator('[data-testid^=mode-]')).toHaveCount(4);
     // A new room starts on the Full game.
     await expect(c.getByTestId('mode-full')).toHaveClass(/on/);
@@ -93,7 +92,7 @@ test('three players use the table polish features through a whole game', async (
     // A shorter game: 7 points to win (raised to 8 mid-game below).
     for (let i = 0; i < 3; i++) await a.click('[aria-label="Fewer points"]');
     await expect(c.getByTestId('win-vp')).toHaveText('7');
-    await startGame(a);
+    await a.click('[data-testid=start]');
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
     const v0 = await view(a);
     expect(v0.rules.houseRules).toEqual({ handBack: true, handBackSetup: true, undo: true, undoTurn: true });

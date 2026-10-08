@@ -12,7 +12,7 @@
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, lobbyStep, playUntil, seatedTable, startGame, view } from './table';
+import { checkFrames, playUntil, seatedTable, view } from './table';
 
 const SHOTS = process.env.SHOTS;
 const shot = async (p: Page, name: string) => {
@@ -63,21 +63,19 @@ test('Hard and custom CPUs: the CPU page, the lobby menu and a full game', async
     await expect(a.getByTestId('cpu-level').nth(0)).toHaveValue('hard');
     await expect(a.getByTestId('cpu-level').nth(1).locator('option:checked')).toHaveText('Turnip');
     // The CPU trading switches: on by default; Ann allows more than one offer a turn.
-    for (const p of t.pages) await lobbyStep(p, 'game');
     await expect(a.getByTestId('opt-cpuTrading')).toBeChecked();
     await a.getByTestId('opt-cpuOneOffer').click();
     await expect(a.getByTestId('opt-cpuOneOffer')).not.toBeChecked();
     await expect(b.getByTestId('opt-cpuOneOffer')).not.toBeChecked();
     // The CPU page opens over the lobby: the room and the seat stay put.
-    await lobbyStep(a, 'players');
     await a.getByTestId('cpu-page-link').click();
     await expect(a.getByTestId('cpus-page')).toBeVisible();
     await a.getByTestId('cpus-back').click();
     await expect(a.getByTestId('cpus-page')).toHaveCount(0);
-    await expect(a.getByTestId('step-players')).toHaveAttribute('aria-current', 'step');
+    await expect(a.getByTestId('start')).toBeVisible();
     await shot(a, 'cpu-3-lobby');
 
-    await startGame(a);
+    await a.click('[data-testid=start]');
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     for (const p of t.pages) {
       await expect(p.getByTestId('cpu-tag')).toHaveCount(2);

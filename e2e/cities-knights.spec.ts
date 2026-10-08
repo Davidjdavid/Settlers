@@ -12,17 +12,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import {
-  checkFrames,
-  confirmPlace,
-  lobbyStep,
-  playUntil,
-  seatedTable,
-  startGame,
-  turnPage,
-  view,
-  type Table,
-} from './table';
+import { checkFrames, confirmPlace, playUntil, seatedTable, turnPage, view, type Table } from './table';
 
 const SHOTS = process.env.SHOTS;
 
@@ -35,13 +25,12 @@ test('three players play a full Cities & Knights game', async ({ browser }) => {
     const t = await seatedTable(browser, server, ['Ann', 'Bob', 'Cat']);
     const [a, b, c] = t.pages as [Page, Page, Page];
 
-    for (const p of t.pages) await lobbyStep(p, 'game');
     await a.click('[data-testid=mode-knights]');
     await expect(b.getByTestId('mode-knights')).toHaveClass(/on/);
     await expect(c.getByTestId('win-vp')).toHaveText('13');
     for (let i = 0; i < 5; i++) await a.click('[aria-label="Fewer points"]');
     await expect(c.getByTestId('win-vp')).toHaveText('8');
-    await startGame(a);
+    await a.click('[data-testid=start]');
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     const v0 = await view(a);
     expect(v0.rules.modules).toEqual(['citiesKnights']);

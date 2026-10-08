@@ -6,7 +6,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { confirmPlace, lobbyStep, playUntil, seatedTable, startGame, view } from './table';
+import { confirmPlace, playUntil, seatedTable, view } from './table';
 
 const SHOTS = process.env.SHOTS;
 
@@ -22,7 +22,6 @@ test('new maps in the lobby, and a game with the dice deck', async ({ browser })
 
     // Quick clicks all count, even before the server has answered the first (a fast double click
     // on a slow connection): three steps down, and two house rules ticked at once, stay.
-    for (const p of t.pages) await lobbyStep(p, 'game');
     const startVP = Number(await a.getByTestId('win-vp').textContent());
     await a.evaluate(() => {
       const fewer = document.querySelector<HTMLButtonElement>('[aria-label="Fewer points"]')!;
@@ -69,7 +68,7 @@ test('new maps in the lobby, and a game with the dice deck', async ({ browser })
     // The dice deck with 5 cards out, picked in the lobby.
     await a.getByTestId('rule-diceDeck').selectOption('trimmed');
     for (const p of t.pages) await expect(p.getByTestId('rule-diceDeck')).toHaveValue('trimmed');
-    await startGame(a);
+    await a.click('[data-testid=start]');
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     expect((await view(a)).rules.houseRules.diceDeck).toBe('trimmed');
 

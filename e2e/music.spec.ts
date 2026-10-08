@@ -10,7 +10,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { seatedTable, startGame } from './table';
+import { seatedTable } from './table';
 
 const SHOTS = process.env.SHOTS;
 test.use({ actionTimeout: 15_000 });
@@ -198,7 +198,7 @@ test('shared music: in step for everyone, each with their own volume', async ({ 
     await a.getByTestId('music-close').click();
 
     /* ---------- Into the game: the music carries on ---------- */
-    await startGame(a);
+    await a.getByTestId('start').click();
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     await inStep([a, b, c], 'PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf', true);
     await openMusic(c);

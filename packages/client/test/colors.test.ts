@@ -81,12 +81,4 @@ describe('card colours (SPEC 13.2)', () => {
     for (const vision of VISIONS)
       expect(diff(CARD_COLOR.coin, CARD_COLOR.ore, vision), vision).toBeGreaterThan(20);
   });
-
-  it('gold fields look nothing like wheat in any style or colour vision', () => {
-    for (const st of STYLES)
-      for (const vision of VISIONS)
-        expect(diff(THEMES[st].tile.gold, THEMES[st].tile.wheat, vision), `${st} ${vision}`).toBeGreaterThan(
-          35,
-        );
-  });
 });

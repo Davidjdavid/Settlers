@@ -6,16 +6,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import {
-  checkFrames,
-  confirmPlace,
-  lobbyStep,
-  playUntil,
-  seatedTable,
-  startGame,
-  turnPage,
-  view,
-} from './table';
+import { checkFrames, confirmPlace, playUntil, seatedTable, turnPage, view } from './table';
 
 const SHOTS = process.env.SHOTS;
 
@@ -35,14 +26,13 @@ test('undo a whole turn, the bank basket, and arranging your cards', async ({ br
     const [a] = t.pages as [Page, Page, Page];
 
     // Lobby: undo a move and a whole turn are on; the second needs the first.
-    for (const p of t.pages) await lobbyStep(p, 'game');
     await expect(a.getByTestId('rule-undo')).toBeChecked();
     await expect(a.getByTestId('rule-undoTurn')).toBeChecked();
     await a.getByTestId('rule-undo').click();
     for (const p of t.pages) await expect(p.getByTestId('rule-undoTurn')).toBeDisabled();
     await a.getByTestId('rule-undo').click();
     for (const p of t.pages) await expect(p.getByTestId('rule-undoTurn')).toBeEnabled();
-    await startGame(a);
+    await a.click('[data-testid=start]');
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     expect((await view(a)).rules.houseRules).toMatchObject({ undo: true, undoTurn: true });
 

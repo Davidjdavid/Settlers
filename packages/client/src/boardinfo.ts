@@ -6,7 +6,6 @@
 import {
   RES,
   TRACKS,
-  geometryFor,
   robberAwake,
   stateFromView,
   type Geometry,
@@ -21,7 +20,6 @@ export type Spot =
   | { k: 'metro'; t: Track; v: number }
   | { k: 'knight'; v: number }
   | { k: 'building'; v: number }
-  | { k: 'tile'; h: number }
   | { k: 'port'; i: number }
   | { k: 'robber' }
   | { k: 'pirate' }
@@ -45,12 +43,6 @@ export function spotsOf(view: PlayerView, g: Geometry, no3to1: boolean): SpotAt[
     const land = e.hexes.find((x) => b.hexes[x]!.t !== 'sea') ?? e.hexes[0]!;
     const p = harborPoint(g, pt.e, land);
     out.push({ spot: { k: 'port', i }, x: p.x / K, y: p.y / K, r: 0.36 });
-  });
-  // Number tokens (SPEC 13.4): what a tile pays and how often.
-  b.hexes.forEach((hx, i) => {
-    if (!hx.n) return;
-    const h = g.hexes[i]!;
-    out.push({ spot: { k: 'tile', h: i }, x: h.x, y: h.y, r: 0.3 });
   });
   if (b.robber >= 0) {
     const h = g.hexes[b.robber]!;
@@ -94,23 +86,10 @@ export function spotAt(spots: SpotAt[], x: number, y: number): SpotAt | null {
 }
 
 const LEVEL = ['', 'basic', 'strong', 'mighty'];
-/** Ways two dice make each total, out of 36. */
-const WAYS = (n: number) => (n >= 2 && n <= 12 ? 6 - Math.abs(n - 7) : 0);
 
-/** A tile in words: "Ore 6", "the gold field 9". */
-function tileName(view: PlayerView, h: number): string {
-  const x = view.board.hexes[h]!;
-  if ((RES as readonly string[]).includes(x.t)) return `${RES_LABEL[x.t as Resource]} ${x.n}`;
-  return x.t === 'gold' ? `Gold field ${x.n}` : `${x.t} ${x.n}`;
-}
-
-/**
- * The label for a piece. `rolled` is how often each total has come up this game (index = total),
- * for number tokens.
- */
-export function spotLabel(view: PlayerView, spot: Spot, rolled?: readonly number[]): string {
+/** The label for a piece. */
+export function spotLabel(view: PlayerView, spot: Spot): string {
   const name = (p: number) => view.players[p]?.nick ?? 'Someone';
-  const g = geometryFor(view.board.hexes);
   const ck = view.ck;
   const walled = (v: number) => (ck?.walls.includes(v) ? ' · city wall: adds 2 to their hand limit' : '');
   switch (spot.k) {
@@ -127,28 +106,7 @@ export function spotLabel(view: PlayerView, spot: Spot, rolled?: readonly number
     case 'building': {
       const [p, kind] = view.verts[spot.v]!;
       const what = kind === 2 ? 'city · 2 points' : 'settlement · 1 point';
-      // What it sits on, and the cards it brings in on average (the robber's tile pays nothing).
-      const tiles = g.verts[spot.v]!.hexes.filter((h) => view.board.hexes[h]!.n > 0);
-      const per = tiles
-        .filter((h) => h !== view.board.robber)
-        .reduce((a, h) => a + (WAYS(view.board.hexes[h]!.n) / 36) * kind, 0);
-      const on = tiles.length
-        ? ` · on ${tiles.map((h) => tileName(view, h)).join(', ')} · about ${Math.round(per * 10)} card${Math.round(per * 10) === 1 ? '' : 's'} every 10 rolls`
-        : '';
-      return `${name(p)}'s ${what}${on}${walled(spot.v)}`;
-    }
-    case 'tile': {
-      const x = view.board.hexes[spot.h]!;
-      const ways = WAYS(x.n);
-      const times = rolled ? ` · rolled ${rolled[x.n] ?? 0} time${rolled[x.n] === 1 ? '' : 's'} so far` : '';
-      const pays = g.hexVerts[spot.h]!.flatMap((v) => {
-        const b = view.verts[v];
-        return b ? [`${name(b[0])}'s ${b[1] === 2 ? 'city (2)' : 'settlement (1)'}`] : [];
-      });
-      const robbed = view.board.robber === spot.h;
-      return `${tileName(view, spot.h)} · comes up ${ways} in 36 rolls (${Math.round((ways / 36) * 100)}%)${times} · ${
-        robbed ? 'the robber is on it: it pays nothing' : pays.length ? `pays ${pays.join(', ')}` : 'pays nobody yet'
-      }`;
+      return `${name(p)}'s ${what}${walled(spot.v)}`;
     }
     case 'knight': {
       const k = ck!.knights[spot.v]!;

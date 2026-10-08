@@ -50,50 +50,6 @@ export function Login() {
   );
 }
 
-/** Setting up a game, one step at a time (SPEC 13.5). */
-const STEPS = [
-  { k: 'players', label: 'Players' },
-  { k: 'game', label: 'The game' },
-  { k: 'board', label: 'The board' },
-  { k: 'start', label: 'Start' },
-] as const;
-type Step = (typeof STEPS)[number]['k'];
-const NEXT_LABEL: Record<Exclude<Step, 'start'>, string> = {
-  players: 'Next: the game',
-  game: 'Next: the board',
-  board: 'Next: who goes first',
-};
-
-/** Short names for house rules in the game's summary. */
-const RULE_SHORT: Partial<Record<keyof RoomOptions['houseRules'], string>> = {
-  no7FirstRound: 'no 7s in round 1',
-  bank3to1: '3:1 bank',
-  freeShipMoves: 'free ship moves',
-  rerollBeforeAttack: 're-roll early 7s',
-  noDiscardBeforeAttack: 'no early discards',
-};
-
-/** "Full game · Heading for New Shores · 17 points · limited bank · no 7s in round 1". */
-export function gameSummary(o: RoomOptions): string {
-  const mode = modeOf(o);
-  const parts: string[] = [MODES[mode].label];
-  if (o.scenario !== 'classic') parts.push(SEA_MAPS.find(([id]) => id === o.scenario)?.[1] ?? o.scenario);
-  parts.push(`${o.winVP} points`);
-  parts.push(o.bank === 'unlimited' ? 'unlimited bank' : 'limited bank');
-  const hr = o.houseRules;
-  for (const [k, name] of Object.entries(RULE_SHORT)) {
-    if (!hr[k as keyof typeof hr]) continue;
-    if ((k === 'freeShipMoves' && o.scenario === 'classic') || (k.endsWith('BeforeAttack') && !o.ck))
-      continue;
-    parts.push(name);
-  }
-  if (o.ck && hr.barbarianDelay) parts.push(`barbarians after round ${hr.barbarianDelay}`);
-  if (hr.diceDeck) parts.push(hr.diceDeck === 'trimmed' ? 'dice deck, some out' : 'dice deck');
-  if (hr.handBack === false) parts.push('no handing the dice back');
-  if (hr.undo === false) parts.push('no undo');
-  return parts.join(' · ');
-}
-
 export function Lobby({ room }: { room: RoomInfo }) {
   const mine = room.seats.find((s) => s.pid === room.me);
   const live = useClient().status === 'live';
@@ -126,38 +82,6 @@ export function Lobby({ room }: { room: RoomInfo }) {
   const moving = !!back?.connected;
   const t = room.table;
   const canStart = fits && !!t && !t.problem && !!t.first.pid;
-  // The steps (SPEC 13.5): each screen moves through them on its own, starting at the first not done.
-  const done: Record<Step, boolean> = { players: fits, game: true, board: !t?.problem, start: canStart };
-  const [step, setStepState] = useState<Step>(() => STEPS.find((x) => !done[x.k])?.k ?? 'start');
-  const setStep = (x: Step) => {
-    setStepState(x);
-    // On a phone the board is below the steps: show it.
-    if (x === 'board')
-      document
-        .querySelector('[data-testid=table-board]')
-        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  };
-  const seatsEl = (
-    <div className="seats">
-      {room.seats.map((s) =>
-        s.cpu ? (
-          <CpuSeat key={s.pid} seat={s} taken={taken} />
-        ) : (
-          <div className="seat" key={s.pid}>
-            <span className="dot" style={{ background: PCOL[s.color] }} />
-            <span className="nm">{s.nick}</span>
-            {s.pid === room.me ? <span className="you">you</span> : null}
-            <span className={`online${s.connected ? '' : ' away'}`} />
-          </div>
-        ),
-      )}
-      {Array.from({ length: Math.max(0, 4 - room.seats.length) }, (_, i) => (
-        <div className="seat open" key={`open${i}`}>
-          Open seat
-        </div>
-      ))}
-    </div>
-  );
   return (
     <div className={`lobbywrap${t ? ' withtable' : ''}`}>
       {cpus ? <CpusPage onBack={() => setCpus(false)} /> : null}
@@ -185,114 +109,70 @@ export function Lobby({ room }: { room: RoomInfo }) {
           <MusicButton onOpen={() => setMusic(true)} />
         </div>
         {music ? <MusicSheet onClose={() => setMusic(false)} /> : null}
+        <div className="seats">
+          {room.seats.map((s) =>
+            s.cpu ? (
+              <CpuSeat key={s.pid} seat={s} taken={taken} />
+            ) : (
+              <div className="seat" key={s.pid}>
+                <span className="dot" style={{ background: PCOL[s.color] }} />
+                <span className="nm">{s.nick}</span>
+                {s.pid === room.me ? <span className="you">you</span> : null}
+                <span className={`online${s.connected ? '' : ' away'}`} />
+              </div>
+            ),
+          )}
+          {Array.from({ length: Math.max(0, 4 - room.seats.length) }, (_, i) => (
+            <div className="seat open" key={`open${i}`}>
+              Open seat
+            </div>
+          ))}
+        </div>
         {mine ? (
           <>
-            <nav className="steps" aria-label="Setting up the game">
-              {STEPS.map((x, i) => (
-                <button
-                  key={x.k}
-                  type="button"
-                  className={`step${step === x.k ? ' on' : ''}${done[x.k] ? ' done' : ''}`}
-                  aria-current={step === x.k ? 'step' : undefined}
-                  data-testid={`step-${x.k}`}
-                  onClick={() => setStep(x.k)}
-                >
-                  <span className="sn" aria-hidden="true">
-                    {done[x.k] && step !== x.k ? '✓' : i + 1}
-                  </span>
-                  {x.label}
+            <div className="field">
+              <label>Your color</label>
+              <ColorPicker
+                colors={PLAYER_COLORS}
+                value={mine.color}
+                taken={taken}
+                onPick={(c) => client.setColor(c)}
+              />
+            </div>
+            <Options room={room} editable />
+            <div className="row" style={{ marginBottom: 12 }}>
+              {room.seats.length < 4 ? (
+                <button className="btn small" onClick={() => client.addCpu()} data-testid="add-cpu">
+                  Add CPU player
                 </button>
-              ))}
-            </nav>
-            {seatsEl}
-            {step === 'players' ? (
-              <>
-                <div className="field">
-                  <label>Your color</label>
-                  <ColorPicker
-                    colors={PLAYER_COLORS}
-                    value={mine.color}
-                    taken={taken}
-                    onPick={(c) => client.setColor(c)}
-                  />
-                </div>
-                <div className="row" style={{ marginBottom: 12 }}>
-                  {room.seats.length < 4 ? (
-                    <button className="btn small" onClick={() => client.addCpu()} data-testid="add-cpu">
-                      Add CPU player
-                    </button>
-                  ) : null}
-                  <button
-                    className="btn small ghost"
-                    onClick={() => setCpus(true)}
-                    data-testid="cpu-page-link"
-                  >
-                    How CPUs play
-                  </button>
-                </div>
-                <p className="hint">
-                  {fits
-                    ? `${room.seats.length} players: ready for ${MODES[mode].label}. Share the invite link for more, or add a CPU.`
-                    : `${MODES[mode].label} needs ${allowed.join(' or ')} players. Share the invite link, or add a CPU.`}
-                </p>
-              </>
-            ) : null}
-            {step === 'game' ? (
-              <>
-                <p className="gamesummary" data-testid="game-summary">
-                  {gameSummary(room.options)}
-                </p>
-                <Options room={room} editable />
-              </>
-            ) : null}
-            {step === 'board' ? (
-              <p className="hint stephint" data-testid="board-step">
-                The board is on the table (beside this on a wide screen, below it on a phone): everyone sees
-                the same one. Make a new one with Reroll, edit it, or pick a saved map, then move on.
-              </p>
-            ) : null}
-            {step === 'start' ? (
-              <>
-                <p className="gamesummary" data-testid="game-summary">
-                  {gameSummary(room.options)}
-                </p>
-                {t ? <TurnOrderPanel room={room} /> : null}
-              </>
-            ) : null}
-            <div className="row stepfoot">
-              {step === 'start' ? (
-                <button
-                  className="btn primary"
-                  disabled={!canStart}
-                  onClick={() => client.start()}
-                  data-testid="start"
-                >
-                  Start game
-                </button>
-              ) : (
-                <button
-                  className="btn primary"
-                  data-testid="step-next"
-                  onClick={() => setStep(STEPS[STEPS.findIndex((x) => x.k === step) + 1]!.k)}
-                >
-                  {NEXT_LABEL[step]}
-                </button>
-              )}
+              ) : null}
+              <button className="btn small ghost" onClick={() => setCpus(true)} data-testid="cpu-page-link">
+                How CPUs play
+              </button>
+            </div>
+            {t ? <TurnOrderPanel room={room} /> : null}
+            <div className="row">
+              <button
+                className="btn primary"
+                disabled={!canStart}
+                onClick={() => client.start()}
+                data-testid="start"
+              >
+                Start game
+              </button>
               <button className="btn ghost" onClick={() => client.stand()}>
                 Stand up
               </button>
             </div>
-            {step === 'start' ? (
-              <p className="hint">
-                {!fits
-                  ? `${MODES[mode].label} needs ${allowed.join(' or ')} players.`
-                  : t?.problem
-                    ? t.problem
-                    : t && !t.first.pid
-                      ? 'Finish the roll for who goes first.'
-                      : 'Anyone seated can start whenever you like; Ready is just a signal.'}
-              </p>
-            ) : null}
+            <p className="hint">
+              {!fits
+                ? `${MODES[mode].label} needs ${allowed.join(' or ')} players.`
+                : t?.problem
+                  ? t.problem
+                  : t && !t.first.pid
+                    ? 'Finish the roll for who goes first.'
+                    : 'Anyone seated can start whenever you like; Ready is just a signal.'}
+            </p>
           </>
         ) : (
           <form
@@ -301,10 +181,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
               if (profile && (pick || rejoining)) client.join(profile.id, pick ?? 'red', moving);
             }}
           >
-            {seatsEl}
-            <p className="gamesummary" data-testid="game-summary">
-              {gameSummary(room.options)}
-            </p>
+            <Options room={room} editable={false} />
             {t ? <TurnOrderPanel room={room} /> : null}
             <div className="field">
               <label>Who are you?</label>
