@@ -578,7 +578,7 @@ input:focus-visible,
 .btn.on,
 .btn.on:hover:not(:disabled) {
   background: var(--ivory);
-  color: var(--abyss);
+  color: var(--on-ivory, var(--abyss));
   border-color: transparent;
 }
 
@@ -684,7 +684,7 @@ input:focus-visible,
   box-sizing: border-box;
   border-radius: 12px;
   background: var(--ink);
-  color: var(--abyss);
+  color: var(--on-ink, var(--abyss));
   font: 750 13px/24px var(--ui);
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -959,7 +959,7 @@ input:focus-visible,
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--ivory);
-  color: var(--abyss);
+  color: var(--on-ivory, var(--abyss));
 }
 .tag {
   font-size: 10.5px;
@@ -1383,7 +1383,7 @@ input:focus-visible,
 }
 .toast {
   background: var(--ivory);
-  color: var(--abyss);
+  color: var(--on-ivory, var(--abyss));
   font-weight: 650;
   padding: 10px 14px;
   border-radius: 12px;
@@ -1571,7 +1571,7 @@ body.noroom .dock {
 }
 .flycard.dev {
   background: var(--ivory);
-  color: var(--abyss);
+  color: var(--on-ivory, var(--abyss));
   font: 700 11px/1 var(--ui);
 }
 .gain {
@@ -4113,9 +4113,11 @@ button.vp {
   margin-left: 6px;
 }
 
-/* A tablet at the larger display sizes: the top bar keeps every button, with shorter labels. */
+/* A tablet at the larger display sizes: the top bar keeps every button, with shorter labels; the
+   Look button moves to the menu (it pushed the menu off a tablet at Extra large). */
 @container app (max-width: 780px) {
-  .top span.wide-only {
+  .top span.wide-only,
+  .top .btn.lookbtn {
     display: none;
   }
 }

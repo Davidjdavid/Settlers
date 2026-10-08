@@ -32,6 +32,15 @@ import { Log } from './log';
 import { DicePin, useLayoutWidth } from './dicepin';
 import { HandCards } from './hand';
 import { MomentLayer, Place } from './momentlayer';
+import {
+  BroadcastExtras,
+  BroadcastGraph,
+  LookSheet,
+  boardStyleFor,
+  inkOn,
+  lookOf,
+  notePoints,
+} from './looks';
 import { placesOf, pointsOf } from './moments';
 import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
@@ -99,6 +108,7 @@ type SheetState =
   | { k: 'music' }
   | { k: 'rules' }
   | { k: 'dice' }
+  | { k: 'look' }
   | { k: 'quit' };
 
 /** The see-through pieces that show what an action would place (SPEC 4.3). */
@@ -509,6 +519,14 @@ export function Game({
 
   const doAct = (a: Action, after?: () => void) => void client.act(a).then((r) => r.ok && after?.());
   const my = room.mySettings;
+  // The whole screen's look (SPEC 13.6); the page behind the app takes it too.
+  const look = lookOf(my);
+  useEffect(() => {
+    document.documentElement.dataset.look = look;
+    return () => {
+      delete document.documentElement.dataset.look;
+    };
+  }, [look]);
   // Your own layout (SPEC 11): none saved for this kind of screen means the standard screen.
   const device = deviceOf(layoutW);
   const [editing, setEditing] = useState(false);
@@ -1236,8 +1254,12 @@ export function Game({
   const myPid = room.me;
   const disconnected = room.seats.map((x, i) => ({ ...x, i })).filter((x) => !x.connected);
 
+  // Points over the turns this tab has seen, for the broadcast look's graph (SPEC 13.6).
+  const seenKey = `${room.code}:${v.players.map((p) => p.pid).join()}`;
+  notePoints(seenKey, v);
   const mainEl = (
     <main className="main">
+      {look === 'broadcast' ? <BroadcastExtras v={v} log={log} /> : null}
       {pr ? (
         <div className="banner" data-testid="reset-banner">
           {pr.pid === myPid ? (
@@ -1352,7 +1374,7 @@ export function Game({
       <div className="board-wrap">
         <Board
           view={v}
-          style={room.mySettings?.artStyle}
+          style={boardStyleFor(look, room.mySettings?.artStyle)}
           {...(dice ? { rolled: dice.dice } : {})}
           targets={targets}
           myColor={me != null ? PCOL[v.players[me]!.color] : null}
@@ -1504,6 +1526,7 @@ export function Game({
             key={p.pid}
             className={`player${i === v.turn && v.phase === 'play' ? ' turn' : ''}${connected(i) ? '' : ' away'}`}
             data-seat={i}
+            style={{ ['--pc' as string]: PCOL[p.color], ['--pc-ink' as string]: inkOn(PCOL[p.color]) }}
           >
             <span className="pc">
               <svg viewBox="-15 -15 30 30" aria-hidden="true">
@@ -1696,7 +1719,7 @@ export function Game({
     </section>
   );
   return (
-    <div className={`app${lay ? ' custom' : ''}${editing ? ' editing' : ''}`}>
+    <div className={`app${lay ? ' custom' : ''}${editing ? ' editing' : ''}`} data-look={look}>
       <header className="top">
         <div className="brand">
           <span dangerouslySetInnerHTML={{ __html: BRAND_SVG }} style={{ display: 'contents' }} />
@@ -1756,6 +1779,14 @@ export function Game({
           data-testid="sync"
         />
         <MusicButton onOpen={() => setSheet({ k: 'music' })} />
+        <button
+          className="btn small ghost lookbtn"
+          onClick={() => setSheet({ k: 'look' })}
+          data-testid="open-look"
+          title="How the whole screen looks, for you"
+        >
+          Look
+        </button>
         {dice ? (
           <button className="btn small ghost" onClick={() => setSheet({ k: 'dice' })} data-testid="open-dice">
             Dice<span className="wide-only"> stats</span>
@@ -1806,6 +1837,7 @@ export function Game({
           <aside className="side">
             {barbEl}
             {playersEl}
+            {look === 'broadcast' ? <BroadcastGraph v={v} code={seenKey} /> : null}
             {talkEl}
           </aside>
         </>
@@ -1900,6 +1932,7 @@ export function Game({
           onEndGame={() => setSheet({ k: 'endGame' })}
           onSettings={me != null ? () => setSheet({ k: 'settings' }) : undefined}
           onRules={() => setSheet({ k: 'rules' })}
+          onLook={() => setSheet({ k: 'look' })}
           onQuit={me != null && v.phase === 'play' ? () => setSheet({ k: 'quit' }) : undefined}
           onLayout={
             me != null
@@ -1916,6 +1949,9 @@ export function Game({
         <SettingsSheet mine={room.mySettings} onClose={() => setSheet(null)} />
       ) : null}
       {sheet?.k === 'rules' ? <RulesSheet v={v} room={room} onClose={() => setSheet(null)} /> : null}
+      {sheet?.k === 'look' ? (
+        <LookSheet mine={room.mySettings ?? null} onClose={() => setSheet(null)} />
+      ) : null}
       {sheet?.k === 'dice' && dice ? (
         <DicePanel
           dice={dice}
