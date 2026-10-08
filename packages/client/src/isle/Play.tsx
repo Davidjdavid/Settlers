@@ -767,7 +767,11 @@ export function IslePlay(props: IsleProps) {
     seenTurn.current = myTurnKey;
     setSplash(true);
   }, [myTurnKey]);
-  // It waits for the roll that started your turn to be shown, then has the middle to itself.
+  // It waits for the roll that started your turn to be shown, then has the middle to itself;
+  // once you've rolled it's too late to say (it showed after your own roll).
+  useEffect(() => {
+    if (splash && v.stage !== 'preroll') setSplash(false);
+  }, [splash, v.stage]);
   useEffect(() => {
     if (!splash || show) return;
     const t = window.setTimeout(() => setSplash(false), reduced() ? 1200 : 1700);
