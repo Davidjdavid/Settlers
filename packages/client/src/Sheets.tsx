@@ -79,14 +79,22 @@ export function Chips({ c }: { c: Cards }) {
   );
 }
 
-export function Ctl(props: { value: number; max: number; onChange: (n: number) => void; label: string }) {
+export function Ctl(props: {
+  value: number;
+  max: number;
+  onChange: (n: number) => void;
+  label: string;
+  /** How much each press adds or takes away (default 1). */
+  step?: number;
+}) {
+  const step = props.step ?? 1;
   return (
     <div className="ctl">
       <button
         type="button"
         aria-label={`Less ${props.label}`}
-        disabled={props.value <= 0}
-        onClick={() => props.onChange(props.value - 1)}
+        disabled={props.value - step < 0}
+        onClick={() => props.onChange(props.value - step)}
       >
         −
       </button>
@@ -94,8 +102,8 @@ export function Ctl(props: { value: number; max: number; onChange: (n: number) =
       <button
         type="button"
         aria-label={`More ${props.label}`}
-        disabled={props.value >= props.max}
-        onClick={() => props.onChange(props.value + 1)}
+        disabled={props.value + step > props.max}
+        onClick={() => props.onChange(props.value + step)}
       >
         +
       </button>
@@ -193,8 +201,9 @@ export function TradeSheet({
   const [tab, setTab] = useState<'players' | 'bank'>(myTurn ? start : 'players');
   const [give, setGive] = useState<Cards>({});
   const [want, setWant] = useState<Cards>({});
-  const [bg, setBg] = useState<Card | null>(null);
-  const [bw, setBw] = useState<Card | null>(null);
+  // The bank basket (SPEC 13.2): cards given (whole trades at your rate) and cards to get.
+  const [bGive, setBGive] = useState<Cards>({});
+  const [bGet, setBGet] = useState<Cards>({});
   const hand = v.hand!.res;
   const s = stateFromView(v);
   const kinds = kindsOf(v);
@@ -202,7 +211,23 @@ export function TradeSheet({
   const bankHas = (r: Card) => v.bank[r] ?? 0;
   const canOffer =
     total(give) > 0 && total(want) > 0 && !kinds.some((r) => (give[r] ?? 0) > 0 && (want[r] ?? 0) > 0);
-  const rate = bg ? rateFor(s, me, bg) : 4;
+  const rateOf = (r: Card) => rateFor(s, me, r);
+  const lots = kinds.reduce((a, r) => a + Math.floor((bGive[r] ?? 0) / rateOf(r)), 0);
+  const gets = total(bGet);
+  const bankOK = lots > 0 && lots === gets;
+  const bankTrade = () => {
+    const give = Object.fromEntries(kinds.filter((r) => bGive[r]).map((r) => [r, bGive[r]!]));
+    const get = Object.fromEntries(kinds.filter((r) => bGet[r]).map((r) => [r, bGet[r]!]));
+    // One trade is the plain bank trade; more go as one move.
+    const one = lots === 1 ? { g: Object.keys(give)[0] as Card, w: Object.keys(get)[0] as Card } : null;
+    void client
+      .act(one ? { type: 'bank', give: one.g, get: one.w } : { type: 'bankTrade', give, get })
+      .then((r) => {
+        if (!r.ok) return;
+        setBGive({});
+        setBGet({});
+      });
+  };
 
   return (
     <Sheet
@@ -210,7 +235,7 @@ export function TradeSheet({
       sub={
         tab === 'players'
           ? 'Pick what you give and what you want. Everyone sees your offer.'
-          : 'Trade with the bank at your best rate.'
+          : 'Give whole trades at your rate (shown by each card) for any cards from the bank, as many at once as you like.'
       }
       onClose={onClose}
       foot={
@@ -226,14 +251,14 @@ export function TradeSheet({
             Offer {cardsText(give)} for {cardsText(want)}
           </button>
         ) : (
-          <button
-            className="btn primary"
-            disabled={!bg || !bw || has(bg) < rate || bankHas(bw) < 1}
-            onClick={() => {
-              if (bg && bw) void client.act({ type: 'bank', give: bg, get: bw });
-            }}
-          >
-            {bg && bw ? `Give ${rate} ${bg} for 1 ${bw}` : 'Pick both sides'}
+          <button className="btn primary" disabled={!bankOK} data-testid="bank-trade" onClick={bankTrade}>
+            {bankOK
+              ? `Trade ${cardsText(bGive)} for ${cardsText(bGet)}`
+              : lots > gets
+                ? `Pick ${lots - gets} more to get`
+                : gets > lots
+                  ? `Give enough for ${gets - lots} more`
+                  : 'Pick what you give and get'}
           </button>
         )
       }
@@ -276,51 +301,38 @@ export function TradeSheet({
           ))}
         </div>
       ) : (
-        <>
-          <div className="group">
-            <span className="eyebrow">You give</span>
-            <div className="pickgrid">
-              {kinds.map((r) => {
-                const rr = rateFor(s, me, r);
-                return (
-                  <button
-                    key={r}
-                    className="pick"
-                    aria-pressed={bg === r}
-                    disabled={has(r) < rr}
-                    onClick={() => setBg(r)}
-                    style={{ ['--c' as string]: CARD_COLOR[r] }}
-                  >
-                    <Icon r={r} />
-                    {CARD_LABEL[r]}
-                    <small>
-                      {rr}:1 · have {has(r)}
-                    </small>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="group">
-            <span className="eyebrow">You get</span>
-            <div className="pickgrid">
-              {kinds.map((r) => (
-                <button
-                  key={r}
-                  className="pick"
-                  aria-pressed={bw === r}
-                  disabled={r === bg || bankHas(r) < 1}
-                  onClick={() => setBw(r)}
-                  style={{ ['--c' as string]: CARD_COLOR[r] }}
-                >
+        <div className="tgrid" data-testid="bank-basket">
+          <span />
+          <span className="hd">Give</span>
+          <span className="hd">Get</span>
+          {kinds.map((r) => {
+            const rr = rateOf(r);
+            return (
+              <div key={r} style={{ display: 'contents' }}>
+                <div className="rl" style={{ ['--c' as string]: CARD_COLOR[r] }}>
                   <Icon r={r} />
-                  {CARD_LABEL[r]}
-                  {(RES as readonly string[]).includes(r) ? <small>bank {bankHas(r)}</small> : null}
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
+                  <span>{CARD_LABEL[r]}</span>
+                  <small>
+                    {rr}:1 · ×{has(r)}
+                  </small>
+                </div>
+                <Ctl
+                  label={`give ${r}`}
+                  value={bGive[r] ?? 0}
+                  step={rr}
+                  max={(bGet[r] ?? 0) > 0 ? 0 : has(r)}
+                  onChange={(x) => setBGive({ ...bGive, [r]: x })}
+                />
+                <Ctl
+                  label={`get ${r}`}
+                  value={bGet[r] ?? 0}
+                  max={(bGive[r] ?? 0) > 0 ? 0 : bankHas(r)}
+                  onChange={(x) => setBGet({ ...bGet, [r]: x })}
+                />
+              </div>
+            );
+          })}
+        </div>
       )}
     </Sheet>
   );

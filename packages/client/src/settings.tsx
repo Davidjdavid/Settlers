@@ -307,6 +307,7 @@ export function RulesSheet({ v, room, onClose }: { v: PlayerView; room: RoomInfo
     { k: 'handBack', show: true },
     { k: 'handBackSetup', show: true },
     { k: 'undo', show: true },
+    { k: 'undoTurn', show: true },
   ];
   const seated = v.me != null;
   const cpus = v.players.some((p) => p.cpu);
@@ -369,7 +370,7 @@ export function RulesSheet({ v, room, onClose }: { v: PlayerView; room: RoomInfo
               label={RULE_LABEL[k]}
               help={RULE_HELP[k]}
               testid={`tablerule-${k}`}
-              disabled={!mine || (k === 'handBackSetup' && !hr.handBack)}
+              disabled={!mine || (k === 'handBackSetup' && !hr.handBack) || (k === 'undoTurn' && !hr.undo)}
               onChange={(on) => set(k, on)}
             />
           ))}

@@ -62,6 +62,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('freeRoad'), e: idx }),
   z.strictObject({ type: z.literal('skipRoads') }),
   z.strictObject({ type: z.literal('bank'), give: CARD, get: CARD }),
+  z.strictObject({ type: z.literal('bankTrade'), give: cards, get: cards }),
   z.strictObject({ type: z.literal('offer'), give: cards, want: cards }),
   z.strictObject({ type: z.literal('respond'), id: idx.max(1e6), yes: z.boolean() }),
   z.strictObject({ type: z.literal('confirm'), id: idx.max(1e6), with: idx }),
@@ -76,7 +77,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('askBack') }),
   z.strictObject({ type: z.literal('handBack') }),
   z.strictObject({ type: z.literal('refuseBack') }),
-  z.strictObject({ type: z.literal('askUndo') }),
+  z.strictObject({ type: z.literal('askUndo'), turn: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('answerUndo'), yes: z.boolean() }),
   z.strictObject({ type: z.literal('cancelUndo') }),
   // Keep playing after a win (SPEC 8.9).
@@ -87,7 +88,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     type: z.literal('setRule'),
     rule: z.enum([
       'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
-      'barbarianDelay', 'handBack', 'handBackSetup', 'undo', 'diceDeck',
+      'barbarianDelay', 'handBack', 'handBackSetup', 'undo', 'diceDeck', 'undoTurn',
     ]), // prettier-ignore
     value: z.union([z.boolean(), z.number().int().min(0).max(30), z.enum(['full', 'trimmed'])]),
   }),
@@ -153,6 +154,8 @@ export const OptionsSchema = z.strictObject({
     handBackSetup: z.boolean().optional(),
     /** Asking to undo a move (SPEC 5.10); on unless set to false. */
     undo: z.boolean().optional(),
+    /** ...or a whole turn (SPEC 13.2); on with undo unless set to false. */
+    undoTurn: z.boolean().optional(),
     /** The dice deck (docs/rules/dice-deck.md); off unless set. */
     diceDeck: z.enum(['full', 'trimmed']).optional(),
   }),
@@ -247,6 +250,13 @@ export const SettingsSchema = z.strictObject({
     .optional(),
   /** Table talk's size: folded to its title, short, normal (default) or tall. */
   talk: z.enum(['min', 'short', 'normal', 'tall']).optional(),
+  /** SPEC 13.2: your cards' spots in your hand, one arrangement for base games and one for Knights. */
+  handOrder: z
+    .strictObject({
+      base: z.array(CARD.nullable()).max(10).optional(),
+      ck: z.array(CARD.nullable()).max(10).optional(),
+    })
+    .optional(),
   /** SPEC 11: your own screen layout, one per kind of screen (none: the standard screen). */
   layout: z
     .strictObject({

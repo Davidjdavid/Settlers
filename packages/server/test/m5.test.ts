@@ -386,6 +386,47 @@ describe('undo through the server (SPEC 5.10)', () => {
   });
 });
 
+describe('undo a whole turn through the server (SPEC 13.2)', () => {
+  it('everyone says yes: the turn goes back to just after the roll, nothing secret is sent, and a restart agrees', () => {
+    const t = table(['Bob', 'Cat']);
+    send(t.conns[0]!, { t: 'start' });
+    play(t.code, t.conns, () => !!state(t.code).turnStart && state(t.code).stage === 'main');
+    const start = state(t.code);
+    expect(start.config.houseRules).toMatchObject({ undo: true, undoTurn: true });
+    const mover = t.conns.find((c) => c.pid === start.players[start.turn]!.pid)!;
+    const other = t.conns.find((c) => c !== mover)!;
+    const have = Object.entries(start.players[start.turn]!.res).find(([, n]) => n > 0)?.[0] ?? 'wood';
+    // An offer (a move that "Undo" doesn't cover), then the whole turn.
+    const want = have === 'ore' ? 'wood' : 'ore';
+    send(mover, { t: 'act', id: 'o', action: { type: 'offer', give: { [have]: 1 }, want: { [want]: 1 } } });
+    expect(mover.last('ack').ok).toBe(true);
+    send(mover, { t: 'act', id: 'u', action: { type: 'askUndo', turn: true } });
+    expect(mover.last('ack').ok).toBe(true);
+    expect(other.last('update').game!.undo).toEqual({ p: start.turn, asked: true, ok: [], turn: true });
+    send(other, { t: 'act', id: 'y', action: { type: 'answerUndo', yes: true } });
+    // Everything as it was but the move count (and the random numbers, had any been used).
+    const s = state(t.code);
+    const keys = [...new Set([...Object.keys(s), ...Object.keys(start)])];
+    const diff = keys.filter((k) => JSON.stringify((s as never)[k]) !== JSON.stringify((start as never)[k]));
+    expect(diff.filter((k) => k !== 'rng')).toEqual(['seq']);
+    expect(s.offers).toEqual([]);
+    for (const c of t.conns) for (const m of c.msgs) expect(JSON.stringify(m)).not.toContain('turnStart');
+    // Saved and replayed exactly.
+    const before = JSON.stringify(s);
+    restart();
+    expect(JSON.stringify(state(t.code))).toBe(before);
+  });
+
+  it('only true is accepted for a whole turn, and a basket of bank trades is a move', () => {
+    const ok = (action: unknown) => ClientMsgSchema.safeParse({ t: 'act', id: 'x', action }).success;
+    expect(ok({ type: 'askUndo', turn: true })).toBe(true);
+    expect(ok({ type: 'askUndo', turn: false })).toBe(false);
+    expect(ok({ type: 'bankTrade', give: { wheat: 4 }, get: { ore: 1 } })).toBe(true);
+    expect(ok({ type: 'bankTrade', give: { gold: 4 }, get: { ore: 1 } })).toBe(false);
+    expect(ok({ type: 'bankTrade', give: { wheat: 4 } })).toBe(false);
+  });
+});
+
 describe('CPU chatter (SPEC 5.14)', () => {
   it('at most one line per CPU per turn, and none once switched off', () => {
     const { code, conns } = table(['Ann'], 2);

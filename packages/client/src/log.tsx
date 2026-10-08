@@ -23,7 +23,16 @@ import type { LogItem } from '@settlers/server/protocol';
 import { CARD_COLOR, PCOL, cardIcon } from './art';
 import { cardTextColor, nameColor } from './logcolors';
 import { itemKey } from './net';
-import { EVENT_WORD, eventLines, segText, type EventDieText, type Line, type Seg, type Who } from './text';
+import {
+  EVENT_WORD,
+  bankLines,
+  eventLines,
+  segText,
+  type EventDieText,
+  type Line,
+  type Seg,
+  type Who,
+} from './text';
 
 type Row =
   | { k: 'turn'; key: string; p: Seat; dice?: [number, number]; ev?: 'ship' | Track }
@@ -48,6 +57,7 @@ export function logRows(
   const rows: Row[] = [];
   let turn: Extract<Row, { k: 'turn' }> | null = null;
   const used = new Map<string, number>();
+  let bankRun = null as BankRun | null;
   for (const it of log) {
     // Keys stay the same as the log grows; two identical events in one move get a count.
     let base = KEYS.get(it);
@@ -79,9 +89,25 @@ export function logRows(
         continue;
       }
     }
+    // Several bank trades in one move (SPEC 13.2): one line, keyed by the first.
+    if (!isLogNote(e) && e.k === 'bank') {
+      if (bankRun?.seq === it.seq && bankRun.p === e.p) {
+        bankRun.evs.push(e);
+        rows[bankRun.at] = { ...rows[bankRun.at]!, ...bankRunLine(bankRun.key, bankRun.evs) };
+        continue;
+      }
+      bankRun = { seq: it.seq, p: e.p, key, evs: [e], at: rows.length };
+    } else bankRun = null;
     rows.push(...lines(key, e));
   }
   return rows;
+}
+
+type BankRun = { seq: number; p: number; key: string; evs: Extract<GameEvent, { k: 'bank' }>[]; at: number };
+
+/** The one line for several bank trades in a move. */
+function bankRunLine(key: string, evs: Extract<GameEvent, { k: 'bank' }>[]): Extract<Row, { k: 'line' }> {
+  return { k: 'line', key: `${key}#0`, line: bankLines(evs)[0]! };
 }
 
 /** A player's name in their colour, or in normal text with a dot in their colour. */

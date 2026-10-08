@@ -112,6 +112,8 @@ export interface RuleModule {
   afterAction?(x: Ctx): void;
   /** At the end of each turn. */
   onTurnEnd?(s: GameState): void;
+  /** After a whole turn is undone: shuffle this module's hidden decks (SPEC 13.2). */
+  reshuffle?(s: GameState): void;
   /** Seats that must act in a stage this module owns, or undefined if not its stage. */
   waitingOn?(s: GameState): Seat[] | undefined;
 

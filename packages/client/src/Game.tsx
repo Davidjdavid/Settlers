@@ -27,9 +27,10 @@ import {
   TradeSheet, TreasureSheet,
   VictimSheet,
 } from './Sheets'; // prettier-ignore
-import { listNames, nameOf, rollWithEvent, routeName } from './text';
+import { lineText, listNames, nameOf, rollWithEvent, routeName, turnUndoSummary } from './text';
 import { Log } from './log';
 import { DicePin, useLayoutWidth } from './dicepin';
+import { HandCards } from './hand';
 import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
 import { handRisk } from './handrisk';
@@ -1084,7 +1085,7 @@ export function Game({
       ],
     };
   // Undo (SPEC 5.10): ask right after your own move; everyone else answers.
-  if (myActs.some((a) => a.type === 'askUndo'))
+  if (myActs.some((a) => a.type === 'askUndo' && !a.turn))
     pm = {
       ...pm,
       buttons: [
@@ -1092,10 +1093,23 @@ export function Game({
         { label: 'Undo', on: () => void client.act({ type: 'askUndo' }), testid: 'undo' },
       ],
     };
+  // ...or the whole turn, back to just after the roll (SPEC 13.2).
+  if (myActs.some((a) => a.type === 'askUndo' && a.turn))
+    pm = {
+      ...pm,
+      buttons: [
+        ...(pm.buttons ?? []),
+        {
+          label: 'Undo my turn',
+          on: () => void client.act({ type: 'askUndo', turn: true }),
+          testid: 'undo-turn',
+        },
+      ],
+    };
   if (myActs.some((a) => a.type === 'cancelUndo'))
     pm = {
       ...pm,
-      sub: `Waiting for everyone to agree to undo your last move${v.undo?.ok.length ? ` (${listNames(v, v.undo.ok)} agreed)` : ''}.`,
+      sub: `Waiting for everyone to agree to undo your ${v.undo?.turn ? 'turn' : 'last move'}${v.undo?.ok.length ? ` (${listNames(v, v.undo.ok)} agreed)` : ''}.`,
       buttons: [
         ...(pm.buttons ?? []),
         { label: 'Withdraw undo', on: () => void client.act({ type: 'cancelUndo' }), testid: 'undo-cancel' },
@@ -1262,7 +1276,9 @@ export function Game({
           )}
         </div>
       ) : null}
-      {answerUndo && v.undo ? (
+      {answerUndo && v.undo?.turn ? (
+        <TurnUndoBanner v={v} log={log} busy={busy} />
+      ) : answerUndo && v.undo ? (
         <div className="banner" data-testid="undo-banner">
           <span>{nameOf(v, v.undo.p)} asks to undo their last move.</span>
           <span className="acts">
@@ -2394,6 +2410,63 @@ function Offers({
 }
 
 /** A card count that turns red, with a warning, over the hand limit; hover explains it. */
+/**
+ * Someone asks to undo their whole turn (SPEC 13.2): say exactly what that takes back and what
+ * was seen, then yes or no.
+ */
+function TurnUndoBanner({ v, log, busy }: { v: PlayerView; log: LogItem[]; busy: boolean }) {
+  const { lines, seen } = turnUndoSummary(v, log);
+  const who = nameOf(v, v.undo!.p);
+  const MAX = 8;
+  return (
+    <div className="banner undoturn" data-testid="undo-banner">
+      <div className="undoturn-text">
+        <span>
+          {who} asks to undo their whole turn, back to just after {who === 'You' ? 'your' : 'their'} roll.
+        </span>
+        {lines.length ? (
+          <>
+            <span className="undoturn-hd">That takes back:</span>
+            <ul data-testid="undo-list">
+              {lines.slice(0, MAX).map((l, i) => (
+                <li key={i}>{lineText(v, l)}</li>
+              ))}
+              {lines.length > MAX ? <li>…and {lines.length - MAX} more</li> : null}
+            </ul>
+          </>
+        ) : null}
+        {seen.length ? (
+          <span className="undoturn-seen" data-testid="undo-seen">
+            Already seen: {seen.join('; ')}.
+          </span>
+        ) : null}
+        <span className="undoturn-note">
+          The roll stays. Hidden cards, fog and treasures are shuffled afterwards, so nothing seen tells
+          anyone what comes next.
+        </span>
+      </div>
+      <span className="acts">
+        <button
+          className="btn small primary"
+          disabled={busy}
+          data-testid="undo-yes"
+          onClick={() => void client.act({ type: 'answerUndo', yes: true })}
+        >
+          OK, undo the turn
+        </button>
+        <button
+          className="btn small"
+          disabled={busy}
+          data-testid="undo-no"
+          onClick={() => void client.act({ type: 'answerUndo', yes: false })}
+        >
+          No
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function HandCount(props: {
   v: PlayerView;
   s: ReturnType<typeof stateFromView>;
@@ -2490,21 +2563,7 @@ function trayBoxes(props: {
             · {hand.totalVP} points
           </span>
         </div>
-        <div className="hand" data-testid="hand">
-          {(ck ? [...RES, ...COMS] : RES).map((r) => (
-            <div
-              key={r}
-              className={`rcard${hand.res[r] ? '' : ' zero'}${(COMS as readonly string[]).includes(r) ? ' com' : ''}`}
-              style={{ ['--c' as string]: CARD_COLOR[r] }}
-              title={CARD_LABEL[r]}
-              data-res={r}
-              data-n={hand.res[r] ?? 0}
-            >
-              <span dangerouslySetInnerHTML={{ __html: cardIcon(r) }} style={{ display: 'contents' }} />
-              <span className="n">{hand.res[r] ?? 0}</span>
-            </div>
-          ))}
-        </div>
+        <HandCards res={hand.res} ck={ck} />
       </div>
     ),
     build: (

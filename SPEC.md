@@ -488,6 +488,7 @@ Every player's score can show what it's made of, for example "5 = 3 settlements 
   - ending your turn (that's the dice hand-back, 4.4).
 - **Undoing** restores the game exactly as it was before the move, like the hand-back.
 - **How it's recorded:** asking, answering and the undo itself are recorded moves, so replays and stats stay exact.
+- **A whole turn**, even after moves that showed something hidden, can be undone too with the house rule `undoTurn` (13.2).
 
 ### 5.11 Pieces
 
@@ -1108,6 +1109,27 @@ Notes from a full game with friends: it worked, but one screen crashed upgrading
 - **A screen that hits an error says so** ("Something went wrong on this screen", with Reload and a note that the game is safe on the server) instead of going blank, and sends the error, where it happened and the move number to the server's log (`clientError`, at most 10 per page load and per connection). Errors outside drawing (clicks, timers) are sent too.
 - **A knight's sheet closes if the knight goes while it's open** (chased away, a Deserter); drawing it for a missing knight crashed the screen.
 - **The pinned dice show "No rolls yet"** with the expected shape before the first roll (an empty box looked like the stats hadn't loaded).
+
+### 13.2 Smaller asks
+
+- **The coin card is silver**, much lighter than ore, so the two can't be mixed up (checked in every colour vision).
+- **A knight's level shows as 1, 2 or 3 rank chevrons** across its shield, and the shield grows with each level (the crest and the mighty knight's crown stay). Hovering or holding a knight names it ("Strong knight (level 2)").
+- **Arranging your cards.** Drag a card in your hand to another spot to swap them, in any order. The hand is a grid: one row of five in base games and Seafarers; two rows of five with Cities & Knights, each commodity under the resource it comes from (paper under wood, cloth under sheep, coin under ore), which is also how it starts. Your arrangement is saved on your profile, one for each kind of game, and "Reset" puts it back. It changes only your screen.
+- **Undo a whole turn** (house rule `undoTurn`, which works with Undo and is on with it in new rooms; old games are unchanged).
+  - Your turn keeps a **starting point**: the moment it first reaches its main part. That's after the roll and everything the roll caused: production, discards, the robber and its steal, gold, the barbarians and the event die.
+  - On your own turn you can ask to **undo your turn**: put the game back to that starting point. You can ask even after moves that showed something hidden: a card bought or drawn, a steal from a card you played, fog uncovered, a treasure, a trade with a player.
+  - As with Undo (5.10), everyone else must agree (CPUs always do), one "no" cancels it, you can withdraw it, and any other move cancels the request. You can ask again later in the same turn.
+  - **The question says what it does.** It lists everything that gets taken back, from the log since the starting point. It names what was seen ("Joe saw the card they bought"; "everyone saw the fog tile"). It says that the roll stays, and that the hidden decks get shuffled.
+  - **Undoing** puts everything back exactly as it was at the starting point: pieces, hands, the bank, cards bought or played, trades, Longest Road and Largest Army, the stats. Then it **shuffles everything still hidden**: the development deck, the progress decks, the fog tiles and the treasures. So what someone saw can't tell them what comes next, and a card that went back could come out anywhere.
+  - What stays: the roll and its consequences, rule changes, the table talk, and the undo request itself in the log.
+  - "Undo" (your last move) is still offered when it covers it; "Undo my turn" shows when the turn has more to take back than that.
+  - Recorded like every move (`askUndo` with `turn`), so replays and stats stay exact.
+- **Trade several cards with the bank at once** (`bankTrade`). One move can give any mix of cards at your rates for any mix of cards from the bank, for example 4 wheat and 3 ore (at a 3:1 harbor) for a brick and a wood, or 8 sheep for 2 ore.
+  - Each kind you give must be a whole number of trades at your best rate for that card.
+  - The trades given must equal the cards you get.
+  - You can't give and get the same kind.
+  - The bank must have every card you get.
+  - It is exactly the same as making those single bank trades one after another. The log shows it as one line, and it can be undone like a bank trade.
 
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).

@@ -4122,3 +4122,86 @@ button.vp {
   width: 100%;
   margin-bottom: 16px;
 }
+
+/* Undo a whole turn (SPEC 13.2): what it takes back and what was seen. */
+.banner.undoturn {
+  align-items: flex-start;
+}
+.undoturn-text {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.undoturn-text ul {
+  margin: 0;
+  padding-left: 18px;
+  font-weight: 500;
+}
+.undoturn-hd,
+.undoturn-seen,
+.undoturn-note {
+  font-weight: 500;
+  font-size: 13px;
+}
+.undoturn-note {
+  opacity: 0.85;
+}
+
+/* Your hand as a grid of spots you can arrange (SPEC 13.2). */
+.hand.slots {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 52px));
+  gap: 10px 8px;
+}
+.hslot {
+  height: 70px;
+  min-width: 0;
+}
+.hslot .rcard {
+  width: 100%;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.hslot.empty {
+  border-radius: 9px;
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+}
+.hand.arranging .hslot.empty {
+  border-color: var(--lantern);
+  cursor: pointer;
+}
+.rcard.picked {
+  outline: 3px solid var(--lantern);
+  outline-offset: 2px;
+}
+.rcard.dragging {
+  position: relative;
+  z-index: 5;
+  pointer-events: none;
+  cursor: grabbing;
+  opacity: 0.9;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+}
+.rcard.zero.dragging,
+.rcard.zero.picked {
+  opacity: 0.7;
+}
+.handhint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--lantern-2);
+}
+.handreset {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: 500 12px var(--ui);
+  text-decoration: underline;
+  cursor: pointer;
+  justify-self: start;
+}

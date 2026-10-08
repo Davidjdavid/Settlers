@@ -1810,6 +1810,7 @@ export function gameConfigFor(o: RoomOptions, board?: MapData): Partial<GameConf
   if (o.houseRules.handBack !== false) hr.handBack = true;
   if (o.houseRules.handBackSetup) hr.handBackSetup = true;
   if (o.houseRules.undo !== false) hr.undo = true;
+  if (hr.undo && o.houseRules.undoTurn !== false) hr.undoTurn = true;
   if (o.houseRules.diceDeck) hr.diceDeck = o.houseRules.diceDeck;
   if (o.ck) {
     if (o.houseRules.rerollBeforeAttack) hr.rerollBeforeAttack = true;
@@ -1852,7 +1853,7 @@ export function optionsFor(c: Partial<GameConfig>): RoomOptions {
   const o: RoomOptions = {
     scenario: SCENARIOS[scenario] ? scenario : 'classic',
     winVP: c.winVP ?? 10,
-    houseRules: { ...hr, handBack: !!hr.handBack, undo: !!hr.undo },
+    houseRules: { ...hr, handBack: !!hr.handBack, undo: !!hr.undo, undoTurn: !!hr.undoTurn },
   };
   if (c.modules?.includes('citiesKnights')) o.ck = true;
   if (c.bank === 'unlimited') o.bank = 'unlimited';

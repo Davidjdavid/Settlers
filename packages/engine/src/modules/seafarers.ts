@@ -4,6 +4,7 @@
  */
 
 import { startHexes } from '../map';
+import { shuffle } from '../rng';
 import {
   checkWin, afterFreePiece, cleanCounts, finishRobber, gain, isInt, pay, stealRandom, updateLongest,
 } from '../ops'; // prettier-ignore
@@ -324,6 +325,13 @@ export const seafarers: RuleModule = {
   onTurnEnd(s) {
     sea(s).builtThisTurn = [];
     sea(s).movesThisTurn = 0;
+  },
+
+  // The fog tiles still face down (SPEC 13.2).
+  reshuffle(s) {
+    const fog = sea(s).fog;
+    shuffle(fog.terrain, s.rng);
+    shuffle(fog.numbers, s.rng);
   },
 
   waitingOn: (s) => (s.stage === 'gold' ? Object.keys(sea(s).gold?.owed ?? {}).map(Number) : undefined),

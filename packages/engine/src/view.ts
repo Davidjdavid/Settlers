@@ -75,8 +75,13 @@ export interface PlayerView {
     /** The bank's supply (SPEC 8.1); absent in games from before Milestone 8. */
     bank?: 'limited' | 'unlimited';
   };
-  /** A move that can be undone: whose, whether they asked, who has agreed. */
-  undo?: { p: Seat; asked: boolean; ok: Seat[] };
+  /** A move that can be undone: whose, whether they asked, who has agreed (`turn`: the whole turn). */
+  undo?: { p: Seat; asked: boolean; ok: Seat[]; turn?: true };
+  /**
+   * The current turn's starting point (SPEC 13.2): the move that reached it (later moves are what
+   * "Undo my turn" takes back) and how many moves since. The game it holds is server-only.
+   */
+  turnUndo?: { from: number; n: number };
   /** A turn that can be handed back (who ended it, whether they asked). */
   back?: { from: Seat; asked: boolean; refused: boolean };
   /** The dice deck house rule: cards left to draw (dice-deck.md). */
@@ -167,7 +172,14 @@ export function viewFor(s: GameState, seat: Seat | null): PlayerView {
     },
   } satisfies PlayerView);
   if (s.back) v.back = { from: s.back.from, asked: s.back.asked, refused: s.back.refused };
-  if (s.undo) v.undo = { p: s.undo.p, asked: s.undo.asked, ok: s.undo.ok.slice() };
+  if (s.undo)
+    v.undo = {
+      p: s.undo.p,
+      asked: s.undo.asked,
+      ok: s.undo.ok.slice(),
+      ...(s.undo.turn ? { turn: true } : {}),
+    };
+  if (s.turnStart) v.turnUndo = { from: s.turnStart.seq, n: s.turnStart.n };
   if (s.keep) v.keep = cloneJson(s.keep);
   // The dice deck: only how many cards are left (dice-deck.md §4).
   if (s.diceDeck) v.deckLeft = s.diceDeck.left.length;
@@ -266,6 +278,8 @@ export function stateFromView(v: PlayerView): GameState {
   // The turn to restore is server-only; legal moves only need to know a hand-back is possible.
   if (v.back) s.back = { ...v.back, state: null };
   if (v.undo) s.undo = { ...v.undo, ok: v.undo.ok.slice(), state: null };
+  if (v.turnUndo)
+    s.turnStart = { p: v.turn, turnN: v.turnN, seq: v.turnUndo.from, n: v.turnUndo.n, state: null };
   if (v.keep) s.keep = cloneJson(v.keep);
   for (const m of mods(s)) m.fromView?.(v, s);
   return s;

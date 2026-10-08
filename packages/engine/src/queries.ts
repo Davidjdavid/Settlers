@@ -190,6 +190,21 @@ export function rateFor(s: GameState, p: Seat, r: Card): number {
   return rate;
 }
 
+/**
+ * Why p can't ask to undo their whole turn now (SPEC 13.2), or null. "Undo" (the last move) is
+ * offered instead when it takes back the same thing.
+ */
+export function turnUndoBlock(s: GameState, p: Seat): string | null {
+  const ts = s.turnStart;
+  const hr = s.config.houseRules;
+  if (s.phase !== 'play' || !hr?.undo || !hr.undoTurn || !ts || ts.p !== p || s.turn !== p)
+    return 'There’s nothing of yours to undo';
+  if (s.undo?.asked) return 'You already asked';
+  if (ts.n === 0) return 'Nothing to undo yet this turn';
+  if (ts.n === 1 && s.undo?.p === p) return 'Undo your last move instead';
+  return null;
+}
+
 /** Points everyone can see: buildings plus longest road and largest army. */
 export function publicVP(s: GameState, p: Seat): number {
   let vp = 0;

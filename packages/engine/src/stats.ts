@@ -153,12 +153,13 @@ const SPENDING = new Set<Action['type']>([
  * Adds up a game one move at a time. `step` takes the state before and after each move; the
  * whole fold is plain JSON, so it can be saved and picked up again.
  */
-type Saved = { st: GameStats; gold: StatsFold['gold']; keep: { undo?: Saved; back?: Saved } };
+type Saved = { st: GameStats; gold: StatsFold['gold']; keep: Keep };
+/** Stats as they were before a move that may still be undone or handed back, and at the turn's start. */
+type Keep = { undo?: Saved; back?: Saved; turn?: Saved };
 
 export class StatsFold {
   st: GameStats;
-  /** Stats as they were before a move that may still be undone or handed back. */
-  private keep: { undo?: Saved; back?: Saved } = {};
+  private keep: Keep = {};
   /** Gold still to be picked, per player: where it came from. */
   gold: Record<number, { src: GainSource; h: number | null; n: number }[]> = {};
 
@@ -167,14 +168,26 @@ export class StatsFold {
   }
 
   step(prev: GameState, p: Seat, a: Action, events: GameEvent[], next: GameState) {
-    // What to go back to. The engine's snapshots hold no undo, and a hand-back's holds no
-    // hand-back either, so these never nest more than one level.
+    // What to go back to, mirroring the engine's snapshots: an undo's holds the hand-back and turn
+    // start as they were, a hand-back's the turn start, and a turn start's neither, so these never
+    // nest more than a few levels.
     const base = cloneJson({ st: this.st, gold: this.gold });
-    const forUndo: Saved = { ...base, keep: this.keep.back ? { back: this.keep.back } : {} };
-    const forBack: Saved = { ...base, keep: {} };
+    const { back: kb, turn: kt } = this.keep;
+    const forUndo: Saved = { ...base, keep: { ...(kb ? { back: kb } : {}), ...(kt ? { turn: kt } : {}) } };
+    const forBack: Saved = { ...base, keep: kt ? { turn: kt } : {} };
     // An undo or hand-back puts the game back as it was, so the stats go back too.
     const back = events.find((e) => e.k === 'undo' || e.k === 'handBack');
     if (back) {
+      if (back.k === 'undo' && back.turn) {
+        // The whole turn (SPEC 13.2): back to its start, which stays for another undo.
+        const saved = this.keep.turn;
+        if (!saved) throw new Error('stats: nothing kept for undo of a turn');
+        const c = cloneJson({ st: saved.st, gold: saved.gold });
+        this.st = c.st;
+        this.gold = c.gold;
+        this.keep = { turn: saved };
+        return;
+      }
       const saved = back.k === 'undo' ? this.keep.undo : this.keep.back;
       if (!saved) throw new Error(`stats: nothing kept for ${back.k}`);
       this.st = saved.st;
@@ -193,6 +206,11 @@ export class StatsFold {
       if (!next.undo) delete this.keep.undo;
       if (!next.back) delete this.keep.back;
     }
+    // The turn's start: the stats right after the move that reached it.
+    if (!next.turnStart) delete this.keep.turn;
+    else if (next.turnStart.seq === next.seq)
+      this.keep.turn = { ...cloneJson({ st: this.st, gold: this.gold }), keep: {} };
+    else if (kt) this.keep.turn = kt;
   }
 
   private apply(prev: GameState, p: Seat, a: Action, events: GameEvent[], next: GameState) {

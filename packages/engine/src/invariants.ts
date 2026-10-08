@@ -190,10 +190,32 @@ export function checkInvariants(s: GameState, prev?: GameState): string[] {
     const u = s.undo;
     if (!s.config.houseRules?.undo) bad.push('undo pending without the rule');
     if (!(u.p >= 0 && u.p < n)) bad.push(`undo for ${u.p}`);
-    if (!u.state || u.state.undo) bad.push('undo without exactly one earlier state');
+    if (u.turn) {
+      if (u.state || !u.asked) bad.push('whole-turn undo with a state or not asked');
+      if (s.turnStart?.p !== u.p) bad.push('whole-turn undo without its turn start');
+    } else if (!u.state || u.state.undo) bad.push('undo without exactly one earlier state');
     if (!u.asked && u.ok.length) bad.push('undo approved before it was asked');
     if (u.ok.includes(u.p)) bad.push('undo approved by its own player');
     if (s.phase !== 'play') bad.push('undo pending after the game ended');
+  }
+  // A turn's starting point (SPEC 13.2).
+  if (s.turnStart) {
+    const t = s.turnStart;
+    if (!s.config.houseRules?.undo || !s.config.houseRules.undoTurn) bad.push('turn start without the rule');
+    if (t.p !== s.turn || t.turnN !== s.turnN) bad.push('turn start for another turn');
+    if (!(Number.isInteger(t.n) && t.n >= 0) || !(t.seq > 0 && t.seq <= s.seq)) bad.push('turn start counts');
+    const st = t.state;
+    if (
+      !st ||
+      st.undo ||
+      st.back ||
+      st.turnStart ||
+      st.stage !== 'main' ||
+      st.turn !== t.p ||
+      st.seq !== t.seq
+    )
+      bad.push('turn start state is not the main part of this turn');
+    if (s.phase !== 'play') bad.push('turn start after the game ended');
   }
 
   for (const m of mods(s)) bad.push(...(m.invariants?.(s) ?? []));

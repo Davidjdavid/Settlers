@@ -12,7 +12,7 @@ import {
 } from './ops'; // prettier-ignore
 import {
   BANK_EACH, UNLIMITED, COST, DEV_COUNTS, PIECES, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, geo, has,
-  keepMinTarget, publicVP, rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, totalVP, settlementOK, setupVertOK, snakeOrder, total,
+  keepMinTarget, publicVP, rateFor, roadEdgeOK, roadOK, robberAwake, robberHexOK, robberVictims, routeLen, totalVP, settlementOK, setupVertOK, snakeOrder, total, turnUndoBlock,
   vertFree, vertexOK, zeroRes,
 } from './queries'; // prettier-ignore
 import { drawDice } from './diceDeck';
@@ -142,6 +142,7 @@ export function applyAction(s0: GameState, seat: Seat, action: Action): ApplyRes
   }
   keepForHandBack(s0, s, seat, action);
   keepForUndo(s0, s, seat, action, events);
+  keepTurnStart(s0, s, action);
   s.seq = s0.seq + 1;
   return { ok: true, state: s, events };
 }
@@ -154,7 +155,7 @@ const BACK_ACTIONS = new Set<Action['type']>([
 /** Moves that can be undone (SPEC 5.10), as long as they revealed nothing hidden. */
 const UNDOABLE = new Set<Action['type']>([
   'setup', 'road', 'ship', 'settlement', 'city', 'freeRoad', 'freeShip', 'moveShip', 'robber', 'pirate',
-  'knight', 'wall', 'promote', 'activate', 'moveKnight', 'improve', 'bank',
+  'knight', 'wall', 'promote', 'activate', 'moveKnight', 'improve', 'bank', 'bankTrade',
 ]); // prettier-ignore
 /** Events that mean a move showed something hidden (or can't be taken back), so no undo. */
 const REVEALING = new Set<GameEvent['k']>([
@@ -181,12 +182,47 @@ function keepForUndo(s0: GameState, s: GameState, p: Seat, a: Action, events: Ga
   } else delete s.undo;
 }
 
+/**
+ * The turn's starting point for "Undo my turn" (SPEC 13.2): the first moment the turn reaches its
+ * main part, after the roll and everything it caused. Kept until the turn ends; undo requests,
+ * hand-backs and rule changes don't count as moves of the turn. Games without the rule never get it.
+ */
+function keepTurnStart(s0: GameState, s: GameState, a: Action) {
+  const hr = s.config.houseRules;
+  const ts = s.turnStart;
+  if (s.phase !== 'play' || !hr?.undo || !hr.undoTurn || (ts && (ts.turnN !== s.turnN || ts.p !== s.turn))) {
+    delete s.turnStart;
+  }
+  if (s.turnStart) {
+    if (!BACK_ACTIONS.has(a.type)) s.turnStart.n++;
+  } else if (s.phase === 'play' && hr?.undo && hr.undoTurn && s.stage === 'main') {
+    const { undo: _u, back: _b, turnStart: _t, ...here } = s;
+    void _u;
+    void _b;
+    void _t;
+    const seq = s0.seq + 1;
+    s.turnStart = { p: s.turn, turnN: s.turnN, seq, n: 0, state: cloneJson({ ...here, seq }) };
+  }
+}
+
 /** Everyone else has said yes (people answer; CPUs always agree): put the game back. */
 function undoIfAgreed(s: GameState, events: GameEvent[]) {
   const u = s.undo!;
   const others = s.players.map((_, i) => i).filter((i) => i !== u.p);
   if (!others.every((i) => u.ok.includes(i))) return;
   const config = s.config;
+  if (u.turn) {
+    // The whole turn (SPEC 13.2): back to its starting point, which stays for another undo. The
+    // random numbers carry on rather than going back, and what's still hidden is shuffled, so
+    // nothing seen tells anyone what comes next.
+    const ts = s.turnStart!;
+    const rng = s.rng;
+    for (const k of Object.keys(s)) delete (s as unknown as Record<string, unknown>)[k];
+    Object.assign(s, cloneJson(ts.state!), { config, rng, turnStart: { ...ts, n: 0 } });
+    for (const m of mods(s)) m.reshuffle?.(s);
+    events.push({ k: 'undo', p: u.p, turn: true });
+    return;
+  }
   const before = u.state!;
   for (const k of Object.keys(s)) delete (s as unknown as Record<string, unknown>)[k];
   Object.assign(s, before, { config });
@@ -407,6 +443,17 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       return null;
     }
     case 'askUndo': {
+      if (a.turn !== undefined) {
+        if (a.turn !== true) return 'Say what to undo';
+        const why = turnUndoBlock(s, p);
+        if (why) return why;
+        // CPUs always agree.
+        const cpus = s.players.flatMap((pl, i) => (i !== p && pl.cpu ? [i] : []));
+        s.undo = { p, asked: true, ok: cpus, state: null, turn: true };
+        events.push({ k: 'askUndo', p, turn: true });
+        undoIfAgreed(s, events);
+        return null;
+      }
       const u = s.undo;
       if (!u?.state || u.p !== p) return 'There’s nothing of yours to undo';
       if (u.asked) return 'You already asked';
@@ -434,8 +481,12 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
     case 'cancelUndo': {
       const u = s.undo;
       if (!u?.asked || u.p !== p) return 'You haven’t asked to undo';
-      u.asked = false;
-      u.ok = [];
+      // A whole-turn request just goes; the turn can still be asked for again.
+      if (u.turn) delete s.undo;
+      else {
+        u.asked = false;
+        u.ok = [];
+      }
       events.push({ k: 'cancelUndo', p });
       return null;
     }
@@ -782,6 +833,40 @@ function reduce(s: GameState, p: Seat, a: Action, events: GameEvent[]): string |
       s.bank[give]! += rate;
       gain(s, p, get, 1);
       events.push({ k: 'bank', p, give, n: rate, get });
+      return null;
+    }
+
+    case 'bankTrade': {
+      // Several bank trades in one move (SPEC 13.2): exactly those single trades, one after another.
+      if (!myTurn) return 'Trade with the bank on your own turn';
+      if (s.stage !== 'main') return notMain(s);
+      const kinds = cardKinds(s);
+      const give = cleanCounts(a.give, kinds);
+      const get = cleanCounts(a.get, kinds);
+      if (!give || !get || !total(give) || !total(get)) return 'Choose what you give and what you get';
+      if (kinds.some((r) => give[r] && get[r])) return 'You can’t give and get the same card';
+      const lots: [Card, number][] = [];
+      for (const r of kinds) {
+        const n = give[r]!;
+        if (!n) continue;
+        const rate = rateFor(s, p, r);
+        if (n % rate) return `${r} goes to the bank ${rate} at a time`;
+        if (me.res[r]! < n) return `You need ${n} ${r} for this trade`;
+        for (let i = 0; i < n / rate; i++) lots.push([r, rate]);
+      }
+      if (lots.length !== total(get))
+        return `That gives enough for ${lots.length} card${lots.length === 1 ? '' : 's'}, not ${total(get)}`;
+      for (const r of kinds) if (s.bank[r]! < get[r]!) return `The bank is out of ${r}`;
+      let i = 0;
+      for (const r of kinds) {
+        for (let k = 0; k < get[r]!; k++) {
+          const [g, rate] = lots[i++]!;
+          me.res[g]! -= rate;
+          s.bank[g]! += rate;
+          gain(s, p, r, 1);
+          events.push({ k: 'bank', p, give: g, n: rate, get: r });
+        }
+      }
       return null;
     }
 

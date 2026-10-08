@@ -188,6 +188,13 @@ function done(s: GameState) {
 export const treasures: RuleModule = {
   id: 'treasures',
 
+  // The treasures not yet found (SPEC 13.2).
+  reshuffle(s) {
+    const t = tr(s);
+    shuffle(t.deck, s.rng);
+    if (t.fogDeck) shuffle(t.fogDeck, s.rng);
+  },
+
   init(s) {
     const m = s.config.map;
     const g = geo(s);

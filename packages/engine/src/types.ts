@@ -190,6 +190,8 @@ export interface HouseRules {
   handBackSetup?: boolean;
   /** Players may ask everyone to undo their last move (SPEC 5.10). */
   undo?: boolean;
+  /** ...or their whole turn, back to just after the roll (SPEC 13.2). Needs `undo`. */
+  undoTurn?: boolean;
   /** Draw the number dice from a deck of 36 cards (docs/rules/dice-deck.md); 'trimmed' takes 5 out. */
   diceDeck?: 'full' | 'trimmed';
 }
@@ -197,7 +199,7 @@ export interface HouseRules {
 /** Game rules a player may change during their turn (SPEC 4.5). */
 export const RULE_KEYS = [
   'winVP', 'no7FirstRound', 'bank3to1', 'freeShipMoves', 'rerollBeforeAttack', 'noDiscardBeforeAttack',
-  'barbarianDelay', 'handBack', 'handBackSetup', 'undo', 'diceDeck',
+  'barbarianDelay', 'handBack', 'handBackSetup', 'undo', 'diceDeck', 'undoTurn',
 ] as const; // prettier-ignore
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -218,7 +220,22 @@ export interface UndoState {
   asked: boolean;
   /** Who has said yes so far (CPUs say yes as soon as it's asked). */
   ok: Seat[];
-  /** The game as it was before the move; restored on undo. Server-only. */
+  /** The game as it was before the move; restored on undo. Server-only. Null for a whole turn. */
+  state: GameState | null;
+  /** Asking to undo the whole turn back to its starting point (SPEC 13.2). */
+  turn?: true;
+}
+
+/** Where the current turn can go back to with "Undo my turn" (SPEC 13.2). */
+export interface TurnStart {
+  /** Whose turn, and which. */
+  p: Seat;
+  turnN: number;
+  /** The move that reached the starting point; later moves are what an undo takes back. */
+  seq: number;
+  /** Moves since then (not counting undo requests, hand-backs or rule changes). */
+  n: number;
+  /** The game at the starting point, without undo, hand-back or turn start. Server-only. */
   state: GameState | null;
 }
 
@@ -422,6 +439,8 @@ export interface GameState {
   diceDeck?: DiceDeck;
   /** The last move, while it can still be undone; absent otherwise. */
   undo?: UndoState;
+  /** The current turn's starting point, with the undoTurn rule (SPEC 13.2); absent otherwise. */
+  turnStart?: TurnStart;
   /** Keep playing after a win (SPEC 8.9); absent until someone asks. Public. */
   keep?: KeepPlaying;
 }
@@ -490,6 +509,8 @@ export type Action =
   | { type: 'freeRoad'; e: number }
   | { type: 'skipRoads' }
   | { type: 'bank'; give: Card; get: Card }
+  /** Several bank trades in one move (SPEC 13.2). */
+  | { type: 'bankTrade'; give: PartialRes; get: PartialRes }
   | { type: 'offer'; give: PartialRes; want: PartialRes }
   | { type: 'respond'; id: number; yes: boolean }
   | { type: 'confirm'; id: number; with: Seat }
@@ -507,7 +528,7 @@ export type Action =
   | { type: 'askBack' }
   | { type: 'handBack' }
   | { type: 'refuseBack' }
-  | { type: 'askUndo' }
+  | { type: 'askUndo'; turn?: true }
   | { type: 'answerUndo'; yes: boolean }
   | { type: 'cancelUndo' }
   /** After a win: ask everyone to keep playing to a new target, answer, or withdraw (SPEC 8.9). */
@@ -604,7 +625,7 @@ export type GameEvent =
   | { k: 'askBack'; p: Seat }
   | { k: 'handBack'; p: Seat; to: Seat }
   | { k: 'refuseBack'; p: Seat }
-  | { k: 'askUndo'; p: Seat }
+  | { k: 'askUndo'; p: Seat; turn?: true }
   | { k: 'answerUndo'; p: Seat; yes: boolean }
   | { k: 'cancelUndo'; p: Seat }
   | { k: 'askKeep'; p: Seat; target: number }
@@ -612,7 +633,7 @@ export type GameEvent =
   | { k: 'cancelKeep'; p: Seat }
   /** Everyone agreed: play resumes with a new target. */
   | { k: 'keepPlaying'; target: number; from: number }
-  | { k: 'undo'; p: Seat }
+  | { k: 'undo'; p: Seat; turn?: true }
   | { k: 'rule'; p: Seat; rule: RuleKey; value: boolean | number | 'full' | 'trimmed' }
   /** The dice deck was shuffled: `left` cards to draw (dice-deck.md §1.4). */
   | { k: 'deckShuffled'; left: number }

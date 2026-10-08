@@ -11,6 +11,7 @@ import { mods } from './modules/api';
 import {
   COST, canPlaceFreePiece, cardKinds, deckCount, devCardsOn, freePieceSupply, has, legalCities, legalRoads,
   keepMinTarget, legalSettlements, legalSetupRoads, legalSetupVerts, rateFor, robberHexOK, robberVictims,
+  turnUndoBlock,
 } from './queries'; // prettier-ignore
 import { RES, type Action, type GameState, type Seat } from './types';
 
@@ -73,6 +74,7 @@ export function legalActions(s: GameState, p: Seat): Action[] {
     else if (u.asked && !u.ok.includes(p))
       out.push({ type: 'answerUndo', yes: true }, { type: 'answerUndo', yes: false });
   }
+  if (!turnUndoBlock(s, p)) out.push({ type: 'askUndo', turn: true });
   if (!myTurn) return out;
 
   switch (s.stage) {

@@ -147,6 +147,8 @@ export function checkFrames(t: Table, seats: (number | null)[], minFrames = 100)
       // The table's board seed is public (docs/pregame.md 1.1); nothing in a game may carry one.
       if (f.game) expect(raw).not.toContain('"seed"');
       expect(raw).not.toContain('"deck"');
+      // A turn's starting point (SPEC 13.2) is a whole game: it never leaves the server.
+      expect(raw).not.toContain('"turnStart"');
       // The fog's face-down order lives only on the server. (Before a game, the table's map may
       // list what fog can hide, as the map file does: that's public, like the deck's make-up.)
       if (f.game) expect(raw).not.toMatch(/"fog":\{/);

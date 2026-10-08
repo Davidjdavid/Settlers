@@ -37,12 +37,12 @@ interface Scenario {
 }
 const HFNS = SCENARIOS['heading-for-new-shores']!;
 const SIMS: Record<string, Scenario> = {
-  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb', 'hu', 'nH', 'u', 'I', 'O', 'k', 'nK'] },
+  classic: { players: [2, 3, 4], rules: ['n', 'b', 'nb', 'hu', 'nH', 'u', 'I', 'O', 'k', 'nK', 'hT', 'bT'] },
   'heading-for-new-shores': {
     map: HFNS,
     players: HFNS.players,
     maxTurns: 3000,
-    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH', 'I'],
+    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH', 'I', 'fT'],
   },
   'heading-for-new-shores-3': {
     map: scenarioMap('heading-for-new-shores', 3),
@@ -50,13 +50,17 @@ const SIMS: Record<string, Scenario> = {
     maxTurns: 3000,
     rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'fH'],
   },
-  'fog-test': { map: fogTest as unknown as MapData, players: [3, 4], rules: ['n', 'b', 'nb', 'fu', 'nbf'] },
+  'fog-test': {
+    map: fogTest as unknown as MapData,
+    players: [3, 4],
+    rules: ['n', 'b', 'nb', 'fu', 'nbf', 'fT'],
+  },
   // SPEC 10.5: the Fog Islands in Seafarers and in Full game mode.
   'fog-islands': {
     map: SCENARIOS['fog-islands']!,
     players: [3, 4],
     maxTurns: 3000,
-    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'I'],
+    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'I', 'hT'],
   },
   'fog-islands-ck': {
     map: SCENARIOS['fog-islands']!,
@@ -65,7 +69,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 15,
     quickVP: 12,
     maxTurns: 5000,
-    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O', 'rk', 'K'],
+    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O', 'rk', 'K', 'fT'],
   },
   ck: {
     modules: ['citiesKnights'],
@@ -73,7 +77,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 13,
     quickVP: 10,
     maxTurns: 3000,
-    rules: ['r', 'd', 'w', 'b', 'nrwu', 'bdw', 'hu', 'rH', 'I', 'O', 'bO', 'hK', 'k'],
+    rules: ['r', 'd', 'w', 'b', 'nrwu', 'bdw', 'hu', 'rH', 'I', 'O', 'bO', 'hK', 'k', 'hT', 'T'],
   },
   'ck-sea': {
     map: HFNS,
@@ -82,7 +86,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 17,
     quickVP: 13,
     maxTurns: 5000,
-    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'wHu', 'I', 'O'],
+    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'wHu', 'I', 'O', 'fT'],
   },
   // The maps added on 2 October: Four Islands, Treasure Fog, Classic and the Isles.
   'four-islands': {
@@ -101,7 +105,7 @@ const SIMS: Record<string, Scenario> = {
     map: SCENARIOS['treasure-fog']!,
     players: [3, 4],
     maxTurns: 3000,
-    rules: ['n', 'b', 'f', 'hu'],
+    rules: ['n', 'b', 'f', 'hu', 'fT'],
   },
   'classic-isles': {
     map: SCENARIOS['classic-isles']!,
@@ -140,14 +144,14 @@ const SIMS: Record<string, Scenario> = {
     winVP: 17,
     quickVP: 13,
     maxTurns: 5000,
-    rules: ['r', 'd', 'w', 'f', 'hu', 'I'],
+    rules: ['r', 'd', 'w', 'f', 'hu', 'I', 'T'],
   },
   // SPEC 10.5: a test map with treasures, in Seafarers and in Full game mode.
   treasures: {
     map: treasureTest as unknown as MapData,
     players: [3, 4],
     maxTurns: 3000,
-    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'I'],
+    rules: ['n', 'b', 'nb', 'f', 'nbfu', 'hu', 'I', 'fT'],
   },
   'treasures-ck': {
     map: treasureTest as unknown as MapData,
@@ -156,7 +160,7 @@ const SIMS: Record<string, Scenario> = {
     winVP: 17,
     quickVP: 13,
     maxTurns: 5000,
-    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O'],
+    rules: ['r', 'd', 'w', 'f', 'nbfu', 'rdw', 'hu', 'I', 'O', 'hT'],
   },
 };
 for (const k of ['classic', 'heading-for-new-shores', 'ck', 'ck-sea', 'treasures-ck'] as const) {
@@ -233,6 +237,7 @@ function parseSeed(seed: string): {
   if (hr?.includes('w')) houseRules.barbarianDelay = 2;
   if (hr?.includes('h')) houseRules.handBack = true;
   if (hr?.includes('u')) houseRules.undo = true;
+  if (hr?.includes('T')) Object.assign(houseRules, { undo: true, undoTurn: true });
   if (hr?.includes('k')) houseRules.diceDeck = 'full';
   if (hr?.includes('K')) houseRules.diceDeck = 'trimmed';
   if (hr?.includes('H')) Object.assign(houseRules, { handBack: true, handBackSetup: true });

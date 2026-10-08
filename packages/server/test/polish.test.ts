@@ -184,7 +184,12 @@ describe('game rules during the game', () => {
     expect(other.last('ack').ok).toBe(false);
     send(turn, { t: 'act', id: 'r2', action: { type: 'setRule', rule: 'bank3to1', value: true } });
     expect(turn.last('ack').ok).toBe(true);
-    expect(state(code).config.houseRules).toEqual({ handBack: true, undo: true, bank3to1: true });
+    expect(state(code).config.houseRules).toEqual({
+      handBack: true,
+      undo: true,
+      undoTurn: true,
+      bank3to1: true,
+    });
     expect(rooms.getRoom(code)!.options.houseRules.bank3to1).toBe(true);
     const log = other.last('update').log;
     expect(log.some((it) => it.k === 'ev' && it.e.k === 'rule')).toBe(true);

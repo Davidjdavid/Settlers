@@ -59,7 +59,7 @@ const WEIGHT: Record<Action['type'], number> = {
   setup: 1, roll: 1, robber: 1, freeRoad: 5, skipRoads: 0.2,
   city: 40, settlement: 40, buyDev: 6, road: 4,
   playKnight: 3, playRoads: 2, playPlenty: 2, playMono: 1,
-  bank: 1.5, end: 3, confirm: 8, cancel: 0.5, respond: 2,
+  bank: 1.5, bankTrade: 0, end: 3, confirm: 8, cancel: 0.5, respond: 2,
   discard: 1, offer: 1,
   ship: 6, freeShip: 5, moveShip: 1, pirate: 1, chooseGold: 1,
   improve: 25, wall: 4, knight: 6, promote: 4, activate: 5, moveKnight: 1.5, chase: 3,
@@ -96,6 +96,36 @@ export function randomOffer(s: GameState, p: Seat, rng: RngState): Action | null
     give: { [give]: 1 + nextInt(rng, Math.min(2, res[give]!)) },
     want: { [pick(rng, wants)]: 1 },
   };
+}
+
+/**
+ * Several bank trades at once (SPEC 13.2), valid by construction: some whole trades of some cards,
+ * for as many cards of other kinds as the bank has.
+ */
+function randomBankTrade(s: GameState, p: Seat, rng: RngState): Action | null {
+  const res = s.players[p]!.res;
+  const kinds = cardKinds(s);
+  const give: PartialRes = {};
+  let lots = 0;
+  for (const r of kinds) {
+    const rate = rateFor(s, p, r);
+    const most = Math.floor(res[r]! / rate);
+    if (most && chance(rng, 0.6)) {
+      const k = 1 + nextInt(rng, most);
+      (give as Cards)[r] = k * rate;
+      lots += k;
+    }
+  }
+  const left = { ...s.bank };
+  const get: PartialRes = {};
+  for (let i = 0; i < lots; i++) {
+    const pool = kinds.filter((r) => !(give as Cards)[r] && left[r]! > 0);
+    if (!pool.length) return null;
+    const r = pick(rng, pool);
+    left[r]!--;
+    (get as Cards)[r] = ((get as Cards)[r] ?? 0) + 1;
+  }
+  return lots ? { type: 'bankTrade', give, get } : null;
 }
 
 /** Bank trades that move the player toward something they want to build. */
@@ -210,9 +240,15 @@ function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
     if (!b.refused && b.from !== s.turn) return [b.from, { type: 'askBack' }];
     if (chance(rng, 0.3)) return [s.turn, { type: 'handBack' }];
   }
-  // Undo: ask, answer (mostly yes) or withdraw now and then.
+  // Undo the whole turn now and then (SPEC 13.2).
+  if (s.turnStart && chance(rng, 0.02)) {
+    const ask = legalActions(s, s.turn).find((a) => a.type === 'askUndo' && a.turn);
+    if (ask) return [s.turn, ask];
+  }
+  // Undo: ask, answer (mostly yes) or withdraw now and then. Any other move cancels a request, so
+  // one that's been asked is mostly answered at once, or undos would hardly ever happen.
   const u = s.undo;
-  if (u && chance(rng, 0.15)) {
+  if (u && chance(rng, u.asked ? 0.7 : 0.15)) {
     if (!u.asked) return [u.p, { type: 'askUndo' }];
     const waiting = s.players.map((_, i) => i).filter((i) => i !== u.p && !u.ok.includes(i));
     if (waiting.length && chance(rng, 0.85))
@@ -252,6 +288,10 @@ function chooseMove(s: GameState, rng: RngState): [Seat, Action] {
     const offer = randomOffer(s, p, rng);
     if (offer) return [p, offer];
   }
+  if (s.stage === 'main' && chance(rng, 0.02)) {
+    const basket = randomBankTrade(s, p, rng);
+    if (basket) return [p, basket];
+  }
   const acts = legalActions(s, p).filter((a) => a.type !== 'respond' && a.type !== 'cancel');
   const main = s.stage === 'main';
   return [
@@ -277,6 +317,11 @@ function fuzzAction(s: GameState, rng: RngState): [Seat, Action] {
     { type: 'discard', cards: { gold: 1 } },
     { type: 'offer', give: { wood: 99 }, want: { ore: 1 } },
     { type: 'bank', give: 'wood', get: 'wood' },
+    { type: 'bankTrade', give: { wood: 4 }, get: { wood: 1 } },
+    { type: 'bankTrade', give: { wood: 3, brick: 1 }, get: { ore: 1 } },
+    { type: 'bankTrade', give: { gold: 4 }, get: { ore: 1 } },
+    { type: 'bankTrade', give: { wood: 4 }, get: { ore: 2 } },
+    { type: 'askUndo', turn: false },
     { type: 'playPlenty', r1: 'gold', r2: 'ore' },
     { type: 'confirm', id: 9999, with: 0 },
     { type: 'nonsense' },
@@ -336,6 +381,8 @@ function randomCandidates(s: GameState, rng: RngState): [Seat, Action][] {
         { type: 'setup', v, e: geo(s).verts[v]!.edges[0]!, ship: true },
       );
     }
+    // Undo my turn: offered exactly when allowed (SPEC 13.2).
+    cands.push({ type: 'askUndo', turn: true });
     out.push([p, pick(rng, cands)]);
   }
   return out;
@@ -487,6 +534,22 @@ function eventLeakCheck(
 }
 
 /** JSON with sorted keys, to compare states regardless of key order. */
+/** The hidden decks in a fixed order, for comparing games up to a shuffle (SPEC 13.2). */
+function sortedDecks(x: GameState): GameState {
+  const y = cloneJson(x);
+  const sort = <T>(a: T[] | undefined) => a?.sort((p, q) => String(p).localeCompare(String(q)));
+  if (y.sea) {
+    sort(y.sea.fog.terrain);
+    y.sea.fog.numbers.sort((a, b) => a - b);
+  }
+  if (y.tr) {
+    sort(y.tr.deck);
+    sort(y.tr.fogDeck);
+  }
+  if (y.ck) for (const t of TRACKS) sort(y.ck.decks[t]);
+  return y;
+}
+
 export function canonical(x: unknown): string {
   return JSON.stringify(x, (_k, v) =>
     v && typeof v === 'object' && !Array.isArray(v)
@@ -515,7 +578,7 @@ const UNDO_TYPES = new Set(['askUndo', 'answerUndo', 'cancelUndo']);
 // Kept separately from the engine's lists, so a move added there by mistake is caught here.
 const UNDOABLE_TYPES = new Set([
   'setup', 'road', 'ship', 'settlement', 'city', 'freeRoad', 'freeShip', 'moveShip', 'robber', 'pirate',
-  'knight', 'wall', 'promote', 'activate', 'moveKnight', 'improve', 'bank',
+  'knight', 'wall', 'promote', 'activate', 'moveKnight', 'improve', 'bank', 'bankTrade',
 ]); // prettier-ignore
 const SECRET_EVENTS = new Set(['roll', 'steal', 'buyDev', 'draw', 'discover', 'spy', 'give', 'gold']);
 
@@ -717,11 +780,41 @@ export function simulate(seed: string, nPlayers: number, opts: SimOptions = {}):
       const same = (x: GameState) => canonical({ ...x, seq: 0, config: null });
       if (same(s) !== same(prev.back!.state!)) fail('hand-back did not restore the turn exactly');
     }
-    // An undo restores the game exactly as it was before the move (SPEC 5.10).
-    if (r.events.some((e) => e.k === 'undo')) {
+    // An undo restores the game exactly as it was before the move (SPEC 5.10), or a whole turn's
+    // undo as it was at the turn's start, but for the random numbers and the hidden decks, which
+    // are shuffled (SPEC 13.2).
+    const undoEv = r.events.find((e) => e.k === 'undo');
+    if (undoEv?.k === 'undo' && undoEv.turn) {
+      const t0 = prev.turnStart!;
+      const same = (x: GameState) => {
+        const { config: _c, rng: _r, turnStart: _t, ...rest } = sortedDecks(x);
+        void _c;
+        void _r;
+        void _t;
+        return canonical({ ...rest, seq: 0 });
+      };
+      if (same(s) !== same(t0.state!)) fail('undo of a turn did not restore its start exactly');
+      if (!s.turnStart || s.turnStart.n !== 0 || canonical(s.turnStart.state) !== canonical(t0.state))
+        fail('undo of a turn lost its start');
+      // Random numbers used since the start aren't used again.
+      if (canonical(prev.rng) !== canonical(t0.state!.rng) && canonical(s.rng) === canonical(t0.state!.rng))
+        fail('undo of a turn put the random numbers back');
+    } else if (undoEv) {
       const same = (x: GameState) => canonical({ ...x, seq: 0, config: null });
       if (same(s) !== same(prev.undo!.state!)) fail('undo did not restore the game exactly');
     }
+    // The turn's start (SPEC 13.2): taken once, when the turn first reaches its main part; then
+    // left alone until the turn ends.
+    const t0 = prev.turnStart;
+    const t1 = s.turnStart;
+    if (t1 && t1.seq === s.seq) {
+      if (t0 && t0.turnN === s.turnN) fail('turn start taken twice in a turn');
+      const strip = (x: GameState) => canonical({ ...x, undo: null, back: null, turnStart: null });
+      if (s.stage !== 'main' || strip(s) !== strip(t1.state!)) fail('turn start is not the game as it was');
+    } else if (t1 && t0 && t0.turnN === t1.turnN && canonical(t0.state) !== canonical(t1.state)) {
+      fail('turn start changed during the turn');
+    }
+    if (t1 && !s.config.houseRules?.undoTurn) fail('turn start without the rule');
     // After any other move, the undo on offer (if any) is for exactly that move.
     if (s.undo && !UNDO_TYPES.has(a.type)) {
       const same = (x: GameState) => canonical({ ...x, seq: 0, undo: null });

@@ -18,6 +18,7 @@ import {
   type RuleKey,
   type Seat,
 } from '@settlers/engine';
+import type { LogItem } from '@settlers/server/protocol';
 import { CARD_LABEL, DEV_LABEL, PROGRESS_LABEL, RES_LABEL, TRACK_LABEL } from './art';
 
 /** Who's at the table: enough to name players (the log keeps this small for speed). */
@@ -420,13 +421,20 @@ export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
     case 'refuseBack':
       return one(L`${P(e.p)} kept the dice`);
     case 'askUndo':
-      return one(L`${P(e.p)} asked to undo their last move`);
+      return one(
+        e.turn ? L`${P(e.p)} asked to undo their whole turn` : L`${P(e.p)} asked to undo their last move`,
+      );
     case 'answerUndo':
       return one(e.yes ? L`${P(e.p)} agreed to the undo` : L`${P(e.p)} said no to the undo`);
     case 'cancelUndo':
       return one(L`${P(e.p)} withdrew the undo request`);
     case 'undo':
-      return one(L`${P(e.p, 'poss')} last move was undone`, { big: true });
+      return one(
+        e.turn
+          ? L`${P(e.p, 'poss')} turn was undone, back to just after the roll`
+          : L`${P(e.p, 'poss')} last move was undone`,
+        { big: true },
+      );
     case 'rule':
       return one(L`${P(e.p)} ${ruleText(e.rule, e.value)}`, { big: true });
     case 'askKeep':
@@ -440,6 +448,83 @@ export function eventLines(v: PlayerView, e: GameEvent | LogNote): Line[] {
     case 'deckShuffled':
       return one(L`The dice deck was shuffled: ${String(e.left)} cards`);
   }
+}
+
+/** Several bank trades made in one move (SPEC 13.2), as one line. */
+export function bankLines(evs: Extract<GameEvent, { k: 'bank' }>[]): Line[] {
+  const give: Partial<Record<Card, number>> = {};
+  const get: Partial<Record<Card, number>> = {};
+  for (const e of evs) {
+    give[e.give] = (give[e.give] ?? 0) + e.n;
+    get[e.get] = (get[e.get] ?? 0) + 1;
+  }
+  return [{ parts: L`${P(evs[0]!.p)} traded ${C(give)} to the bank for ${C(get)}` }];
+}
+
+/** Moves of a turn that only talk about the game (asking, answering, rules): not taken back. */
+const TALK = new Set<string>([
+  'askUndo',
+  'answerUndo',
+  'cancelUndo',
+  'rule',
+  'askBack',
+  'refuseBack',
+  'offer',
+]);
+
+/**
+ * What "Undo my turn" takes back (SPEC 13.2), from the log since the turn's start: each move's
+ * lines (moves already undone or handed back left out), and who saw what along the way.
+ */
+export function turnUndoSummary(v: PlayerView, log: readonly LogItem[]): { lines: Line[]; seen: string[] } {
+  const from = v.turnUndo?.from;
+  if (from == null) return { lines: [], seen: [] };
+  // Each move's events, in order; an undo takes back the move before it, a whole turn's all of them.
+  let moves: GameEvent[][] = [];
+  let seq = -1;
+  for (const it of log) {
+    if (it.k !== 'ev' || it.seq <= from || isLogNote(it.e)) continue;
+    const e = it.e;
+    if (e.k === 'undo' || e.k === 'handBack') {
+      if (e.k === 'undo' && e.turn) moves = [];
+      else {
+        // The last real move (not talk) goes.
+        for (let i = moves.length - 1; i >= 0; i--)
+          if (moves[i]!.some((x) => !TALK.has(x.k))) {
+            moves.splice(i, 1);
+            break;
+          }
+      }
+      seq = -1;
+      continue;
+    }
+    if (it.seq !== seq) moves.push([]);
+    seq = it.seq;
+    moves[moves.length - 1]!.push(e);
+  }
+  const lines: Line[] = [];
+  const seen = new Set<string>();
+  const who = (p: Seat) => nameOf(v, p);
+  for (const m of moves) {
+    const evs = m.filter((e) => !TALK.has(e.k));
+    const bank = evs.filter((e): e is Extract<GameEvent, { k: 'bank' }> => e.k === 'bank');
+    if (bank.length > 1) lines.push(...bankLines(bank));
+    for (const e of evs) {
+      if (bank.length > 1 && e.k === 'bank') continue;
+      lines.push(...eventLines(v, e).map((l) => ({ parts: l.parts })));
+      if (e.k === 'buyDev') seen.add(`${who(e.p)} saw the card ${e.p === v.me ? 'you' : 'they'} bought`);
+      if (e.k === 'draw') seen.add(`${who(e.p)} saw the progress card ${e.p === v.me ? 'you' : 'they'} drew`);
+      if (e.k === 'treasureDev') seen.add(`${who(e.p)} saw the card from the treasure`);
+      if (e.k === 'steal')
+        seen.add(`${who(e.p)} and ${nameOf(v, e.from).replace(/^You$/, 'you')} saw the card stolen`);
+      if (e.k === 'discover') seen.add('Everyone saw what was under the fog');
+      if (e.k === 'treasure') seen.add('Everyone saw the treasure found');
+      if (e.k === 'spy')
+        seen.add(`${who(e.p)} saw a progress card of ${nameOf(v, e.from).replace(/^You$/, 'yours')}`);
+      if (e.k === 'playDev' || e.k === 'progress') seen.add('Everyone saw the cards played');
+    }
+  }
+  return { lines, seen: [...seen] };
 }
 
 /**
@@ -472,6 +557,7 @@ export const RULE_LABEL: Record<RuleKey, string> = {
   handBack: 'Players can hand the dice back',
   handBackSetup: 'Hand the dice back during setup too',
   undo: 'Players can ask to undo a move',
+  undoTurn: 'Players can ask to undo a whole turn',
   diceDeck: 'Dice deck',
 };
 

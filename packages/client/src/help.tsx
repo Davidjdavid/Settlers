@@ -6,7 +6,7 @@ import type { PlayerSettings } from '@settlers/server/protocol';
 /** The on/off switches (sounds and the pinned dice have their own pages). */
 export type SettingKey = Exclude<
   keyof PlayerSettings,
-  'sounds' | 'dicePin' | 'layout' | 'eventDieText' | 'talk' | 'artStyle' | 'music'
+  'sounds' | 'dicePin' | 'layout' | 'eventDieText' | 'talk' | 'artStyle' | 'music' | 'handOrder'
 >;
 
 export const SETTING_LABEL: Record<SettingKey, string> = {
@@ -66,6 +66,8 @@ export const RULE_HELP: Record<RuleKey, string> = {
   handBack:
     'After you end your turn you can ask “Wait, give the dice back” until the next player does anything (rolls, plays a card or anything else). They choose to hand them back or not, and can hand them back without being asked. Your turn comes back exactly as it was: same roll, same cards, cards bought that turn still not playable. Only one step back. A CPU always hands back.',
   undo: 'Right after your own move you can ask to undo it. Everyone else at the table has to agree (CPUs always do), and one “no” cancels it. Only your most recent move, only before anyone else acts, and never a roll, a steal, a card drawn or played, or anything else that showed something hidden.',
+  undoTurn:
+    'On your own turn you can ask to undo everything since your roll: builds, cards bought or played, trades, steals, fog uncovered. Everyone else has to agree, and they’re told exactly what will be taken back and what was seen. The roll stays. Afterwards the hidden decks (development and progress cards, fog, treasures) are shuffled, so nothing seen tells anyone what comes next. Works together with “undo a move”.',
   handBackSetup:
     'Also allows handing the dice back after a starting settlement and road are placed, so the player who just placed can take it back. When off, starting placements are final.',
   diceDeck:

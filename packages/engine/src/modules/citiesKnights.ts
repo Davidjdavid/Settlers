@@ -440,6 +440,11 @@ export const citiesKnights: RuleModule = {
     owe(s, owed, events);
   },
 
+  // The progress decks (SPEC 13.2).
+  reshuffle(s) {
+    for (const t of TRACKS) shuffle(ck(s).decks[t], s.rng);
+  },
+
   onTurnEnd(s) {
     const c = ck(s);
     for (const k of c.knights) {

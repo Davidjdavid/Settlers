@@ -401,7 +401,7 @@ const SEA_MAPS: [RoomOptions['scenario'], string][] = [
 const modeOf = (o: RoomOptions): Mode =>
   o.scenario === 'classic' ? (o.ck ? 'knights' : 'base') : o.ck ? 'full' : 'seafarers';
 
-type Flag = 'no7FirstRound' | 'bank3to1' | 'freeShipMoves' | 'rerollBeforeAttack' | 'noDiscardBeforeAttack' | 'handBack' | 'handBackSetup'; // prettier-ignore
+type Flag = 'no7FirstRound' | 'bank3to1' | 'freeShipMoves' | 'rerollBeforeAttack' | 'noDiscardBeforeAttack' | 'handBack' | 'handBackSetup' | 'undo' | 'undoTurn'; // prettier-ignore
 const HOUSE_RULES: { k: Flag; seafarers?: boolean; ck?: boolean; defaultOn?: boolean }[] = [
   { k: 'no7FirstRound' },
   { k: 'bank3to1' },
@@ -410,6 +410,8 @@ const HOUSE_RULES: { k: Flag; seafarers?: boolean; ck?: boolean; defaultOn?: boo
   { k: 'noDiscardBeforeAttack', ck: true },
   { k: 'handBack', defaultOn: true },
   { k: 'handBackSetup' },
+  { k: 'undo', defaultOn: true },
+  { k: 'undoTurn', defaultOn: true },
 ];
 
 /** Cities & Knights adds 3 points to a scenario's target and needs 3 or 4 players. */
@@ -549,7 +551,11 @@ function Options({ room, editable }: { room: RoomInfo; editable: boolean }) {
             <input
               type="checkbox"
               checked={on(h)}
-              disabled={!editable || (h.k === 'handBackSetup' && o.houseRules.handBack === false)}
+              disabled={
+                !editable ||
+                (h.k === 'handBackSetup' && o.houseRules.handBack === false) ||
+                (h.k === 'undoTurn' && o.houseRules.undo === false)
+              }
               data-testid={`rule-${h.k}`}
               onChange={(e) =>
                 set((o) => ({ ...o, houseRules: { ...o.houseRules, [h.k]: e.target.checked } }))

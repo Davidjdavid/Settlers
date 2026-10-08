@@ -105,18 +105,29 @@ describe('room options', () => {
   });
 
   it('a classic game with default options keeps exactly the classic config', () => {
-    // New games can hand the dice back (SPEC 4.4); turning it off gives the classic config.
-    expect(gameConfigFor(DEFAULT_OPTIONS)).toEqual({ houseRules: { handBack: true, undo: true } });
+    // New games can hand the dice back (SPEC 4.4) and undo a move or a whole turn (5.10, 13.2);
+    // turning those off gives the classic config.
+    expect(gameConfigFor(DEFAULT_OPTIONS)).toEqual({
+      houseRules: { handBack: true, undo: true, undoTurn: true },
+    });
     expect(gameConfigFor({ ...DEFAULT_OPTIONS, houseRules: { handBack: false, undo: false } })).toEqual({});
+    // A whole turn can be switched off on its own, and never comes without Undo.
+    expect(gameConfigFor({ ...DEFAULT_OPTIONS, houseRules: { undoTurn: false } }).houseRules).toEqual({
+      handBack: true,
+      undo: true,
+    });
+    expect(
+      gameConfigFor({ ...DEFAULT_OPTIONS, houseRules: { handBack: false, undo: false, undoTurn: true } }),
+    ).toEqual({});
     expect(
       gameConfigFor({ ...DEFAULT_OPTIONS, winVP: 12, houseRules: { bank3to1: true, freeShipMoves: true } }),
     ).toEqual({
       winVP: 12,
-      houseRules: { bank3to1: true, handBack: true, undo: true },
+      houseRules: { bank3to1: true, handBack: true, undo: true, undoTurn: true },
     });
     const sea = gameConfigFor({ ...HFNS, houseRules: { freeShipMoves: true } });
     expect(sea.map?.id).toBe('heading-for-new-shores');
-    expect(sea.houseRules).toEqual({ freeShipMoves: true, handBack: true, undo: true });
+    expect(sea.houseRules).toEqual({ freeShipMoves: true, handBack: true, undo: true, undoTurn: true });
   });
 
   it('Cities & Knights adds its module, needs 3 or 4 players, and only then takes its house rules', () => {
@@ -129,7 +140,7 @@ describe('room options', () => {
     expect(gameConfigFor(ck)).toEqual({
       modules: ['citiesKnights'],
       winVP: 13,
-      houseRules: { rerollBeforeAttack: true, barbarianDelay: 2, handBack: true, undo: true },
+      houseRules: { rerollBeforeAttack: true, barbarianDelay: 2, handBack: true, undo: true, undoTurn: true },
       // New Knights games have a limited bank: 12 of each commodity (SPEC 8.1).
       bank: 'limited',
     });
@@ -137,7 +148,7 @@ describe('room options', () => {
     expect(gameConfigFor({ ...ck, bank: 'unlimited' }).bank).toBe('unlimited');
     expect(gameConfigFor({ ...DEFAULT_OPTIONS, bank: 'unlimited' })).toEqual({
       bank: 'unlimited',
-      houseRules: { handBack: true, undo: true },
+      houseRules: { handBack: true, undo: true, undoTurn: true },
     });
     const both = gameConfigFor({ ...HFNS, ck: true, winVP: 17 });
     expect(both.modules).toEqual(['seafarers', 'citiesKnights']);
