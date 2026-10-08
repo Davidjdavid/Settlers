@@ -314,6 +314,12 @@ export function Game({
   // Cities & Knights choices owed: board picks glow; others open their sheet.
   const owe = myOwe(v);
   const oweKey = owe ? `${v.seq}:${JSON.stringify(owe)}` : '';
+  // A knight's sheet closes if the knight goes while it's open (chased away, a Deserter): drawing
+  // a sheet for a knight that isn't there crashed the screen.
+  const sheetKnight = sheet?.k === 'knightAct' ? v.ck?.knights[sheet.at] : undefined;
+  useEffect(() => {
+    if (sheet?.k === 'knightAct' && !sheetKnight) setSheet(null);
+  }, [sheet, sheetKnight]);
   // When the game ends, close any sheet that asks for a move: it can't be answered any more.
   useEffect(() => {
     if (v.phase !== 'over') return;
@@ -760,7 +766,7 @@ export function Game({
   // The Smith's picks, drawn at their new level until Upgrade or Cancel.
   const smithGhosts: Ghost[] | undefined =
     mode === 'card' && card && paramOf(card.plays) === 'vs' && card.picks.length
-      ? card.picks.map((x) => ({ kind: 'knight', at: x, lvl: (v.ck!.knights[x]?.lvl ?? 1) + 1 }))
+      ? card.picks.map((x) => ({ kind: 'knight', at: x, lvl: Math.min(3, (v.ck!.knights[x]?.lvl ?? 1) + 1) }))
       : undefined;
 
   // The Roll button and the dice do exactly the same thing (SPEC 5.3).
@@ -1832,7 +1838,7 @@ export function Game({
           }}
         />
       ) : null}
-      {sheet?.k === 'knightAct' ? (
+      {sheet?.k === 'knightAct' && v.ck?.knights[sheet.at] ? (
         <KnightSheet
           v={v}
           at={sheet.at}

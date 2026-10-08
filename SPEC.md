@@ -1099,6 +1099,16 @@ Asked for: "a way for someone to link their Spotify playlist or YouTube videos",
 - YouTube's player is loaded only once someone adds music, so a room without music loads nothing from YouTube.
 - Tests: the server's music state and its timing on a fake clock (`music.test.ts`); in the browser, three screens with a stand-in player (YouTube isn't reachable from the test machines): one adds a link, all play it at the same point, pause and skip reach everyone, a playlist moving on by itself is followed by everyone and named right, a late joiner and a reload land in sync, volume and mute apply at once (for a watcher too) and are each person's own, Stop keeps the queue and Clear asks first.
 
+## Milestone 13: After the first full game night (8 October)
+
+Notes from a full game with friends: it worked, but one screen crashed upgrading a knight, the dice stats looked missing at first, and the game "felt like an engineer made it". Built in stages; nothing goes live during a game night.
+
+### 13.1 Reliability
+
+- **A screen that hits an error says so** ("Something went wrong on this screen", with Reload and a note that the game is safe on the server) instead of going blank, and sends the error, where it happened and the move number to the server's log (`clientError`, at most 10 per page load and per connection). Errors outside drawing (clicks, timers) are sent too.
+- **A knight's sheet closes if the knight goes while it's open** (chased away, a Deserter); drawing it for a missing knight crashed the screen.
+- **The pinned dice show "No rolls yet"** with the expected shape before the first roll (an empty box looked like the stats hadn't loaded).
+
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
 - Options for a more competent CPU player.

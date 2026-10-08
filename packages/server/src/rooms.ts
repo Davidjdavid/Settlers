@@ -313,6 +313,8 @@ export class Rooms {
     switch (msg.t) {
       case 'ping':
         return conn.send({ t: 'pong' });
+      case 'clientError':
+        return this.clientError(conn, msg);
       case 'create':
         return this.create(conn, !!msg.full);
       case 'hello':
@@ -1760,6 +1762,21 @@ export class Rooms {
         ...extras,
       });
     }
+  }
+
+  /** Errors each screen has reported, so one stuck in a loop can't flood the log. */
+  private errorsFrom = new WeakMap<Conn, number>();
+  /** A screen hit an error (SPEC 13.1): into the server log with the room, who and where. */
+  private clientError(conn: Conn, m: Extract<ClientMsg, { t: 'clientError' }>) {
+    const n = (this.errorsFrom.get(conn) ?? 0) + 1;
+    this.errorsFrom.set(conn, n);
+    if (n > 10) return;
+    const room = conn.room;
+    const who = room?.seats.find((x) => x.pid === conn.pid)?.nick ?? conn.pid ?? 'someone';
+    const stack = (m.stack ?? '').split('\n').slice(0, 6).join(' | ');
+    this.log(
+      `screen error in room ${room?.code ?? '-'} from ${who} (${m.where ?? '?'}, move ${m.seq ?? '?'}): ${m.msg}${stack ? ` | ${stack}` : ''}${n === 10 ? ' (no more from this screen)' : ''}`,
+    );
   }
 
   /** Public dice stats during a game; the full stats once it's over (SPEC 5.4, 5.5). */

@@ -13,7 +13,7 @@ import {
   type GameState,
   type PartialRes,
 } from '@settlers/engine';
-import type { ClientMsg, ServerMsg } from '../src/protocol';
+import { ClientMsgSchema, type ClientMsg, type ServerMsg } from '../src/protocol';
 import { Rooms, type Conn } from '../src/rooms';
 import { Store } from '../src/store';
 import { joinAs, moves } from './util';
@@ -116,6 +116,29 @@ function randomMove(code: string, conns: FakeConn[], rng: [number, number, numbe
 }
 
 describe('rooms', () => {
+  it('a screen that crashes reports it to the server log, with where and who (and only a few)', () => {
+    const lines: string[] = [];
+    rooms = new Rooms(store, { log: (m) => lines.push(m) });
+    const { code, conns } = table(2);
+    const report = {
+      t: 'clientError',
+      msg: "Cannot read properties of undefined (reading 'lvl')",
+      stack: 'TypeError: …\n    at KnightSheet (ck.tsx:368)\n    at …',
+      where: 'render',
+      seq: 41,
+    } as const;
+    expect(ClientMsgSchema.safeParse(report).success).toBe(true);
+    expect(ClientMsgSchema.safeParse({ ...report, msg: 'x'.repeat(5000) }).success).toBe(false);
+    for (let i = 0; i < 30; i++) send(rooms, conns[1]!, report);
+    const logged = lines.filter((l) => l.includes('screen error'));
+    expect(logged[0]).toContain(code);
+    expect(logged[0]).toContain('P1');
+    expect(logged[0]).toContain("reading 'lvl'");
+    expect(logged[0]).toContain('KnightSheet');
+    // A screen stuck in a loop can't flood the log.
+    expect(logged.length).toBeLessThanOrEqual(10);
+  });
+
   it('creates rooms, seats players and starts a game', () => {
     const { code, conns } = table(3);
     expect(code).toMatch(/^[A-Z0-9]{4}$/);

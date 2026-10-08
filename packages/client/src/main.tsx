@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { botMove, legalActions, seedRng, stateFromView, type PlayerView } from '@settlers/engine';
 import { App } from './App';
+import { CrashCatcher } from './crash';
 import { client } from './net';
 import '@fontsource/figtree/latin-400.css';
 import '@fontsource/figtree/latin-500.css';
@@ -14,7 +15,15 @@ import { played } from './sound';
 
 applySize();
 
-createRoot(document.getElementById('root')!).render(<App />);
+// Errors outside drawing (a click handler, a timer) go to the server's log too (SPEC 13.1).
+window.addEventListener('error', (e) => client.reportError('the page', e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => client.reportError('the page', e.reason));
+
+createRoot(document.getElementById('root')!).render(
+  <CrashCatcher>
+    <App />
+  </CrashCatcher>,
+);
 
 // Hook for the end-to-end test: play your own seat with the engine's bot. It only sees this
 // browser's view and sends moves through the normal connection, like a person clicking.

@@ -578,6 +578,19 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await c.locator(`#board [data-v="${tv.knights[0]}"]`).tap();
     await expect(c.getByTestId('k-activate')).toBeEnabled();
     await c.keyboard.press('Escape');
+    // The knight goes while its sheet is open (chased away, a Deserter): the sheet closes and the
+    // screen carries on (a sheet for a missing knight crashed it).
+    await c.locator(`#board [data-v="${tv.knights[0]}"]`).tap();
+    await expect(c.getByTestId('k-activate')).toBeVisible();
+    await c.evaluate((at) => {
+      const s = (window as any).__settlers;
+      const v = structuredClone(s.state().game);
+      v.ck.knights[at] = null;
+      s.stage(v);
+    }, tv.knights[0]);
+    await expect(c.getByTestId('k-activate')).toHaveCount(0);
+    await expect(c.locator('#board')).toBeVisible();
+    await expect(c.getByTestId('crash-screen')).toHaveCount(0);
 
     /* ---------- Turning down CPU offers on my own (made-up view) ---------- */
     const cpuOffer = () =>
@@ -631,6 +644,17 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     expect(await moves()).toEqual([]);
     await alchemist('main');
     await expect(c.getByTestId('play-alchemist')).toHaveCount(0);
+
+    /* ---------- Something breaks on a screen (SPEC 13.1) ---------- */
+    // A screen that can't draw says so and offers Reload, and the server's log gets the error.
+    await c.evaluate(() => {
+      const s = (window as any).__settlers;
+      s.stage({ ...structuredClone(s.state().game), players: null });
+    });
+    await expect(c.getByTestId('crash-screen')).toContainText('Something went wrong on this screen');
+    await expect.poll(() => server.output).toMatch(/screen error in room \w+ from \w+ \(drawing the screen/);
+    await c.getByTestId('crash-reload').click();
+    await expect(c.locator('#board')).toBeVisible();
 
     // Back to the real game, untouched by any of it.
     await c.reload();

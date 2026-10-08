@@ -546,6 +546,14 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('resetCancel') }),
   z.strictObject({ t: z.literal('claim'), seat: z.number().int().min(0).max(3) }),
   z.strictObject({ t: z.literal('ping') }),
+  /** A screen hit an error (SPEC 13.1): logged on the server so it can be fixed. */
+  z.strictObject({
+    t: z.literal('clientError'),
+    msg: z.string().max(500),
+    stack: z.string().max(4000).optional(),
+    where: z.string().max(200).optional(),
+    seq: z.number().int().min(-1).max(1_000_000).optional(),
+  }),
 ]);
 
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;

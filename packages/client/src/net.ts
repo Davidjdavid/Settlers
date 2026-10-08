@@ -216,6 +216,8 @@ export class Client {
       this.set({ status: 'live' });
       if (this.state.roomCode) this.hello(this.state.roomCode);
       else if (this.creating) this.send({ t: 'create', full: true });
+      // Errors from while the connection was down, after hello so the server knows who.
+      for (const m of this.errorQueue.splice(0)) this.send(m);
     };
     ws.onmessage = (ev) => {
       this.lastMsgAt = Date.now();
@@ -262,6 +264,25 @@ export class Client {
       if (Date.now() - this.lastMsgAt > 45_000) this.ws.close();
       else this.send({ t: 'ping' });
     }
+  }
+
+  /**
+   * A screen error, to the server's log (SPEC 13.1): what, where and at which move, at most 10
+   * from one page load. Sent once the connection is back if it's down.
+   */
+  private errorsSent = 0;
+  private errorQueue: ClientMsg[] = [];
+  reportError(where: string, err: unknown, extra?: string) {
+    if (++this.errorsSent > 10) return;
+    const e = err instanceof Error ? err : new Error(String(err));
+    const m: ClientMsg = {
+      t: 'clientError',
+      msg: `${e.name}: ${e.message}`.slice(0, 500),
+      stack: `${e.stack ?? ''}${extra ? `\n${extra}` : ''}`.slice(0, 4000),
+      where: where.slice(0, 200),
+      seq: this.state.game?.seq ?? -1,
+    };
+    if (!this.send(m)) this.errorQueue.push(m);
   }
 
   private send(m: ClientMsg): boolean {
