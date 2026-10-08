@@ -103,3 +103,38 @@ Every motion has a sound: dice rattle and clack, tiles hop, cards swish, pieces 
 ## 13. The mock-up
 
 An interactive page with made-up data from a real Full game (Knights + Seafarers, four players), built from the same pieces the real screen will use. It plays through: someone else's roll, a 7 and a steal from you, a city and Longest Road, your turn with its recap, your roll, building a city, a trade, ending the turn, the barbarians landing, and a win; on a laptop and on a phone. Not in the mock-up: the lobby, the map editor, the stats pages and settings; they follow in the same style.
+
+## 14. What we missed at the table (9 October)
+
+From the group, after playing on the standard screen:
+
+- **The trade buttons are far from the cards.** You look at your cards, then hunt for the button that trades them.
+- **How many progress cards does someone have?** Little coloured squares are hard to count at a glance.
+- **One player didn't know they had progress cards**: their cards sat at the bottom of the screen, out of sight.
+- **Things happened and nobody noticed.** Who has a golden gate (a metropolis)? Who took Longest Road first, and did they lose it?
+
+What the reading says about each (the SixArm UI/UX Design Guide, Nielsen's heuristics, Norman's *Design of Everyday Things*, Lidwell's *Universal Principles of Design*, NN/g on change blindness, and Board Game Arena players' notes):
+
+- **Proximity** (Gestalt): things used together sit together. Trading is about your cards, so the trade buttons sit right beside your hand, and the build buttons right beside them: cards → what they buy. **Fitts's law**: the actions you use every turn are big and close to where your eyes and pointer already are.
+- **Recognition rather than recall** (Nielsen 6): you shouldn't have to remember or count. Progress cards show as card backs with a big number on each seat ("3"), coloured by the deck they came from, never as tiny squares to count.
+- **Visibility of system status** (Nielsen 1) and **discoverability** (Norman): anything you hold or owe is in view without scrolling. Your progress cards sit in your tray in the middle of the bottom edge, never below the fold. A card you just drew flies in and its slot glows until you've seen it. A card you can play now is lit.
+- **Change blindness** (NN/g): people miss changes outside where they're looking, even big ones. A short toast vanishes before it's read. So every important change gets two things: a **moment** (a callout in the middle of the screen, in the player's colour, with a sound) for the change itself, and a **lasting place** that shows the result (who holds it now). Things that matter less get a smaller cue on the seat that did them, and the log keeps everything.
+- **Rank by the cost of missing it**: big for points, awards and metropolises changing hands, a 7, the robber on your tile, a steal from you, the barbarians; medium for builds and cards played (on the player's seat for a few seconds); small for trades and everything else (the log).
+- **Information you've seen stays on screen** (Board Game Arena players): the last rolls stay; the recap waits until you close it; the awards shelf (below) never goes away.
+
+So the new screen adds:
+
+- **The awards shelf**, beside the race track: Longest Road (or Trade Route), Largest Army, and each metropolis (Science, Trade, Politics: the golden gates), each with the holder's colour and name, or "nobody yet". When one changes hands the moment says so ("Sam took Longest Road from Joe"), the award slides from the old holder's seat to the new one's, and the shelf keeps "from Joe" under it until the next turn. Hover or tap: who held it first, and since when.
+- **Progress cards counted on every seat**: one card back per deck (green, yellow, blue) with how many, and the total, in big type.
+- **Your hand is one strip**: your cards, then Trade with players and the bank right next to them, then build, then your development or progress cards, then the big button. Nothing of yours is ever below the fold.
+
+## 15. The playable screen (laptops and monitors)
+
+Built in the real game as an opt-in setting ("New screen", in the menu and My settings), using the current board and its art styles, so the group can try it in a real game. Phones and tablets keep the standard screen for now. Laptop first (1366×768), up to large monitors (1920×1080 and wider).
+
+- **Top bar**: the menu (with the room code), the race track from 0 to the target with everyone's token, the awards shelf, the dice stats and music.
+- **Left column**: everyone's seat in turn order, a marker on whoever is playing and "You're next" when you are. Each seat: name and colour, points, cards in hand (red over the limit), development or progress cards by deck, knights and road length, awards, and what they just did.
+- **Middle**: the board. Over it: what to do now, and the moments.
+- **Right column**: the last five rolls (who, both dice, the event die), newest first and biggest; "Since your last turn"; then the log and table talk.
+- **Bottom strip**: your hand (section 14), with the big button at the right end: Roll, then End turn; when it's not your turn, whose turn it is and what they're doing.
+- **Your turn** puts a glowing frame in your colour round the whole screen and says "Your turn!" across the middle; the recap opens beside the board.

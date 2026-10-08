@@ -34,6 +34,7 @@ import { HandCards } from './hand';
 import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
 import { handRisk, tradeRisk, type TradeRisk } from './handrisk';
+import { IslePlay } from './isle/Play';
 import {
   BOARD_OWES, BarbarianBox, BarbarianChip, CardFace, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
   myOwe, owePrompt, paramOf,
@@ -509,6 +510,9 @@ export function Game({
   const my = room.mySettings;
   // Your own layout (SPEC 11): none saved for this kind of screen means the standard screen.
   const device = deviceOf(layoutW);
+  // The new screen (docs/isle.md 15) is for laptops and monitors; narrower screens keep this one.
+  const wide = layoutW >= 1100;
+  const isle = wide && my?.screen === 'new';
   const [editing, setEditing] = useState(false);
   const savedLay = my?.layout?.[device];
   const lay = editing || savedLay ? resolve(savedLay, device) : null;
@@ -1497,17 +1501,20 @@ export function Game({
           onPlayProgress: playProgress,
         })
       : null;
+  const offersEl = (
+    <Offers
+      v={v}
+      busy={busy}
+      ask={(q, go) => ask('confirmTrade', q, go)}
+      warnOver={warnOver}
+      askOver={askOver}
+    />
+  );
   // Your own layout places each part of your hand on its own; the standard screen stacks them.
   const handEl = (
     <section className="dock-wrap" aria-label="Your cards and actions">
       {my?.dicePin && phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} phone /> : null}
-      <Offers
-        v={v}
-        busy={busy}
-        ask={(q, go) => ask('confirmTrade', q, go)}
-        warnOver={warnOver}
-        askOver={askOver}
-      />
+      {offersEl}
       {boxes?.hand}
       {lay ? null : (
         <>
@@ -1811,13 +1818,18 @@ export function Game({
           onRules={() => setSheet({ k: 'rules' })}
           onQuit={me != null && v.phase === 'play' ? () => setSheet({ k: 'quit' }) : undefined}
           onLayout={
-            me != null
+            me != null && !isle
               ? () => {
                   setSheet(null);
                   setEditing(true);
                 }
               : undefined
           }
+          screen={me != null && wide ? (isle ? 'new' : 'standard') : undefined}
+          onScreen={(x) => {
+            setSheet(null);
+            client.saveSettings({ ...(client.state.room?.mySettings ?? {}), screen: x });
+          }}
         />
       ) : null}
       {sheet?.k === 'music' ? <MusicSheet onClose={() => setSheet(null)} /> : null}
@@ -1876,6 +1888,36 @@ export function Game({
       ) : null}
     </>
   );
+  if (isle)
+    return (
+      <IslePlay
+        v={v}
+        room={room}
+        log={log}
+        status={status}
+        busy={busy}
+        dice={dice ?? null}
+        board={boardEl}
+        banners={bannersEl}
+        sheets={sheetsEl}
+        offers={offersEl}
+        talk={talkEl}
+        pm={pm}
+        canRoll={canRoll}
+        rollRef={rollRef}
+        gains={gains}
+        boxes={boxes}
+        connected={connected}
+        cpuLevel={(p) =>
+          v.players[p]!.cpu
+            ? (room.seats.find((x) => x.pid === v.players[p]!.pid)?.levelName ?? 'Easy')
+            : null
+        }
+        onMenu={() => setSheet({ k: 'menu' })}
+        onDice={() => setSheet({ k: 'dice' })}
+        onMusic={() => setSheet({ k: 'music' })}
+      />
+    );
   return (
     <div className={`app${lay ? ' custom' : ''}${editing ? ' editing' : ''}`}>
       <header className="top">

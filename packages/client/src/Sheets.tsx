@@ -554,11 +554,16 @@ export function MenuSheet({
   onRules,
   onQuit,
   onLayout,
+  screen,
+  onScreen,
 }: {
   v: PlayerView | null;
   code: string;
   onClose: () => void;
   onEndGame: () => void;
+  /** Which game screen this player uses (docs/isle.md 15), on laptops and monitors. */
+  screen?: 'standard' | 'new' | undefined;
+  onScreen?: (s: 'standard' | 'new') => void;
   /** "My settings", for a seated player. */
   onSettings?: () => void;
   /** The game's rules, changed by whoever has the dice. */
@@ -596,6 +601,15 @@ export function MenuSheet({
         {onSettings ? (
           <button className="btn" onClick={onSettings} data-testid="menu-settings">
             My settings
+          </button>
+        ) : null}
+        {screen && onScreen ? (
+          <button
+            className={`btn${screen === 'standard' ? ' primary' : ''}`}
+            onClick={() => onScreen(screen === 'new' ? 'standard' : 'new')}
+            data-testid="menu-screen"
+          >
+            {screen === 'new' ? 'Back to the standard screen' : 'Try the new screen'}
           </button>
         ) : null}
         {onLayout ? (

@@ -1204,10 +1204,11 @@ Board styles (3 October) change only the board. The first try at whole-screen lo
 - The design is in `docs/isle.md` ("Isle"): the screen always answers, loudest first, whether it's your turn (the whole screen changes), what just happened (rolls and moves animated where they happen), who's winning (a race track to the target) and what you can do (one big button that never moves).
 - **Mock-up first**: an interactive page with made-up data from a real Full game, on a laptop and a phone, with concept art sent along the way; built once the group likes it.
 - The other looks (Universe, Game Night, Live Broadcast) are on hold.
+- **Playable on the current art (9 October, docs/isle.md 14–15)**: "Try the new screen" in the menu (saved on your profile, only your screen) gives laptops and monitors the new layout around the same board and art styles: the race track and the awards shelf across the top, the seats in turn order on the left (progress cards counted by deck), the last rolls, "Since your last turn" and the log on the right, and your hand in one strip along the bottom (cards, then the trade buttons, then building, then your cards to play, then the big Roll / End turn button). Your turn puts a glowing frame round the screen and says so across the middle; every roll is announced on every screen; awards and metropolises changing hands get a moment and stay on the shelf. Windows narrower than a laptop keep the standard screen. "Back to the standard screen" in the menu switches back.
 
 ### 13.7 Rolls you can't miss
 
-_Planned for the new screen (13.6); not built yet._
+_Built in the new screen (13.6, 9 October): the roll announcement, the last five rolls and "Since your last turn". The standard screen doesn't have them._
 
 A roll flashed by in a corner, and anyone who looked away didn't know what had been rolled, or what the last few rolls were when their turn came.
 

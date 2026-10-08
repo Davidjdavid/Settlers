@@ -237,6 +237,8 @@ export const SettingsSchema = z.strictObject({
       'pikmin',
     ])
     .optional(),
+  /** The game screen (docs/isle.md 15): the standard one, or the new one on laptops and monitors. */
+  screen: z.enum(['standard', 'new']).optional(),
   /** Turn down every trade a CPU offers you, at once (off unless true). */
   noCpuTrades: z.boolean().optional(),
   /** SPEC 9.4: master volume, and each sound's switch, volume and style. */
