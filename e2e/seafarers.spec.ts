@@ -35,7 +35,7 @@ test('three players play a full Seafarers game', async ({ browser }) => {
     const v0 = await view(a);
     expect(v0.rules.modules).toEqual(['seafarers']);
     expect(v0.winVP).toBe(10);
-    expect(v0.rules.houseRules).toEqual({ freeShipMoves: true, handBack: true, undo: true });
+    expect(v0.rules.houseRules).toEqual({ freeShipMoves: true, handBack: true, undo: true, undoTurn: true });
 
     // The first starting settlement by clicking: a coast corner, then a ship.
     const first = await turnPage(t);
