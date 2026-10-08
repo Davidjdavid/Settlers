@@ -31,8 +31,6 @@ import { lineText, listNames, nameOf, rollWithEvent, routeName, turnUndoSummary 
 import { Log } from './log';
 import { DicePin, useLayoutWidth } from './dicepin';
 import { HandCards } from './hand';
-import { MomentLayer, Place } from './momentlayer';
-import { placesOf, pointsOf } from './moments';
 import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
 import { handRisk } from './handrisk';
@@ -1367,7 +1365,6 @@ export function Game({
           <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
         ) : null}
         {my?.dicePin && !phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} /> : null}
-        <MomentLayer v={v} level={my?.moments ?? 'big'} />
         {settingOn(my, 'diceCorner') ? (
           <RollDice
             dice={v.dice}
@@ -1490,8 +1487,6 @@ export function Game({
     </section>
   );
   const barbEl = v.ck ? <BarbarianBox v={v} /> : null;
-  // The scoreboard's places (SPEC 13.4), from the points this screen knows.
-  const places = placesOf(v.players.map((_, p) => pointsOf(v, p)));
   const playersEl = (
     <section className="box players-box" aria-label="Players" ref={boxRef}>
       <span className="eyebrow">
@@ -1515,9 +1510,6 @@ export function Game({
               </svg>
             </span>
             <span className="nm">
-              {v.phase === 'play' || v.phase === 'over' ? (
-                <Place place={places[i]!} points={pointsOf(v, i)} />
-              ) : null}
               <span>{p.nick}</span>
               {i === me ? <span className="you">you</span> : null}
               {p.cpu ? (

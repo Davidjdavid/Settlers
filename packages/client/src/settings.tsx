@@ -138,24 +138,6 @@ export function SettingsSheet({ mine, onClose }: { mine: PlayerSettings | null; 
         </select>
       </div>
       <div className="switchrow">
-        <span>
-          Moments across the board: Longest Road, points, rule changes and more{' '}
-          <Help text="Big moments: awards changing hands, points with the new total, someone taking the lead or close to winning, rule changes with what they mean, cards played, a steal you're in, fog and treasures, and a recap at the end of each round. Everything adds 7s, trades, cards bought and steals between others." />
-        </span>
-        <select
-          value={mine?.moments ?? 'big'}
-          data-testid="setting-moments"
-          aria-label="Moments"
-          onChange={(e) =>
-            client.saveSettings({ ...(mine ?? {}), moments: e.target.value as 'all' | 'big' | 'off' })
-          }
-        >
-          <option value="big">Big moments</option>
-          <option value="all">Everything</option>
-          <option value="off">Off</option>
-        </select>
-      </div>
-      <div className="switchrow">
         <span>Sounds: each one’s switch, volume and style</span>
         <button className="btn small" onClick={() => setPage('sounds')} data-testid="sounds-open">
           Sounds…
