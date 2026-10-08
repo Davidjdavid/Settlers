@@ -1,0 +1,145 @@
+/* Isle (docs/isle.md): the toy-island game screen. */
+
+:root {
+  --i-ink: #2a2f45;
+  --i-ink-2: #5a6180;
+  --i-ink-3: #8a90a8;
+  --i-panel: #ffffff;
+  --i-panel-2: #f3f6fb;
+  --i-line: #e2e7f0;
+  --i-outline: #262a40;
+  --i-shadow: 0 6px 0 rgba(23, 46, 92, 0.18), 0 14px 28px rgba(10, 40, 90, 0.22);
+  --i-shadow-sm: 0 4px 0 rgba(23, 46, 92, 0.16), 0 8px 16px rgba(10, 40, 90, 0.18);
+  --i-gold: #ffc934;
+  --i-gold-deep: #e09b00;
+  --i-go: #38c95c;
+  --i-go-deep: #21913d;
+  --i-red: #ef4136;
+  --i-head: 'Baloo 2', 'M PLUS Rounded 1c', system-ui, sans-serif;
+  --i-ui: 'M PLUS Rounded 1c', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.isle {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  font-family: var(--i-ui);
+  color: var(--i-ink);
+  background: #2a9fe0;
+  container-type: size;
+  container-name: isle;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.isleboard {
+  position: absolute;
+  inset: 0;
+}
+.isleboard svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.isleboard .itile {
+  transform-box: fill-box;
+  transform-origin: 50% 60%;
+}
+@keyframes ihop {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-14px) scale(1.04, 0.97);
+  }
+  70% {
+    transform: translateY(0) scale(0.98, 1.03);
+  }
+  100% {
+    transform: none;
+  }
+}
+.isleboard .itoken {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+@keyframes ipop {
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: none;
+  }
+}
+.isleboard .twinkle {
+  animation: itwinkle 2.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.isleboard .twinkle.late {
+  animation-delay: 1.2s;
+}
+@keyframes itwinkle {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+.isleboard .iknight.on .kglow {
+  animation: ikglow 1.8s ease-in-out infinite;
+}
+@keyframes ikglow {
+  50% {
+    opacity: 0.25;
+  }
+}
+.isleboard .iglow-vert .ring {
+  fill: rgba(255, 255, 255, 0.35);
+  stroke: #ffffff;
+  stroke-width: 6;
+  animation: ipulse 1.1s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.isleboard .iglow-vert .dot {
+  fill: #ffffff;
+}
+.isleboard .iglow-edge {
+  stroke: #ffffff;
+  stroke-width: 18;
+  stroke-linecap: round;
+  opacity: 0.85;
+  animation: ipulse 1.1s ease-in-out infinite;
+}
+.isleboard .iglow-hex {
+  fill: rgba(255, 255, 255, 0.25);
+  stroke: #ffffff;
+  stroke-width: 7;
+  animation: ipulse 1.1s ease-in-out infinite;
+}
+@keyframes ipulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .isle *,
+  .isle *::before,
+  .isle *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+.isle[data-tilt] .isleboard {
+  perspective: 1600px;
+}
+.isle[data-tilt] .isleboard svg {
+  transform: rotateX(var(--tilt)) scale(1.08);
+  transform-origin: 50% 60%;
+}

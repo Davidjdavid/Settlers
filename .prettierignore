@@ -3,3 +3,5 @@ node_modules/
 dist/
 package-lock.json
 *.md
+mock-dist/
+packages/client/src/isle/demo.json

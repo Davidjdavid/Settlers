@@ -1183,27 +1183,26 @@ The lobby showed everything at once, and the group didn't know what to do next. 
 - Anyone seated can change anything, as before (there's no host). Someone not seated sees the summary and "Who are you?".
 - A screen opening the lobby starts at the first step that isn't done (usually Players).
 
-### 13.6 Looks: the whole screen in a different style
+### 13.6 A new screen, as if Nintendo made it
 
-Board styles (3 October) change only the board. A **look** changes the whole screen: the frame, panels, buttons, players, hand, dice and log, and the board's tiles, all designed together. The group picks favourites from mock-up screenshots first; then those are built. No 3D.
+Board styles (3 October) change only the board. The first try at whole-screen looks (8 October) recoloured the original screen and kept its tiles; the group said no: they want a whole new UI, as if Nintendo were making their own Settlers, with the UI itself (what it shows, how loudly, the animations) mattering more than the art.
 
-- **Original**: today's screen, kept so the others can be compared with it.
-- **Nintendo-feel**: bright, rounded and bouncy. Chunky buttons that squash when pressed, bold friendly type, a sky-blue table, cheerful tiles. Inspired by, never copying.
-- **Game Night**: a real board on a wooden table. Your cards fanned in your hand, each player's mat in front of them, tumbling dice.
-- **Live Broadcast**: a sports broadcast. A scoreboard bar along the top, a news ticker of what's happening, replays of big moments, stat overlays, and a momentum graph of everyone's points.
-- **Universe-style**: like the screenshot the group shared. Painted tiles raised on sandy edges, ribbon banners for each player across the top, a column of square buttons on the left, a dark offer panel with big tick and cross, and a red hand bar along the bottom. Our own drawings only: no copied art, portraits or logos.
+- The design is in `docs/isle.md` ("Isle"): the screen always answers, loudest first, whether it's your turn (the whole screen changes), what just happened (rolls and moves animated where they happen), who's winning (a race track to the target) and what you can do (one big button that never moves).
+- **Mock-up first**: an interactive page with made-up data from a real Full game, on a laptop and a phone, with concept art sent along the way; built once the group likes it.
+- The other looks (Universe, Game Night, Live Broadcast) are on hold.
 
-Rules for every look:
+### 13.7 Rolls you can't miss
 
-- **Each look has its own tile art**, and gold never looks like wheat (13.2).
-- **Switch any time**, mid-game too, from a Look button in the top bar. It's yours alone, saved on your profile like the board style.
-- **A look changes only how things are drawn**, never what's where or what a click does: the same buttons, the same test ids, the same click targets. Every look passes the same checks as the original:
-  - every number shows its pips;
-  - harbors sit over the water;
-  - pieces stand out on every tile;
-  - nothing spills off a phone's screen;
-  - reduced motion is respected.
-- **Mock-ups first**: screenshots of each look on a laptop and a phone in the middle of a Full game, for the group to compare and vote on.
+A roll flashed by in a corner, and anyone who looked away didn't know what had been rolled, or what the last few rolls were when their turn came.
+
+- **Every roll is announced, big, on every screen.** A card across the middle of the board: the roller's name in their colour, the dice drawn large (Knights: the event die too, with its colour word, "Bob rolled green 3" or "3 green" by the existing setting), and the total in huge numbers. Under it, what the roll did: who got what ("You got 2 Wheat · Ann got 1 Ore"), or "Nobody got anything", or for a 7, "7! The robber moves" in red. It stays about 3 seconds (a little longer for a 7), then shrinks away. Clicks go through it. Reduced motion: it fades in and out. Moments set to Off turns it off too.
+- **Last rolls.** A strip that's always on screen shows the last five rolls, newest first: who rolled (their colour and name) and the total, 7s in red, with the event die's colour in Knights games. Tapping it opens the Dice panel (13.3).
+- **Since your last turn.** When your turn comes, a card sums up what happened since your last one, until you roll (or close it):
+  - each roll, who rolled it and what you got from it;
+  - cards stolen from you, cards you discarded, anything you lost to the barbarians;
+  - what others built (settlements, cities) and played, and awards that changed hands;
+  - points: who gained what.
+  - It's made from the log every screen already has, so it shows nothing secret.
 
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
