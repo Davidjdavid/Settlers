@@ -24,9 +24,9 @@ const shot = async (p: Page, name: string) => {
 const hook = (p: Page, f: string): Promise<any> => p.evaluate((f) => (window as any).__settlers[f](), f);
 const sounds = (p: Page): Promise<string[]> => hook(p, 'sounds');
 /** Every game event a browser was sent as news (updates; a sync resends the whole log). */
-function eventsIn(frames: Frame[]): { k: string; at?: number }[] {
+function eventsIn(frames: Frame[]): { k: string; at?: number; what?: string }[] {
   return frames.flatMap((f) => {
-    const m = f as { t?: string; log?: { k: string; e?: { k: string; at?: number } }[] };
+    const m = f as { t?: string; log?: { k: string; e?: { k: string; at?: number; what?: string } }[] };
     return m.t === 'update' ? (m.log ?? []).flatMap((x) => (x.k === 'ev' && x.e ? [x.e] : [])) : [];
   });
 }
@@ -166,17 +166,19 @@ test('Milestone 9b: sounds with their own settings, and the dice pinned on scree
     // A city or wall built after setup (setup's city sounds like a settlement): a short random
     // game can end without one.
     const builtCity = frames[0]!.some((f) => /"what":"city"|"k":"wall"/.test(JSON.stringify(f)));
-    // Every game has setup's cards, roads and settlements; the rest only if they happened (a short
-    // Knights game can end before the barbarians first attack, so with no robber): each sound
-    // played if and only if its event reached that browser.
-    const SOUND_OF: Record<string, (e: { k: string; at?: number }) => boolean> = {
+    // Every game has setup's cards and settlements (a setup placement sounds like a settlement);
+    // the rest only if they happened (a short Knights game can end before the barbarians first
+    // attack, so with no robber, or be won on cities and cards without another road: CI saw one):
+    // each sound played if and only if its event reached that browser.
+    const SOUND_OF: Record<string, (e: { k: string; at?: number; what?: string }) => boolean> = {
+      road: (e) => e.k === 'build' && (e.what === 'road' || e.what === 'ship'),
       robber: (e) => e.k === 'robber' || e.k === 'pirate',
       buyCard: (e) => ['buyDev', 'draw', 'treasureDev'].includes(e.k),
       knight: (e) => ['knight', 'activate', 'activateAll', 'promote'].includes(e.k),
       barbarians: (e) => e.k === 'barbarians' && (e.at ?? 7) < 7,
     };
     for (const [i, h] of heard.entries()) {
-      for (const id of ['cards', 'road', 'settlement']) expect(h, `${names[i]}: ${id}`).toContain(id);
+      for (const id of ['cards', 'settlement']) expect(h, `${names[i]}: ${id}`).toContain(id);
       const evs = eventsIn(frames[i]!);
       for (const [id, of] of Object.entries(SOUND_OF)) {
         if (evs.some(of)) expect(h, `${names[i]}: ${id}`).toContain(id);
