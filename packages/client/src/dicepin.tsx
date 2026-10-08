@@ -36,9 +36,14 @@ export function useLayoutWidth(): number {
   return w;
 }
 
-/** Bars for 2–12 with the expected count as a tick, small enough for a corner. */
+/**
+ * Bars for 2–12 with the expected count as a tick, small enough for a corner. Before the first
+ * roll there's nothing to count: the expected shape shows faintly, with "No rolls yet" (an empty
+ * box looked like the stats hadn't loaded).
+ */
 function MiniChart({ dice, h }: { dice: number[]; h: number }) {
   const n = dice.reduce((a, b) => a + b, 0);
+  if (!n) return <EmptyChart h={h} />;
   const max = Math.max(1, ...dice.slice(2), ...[...Array(11)].map((_, i) => n * ODDS(i + 2)));
   const W = 176;
   const bw = W / 11;
@@ -71,6 +76,55 @@ function MiniChart({ dice, h }: { dice: number[]; h: number }) {
           </g>
         );
       })}
+    </svg>
+  );
+}
+
+function EmptyChart({ h }: { h: number }) {
+  const W = 176;
+  const bw = W / 11;
+  const label = h > 30;
+  const base = label ? h - 11 : h;
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${h}`}
+      className="minichart"
+      role="img"
+      aria-label="Dice totals, no rolls yet"
+      data-empty
+    >
+      {[...Array(11)].map((_, i) => {
+        const t = i + 2;
+        const top = base - (ODDS(t) / ODDS(7)) * (base - 2);
+        return (
+          <g key={t} data-total={t} data-n={0}>
+            <rect
+              x={i * bw + 2}
+              y={top}
+              width={bw - 4}
+              height={base - top}
+              rx={2}
+              fill="var(--ink-3)"
+              opacity={0.18}
+            />
+            {label ? (
+              <text x={i * bw + bw / 2} y={h - 1} textAnchor="middle" fontSize="9" fill="var(--ink-2)">
+                {t}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+      <text
+        x={W / 2}
+        y={label ? base / 2 + 4 : h / 2 + 4}
+        textAnchor="middle"
+        fontSize="11"
+        fill="var(--ink-2)"
+        data-testid="dice-pin-none"
+      >
+        No rolls yet
+      </text>
     </svg>
   );
 }

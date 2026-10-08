@@ -73,6 +73,12 @@ test('Milestone 9b: sounds with their own settings, and the dice pinned on scree
     await a.click('[data-testid=start]');
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
     const seats = [(await view(a)).me, (await view(b)).me, (await view(c)).me];
+    // Pinned before anyone has rolled: the chart says so instead of showing an empty box.
+    await b.getByTestId('open-dice').click();
+    await b.getByTestId('dice-pin-on').click();
+    await expect(b.getByTestId('dice-pin-none')).toHaveText('No rolls yet');
+    await b.getByTestId('dice-pin-off').click();
+    await expect(b.getByTestId('dice-pin')).toHaveCount(0);
 
     /* ---------- Ann's Sounds page ---------- */
     await a.getByRole('button', { name: 'Menu', exact: true }).click();
