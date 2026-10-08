@@ -12,7 +12,7 @@ import {
   type GameConfig,
   type GameState,
 } from '@settlers/engine';
-import { handRisk } from '../src/handrisk';
+import { handRisk, tradeRisk } from '../src/handrisk';
 
 /** Bot games, calling `each` with the state after every move. */
 function play(seed: string, config: Partial<GameConfig>, each: (s: GameState) => void) {
@@ -104,4 +104,73 @@ describe('Hand-limit warning (SPEC 8.4)', () => {
       if (config.modules && !config.houseRules) expect(walls).toBeGreaterThan(0);
     });
   }
+});
+
+describe('A trade over the hand limit (SPEC 8.4)', () => {
+  const players = ['Ann', 'Bob', 'Cat'].map((nick, i) => ({ pid: `p${i}`, nick, color: COLORS[i]! }));
+  /** A started game with `n` wheat in Ann's hand and `walls` city walls of hers. */
+  const at = (n: number, walls: number, config: Partial<GameConfig> = {}) => {
+    let s: GameState = newGame('tradeRisk', players, config);
+    // Play the starting placements with the bot, then set Ann's hand.
+    const rng = seedRng('tradeRisk-bots');
+    while (s.stage === 'setup') {
+      const r = applyAction(s, s.turn, botMove(viewFor(s, s.turn), rng)!);
+      if (!r.ok) throw new Error(r.error);
+      s = r.state;
+    }
+    s = structuredClone(s);
+    for (const k of cardKinds(s)) s.players[0]!.res[k] = 0;
+    s.players[0]!.res.wheat = n;
+    if (walls) {
+      // Her two cities, and a third on a free corner (only the count matters here).
+      const mine = s.verts.flatMap((b, i) => (b && b[0] === 0 ? [i] : []));
+      mine.push(s.verts.findIndex((b) => b == null));
+      for (const x of mine) s.verts[x] = [0, 2];
+      s.ck!.walls = mine.slice(0, walls);
+      expect(s.ck!.walls).toHaveLength(walls);
+    }
+    const v = viewFor(s, 0);
+    return { v, vs: stateFromView(v) };
+  };
+
+  it('warns when a trade takes you over 7, and says how many a 7 would cost', () => {
+    const { v, vs } = at(6, 0);
+    expect(tradeRisk(v, vs, { wheat: 1 }, { ore: 2 })).toBeNull(); // 7: at the limit
+    const r = tradeRisk(v, vs, { wheat: 1 }, { ore: 3 });
+    expect(r).toMatchObject({ now: 6, after: 8, limit: 7, lose: 4 });
+    expect(r!.text).toBe(
+      'This trade puts you at 8 cards, over your limit of 7. If a 7 is rolled, you’d discard 4.',
+    );
+  });
+
+  it('already over: only a trade that adds cards warns', () => {
+    const { v, vs } = at(9, 0);
+    expect(tradeRisk(v, vs, { wheat: 2 }, { ore: 1 })).toBeNull();
+    expect(tradeRisk(v, vs, { wheat: 1 }, { ore: 1 })).toBeNull();
+    expect(tradeRisk(v, vs, { wheat: 1 }, { ore: 2 })).toMatchObject({ after: 10, lose: 5 });
+  });
+
+  it('a bank trade never warns: it always takes cards away', () => {
+    const { v, vs } = at(8, 0);
+    expect(tradeRisk(v, vs, { wheat: 4 }, { ore: 1 })).toBeNull();
+    expect(tradeRisk(v, vs, { wheat: 2 }, { ore: 1 })).toBeNull();
+  });
+
+  for (const walls of [1, 2, 3])
+    it(`Cities & Knights with ${walls} city wall${walls > 1 ? 's' : ''}: the limit is ${7 + 2 * walls}`, () => {
+      const limit = 7 + 2 * walls;
+      const { v, vs } = at(limit - 1, walls, { modules: ['citiesKnights'], winVP: 13 });
+      expect(tradeRisk(v, vs, { wheat: 1 }, { ore: 2 })).toBeNull();
+      const r = tradeRisk(v, vs, { wheat: 1 }, { ore: 3 });
+      expect(r).toMatchObject({ after: limit + 1, limit });
+      expect(r!.text).toContain(
+        `over your limit of ${limit} (7, plus ${2 * walls} for your city wall${walls > 1 ? 's' : ''})`,
+      );
+    });
+
+  it('no warning while nobody discards (before the first attack, with that house rule)', () => {
+    const config = { modules: ['citiesKnights'], winVP: 13, houseRules: { noDiscardBeforeAttack: true } };
+    const { v, vs } = at(7, 0, config as Partial<GameConfig>);
+    expect(tradeRisk(v, vs, { wheat: 1 }, { ore: 3 })).toBeNull();
+  });
 });

@@ -169,6 +169,51 @@ describe('profiles (SPEC 5.1)', () => {
     expect(d.last('seat').pid).toBe(seats[0]!.pid);
   });
 
+  it('every room closed from the start page: every name is free, the unfinished game stays saved', () => {
+    // Ann's old computer still sits at a game; Bob at a table that never started.
+    const game = table(['Ann', 'Cat']);
+    send(game.conns[0]!, { t: 'start' });
+    play(game.code, game.conns, () => state(game.code).turnN >= 3);
+    const before = JSON.stringify(state(game.code));
+    const gameId = rooms.getRoom(game.code)!.game!.row.id;
+    const lobby = table(['Bob']);
+    const c = new FakeConn();
+    send(c, { t: 'profiles' });
+    expect(
+      c
+        .last('profiles')
+        .list.filter((p) => p.inUse)
+        .map((p) => p.name)
+        .sort(),
+    ).toEqual(['Ann', 'Bob', 'Cat']);
+    // Not from inside a room.
+    send(lobby.conns[0]!, { t: 'closeAll' });
+    expect(lobby.conns[0]!.last('error').text).toBe('Leave this room first');
+    expect(rooms.getRoom(lobby.code)).toBeDefined();
+
+    send(c, { t: 'closeAll' });
+    expect(c.last('notice').text).toBe('Closed 2 rooms. Every name is free.');
+    for (const x of [...game.conns, ...lobby.conns])
+      expect(x.last('closed').text).toMatch(/closed every room.*Saved Games/);
+    expect(rooms.getRoom(game.code)).toBeUndefined();
+    expect(rooms.getRoom(lobby.code)).toBeUndefined();
+    expect(c.last('profiles').list.some((p) => p.inUse)).toBe(false);
+    expect(c.last('saved').list.map((g) => g.id)).toEqual([gameId]);
+    // Rooms stay closed after a restart, and the game resumes exactly where it was.
+    restart();
+    expect(rooms.getRoom(game.code)).toBeUndefined();
+    const d = new FakeConn();
+    send(d, { t: 'resume', game: gameId });
+    expect(JSON.stringify(rooms.getRoom(d.last('sync').room.code)!.game!.state)).toBe(before);
+    // The resumed game's room closes too; then nothing is open, and it says so.
+    const e = new FakeConn();
+    rooms.disconnect(d);
+    send(e, { t: 'closeAll' });
+    expect(e.last('notice').text).toBe('Closed 1 room. Every name is free.');
+    send(e, { t: 'closeAll' });
+    expect(e.last('notice').text).toBe('No rooms were open. Every name is free.');
+  });
+
   it('made once per name, listed with who is using them, and merged unless they shared a game', () => {
     const c = new FakeConn();
     send(c, { t: 'newProfile', name: 'Ann', color: 'red' });

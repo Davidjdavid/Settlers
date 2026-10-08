@@ -212,6 +212,8 @@ export const SettingsSchema = z.strictObject({
   confirmEnd: z.boolean().optional(),
   confirmCard: z.boolean().optional(),
   confirmTrade: z.boolean().optional(),
+  /** Warn before a trade that puts you over your hand limit, and ask again (on unless false). */
+  tradeLimit: z.boolean().optional(),
   /** SPEC 5.9: the sound when you need to act, other game sounds, a browser notification (off unless true). */
   turnSound: z.boolean().optional(),
   gameSounds: z.boolean().optional(),
@@ -487,6 +489,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('saved') }),
   z.strictObject({ t: z.literal('resume'), game: z.string().max(60) }),
   z.strictObject({ t: z.literal('deleteSaved'), game: z.string().max(60) }),
+  /** Close every open room (the start page): every name is free again; games stay in Saved Games. */
+  z.strictObject({ t: z.literal('closeAll') }),
   /** Stats (SPEC 5.6): someone's record (a profile id, or cpu:easy etc.), or one game. */
   z.strictObject({ t: z.literal('stats'), who: z.string().max(60) }),
   z.strictObject({ t: z.literal('gameStats'), game: z.string().max(60) }),

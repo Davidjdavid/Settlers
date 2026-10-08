@@ -288,6 +288,7 @@ Reliability still comes first. In particular, every number on a stats screen is 
   - Your favourite colour is picked for you if it's free.
 - **Names are unique,** ignoring capitals and extra spaces ("ann" is "Ann").
 - **A profile someone is using** (connected in a room right now) shows as in use, and can't be picked at another table at the same time. At its own table it can: that's how you move your seat to another screen (4.6).
+- **A name stuck on another computer** (a game left open there): the start page has "End every game and free every name". After two confirmations every open room closes, everyone in them goes back to the start screen with a note saying why, and every name can be picked again. Games in progress stay in Saved Games (9 October).
 - **What hangs off a profile:**
   - your personal settings (moved over from your nickname);
   - your seat in every game, past and saved;
@@ -692,6 +693,13 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 - If you end your turn over your limit, a small warning shows by End turn, and the end-turn confirmation mentions it.
 - It never blocks you.
 
+**Before a trade (9 October):**
+
+- When a trade would put you over your limit (or further over it), the offer says so: "This trade puts you at 8 cards, over your limit of 7. If a 7 is rolled, you'd discard 4." The limit counts your city walls (7, 9, 11 or 13).
+- Agreeing to it (accepting an offer, or picking who to trade with) asks once more: "Go over your hand limit?", with Trade anyway or Cancel. Off your turn, an offer you make to whoever has the dice happens as soon as they take it, so sending it asks once more instead.
+- Bank trades always take cards away, so they never ask. With "no discards before the first attack" (Q2), nobody discards yet, so nothing asks either.
+- A switch in My settings turns it off: "Warn me when a trade would put me over the hand limit" (on unless switched off).
+
 ### 8.5 Points to win
 
 - **Always on screen:** "First to 13" in the top bar, on every device and display size.
@@ -711,7 +719,7 @@ It's checked in screenshots at the smallest and largest zoom and display size. N
 - You can make several trades in a row without reopening it.
 - The rates come from the rules engine, so the button and the screen always agree with what the engine will accept.
 
-**Trade with players** shows a badge when offers are waiting on you.
+**Trade with players** shows a badge when offers are waiting on you. Off your turn you can only trade with whoever has the dice, so the button names them: "Trade with Joe" (9 October).
 
 **When trading isn't allowed** (before you roll, say), both buttons stay visible but grayed out, with the reason on hover.
 

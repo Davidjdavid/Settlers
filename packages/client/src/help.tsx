@@ -15,6 +15,7 @@ export const SETTING_LABEL: Record<SettingKey, string> = {
   confirmEnd: 'Confirm before ending my turn',
   confirmCard: 'Confirm before playing a card',
   confirmTrade: 'Confirm before accepting a trade',
+  tradeLimit: 'Warn me when a trade would put me over the hand limit',
   turnSound: 'Sound when it’s my turn or I need to act',
   gameSounds: 'Other game sounds',
   browserNotify: 'Notify me when the tab is in the background',
@@ -34,6 +35,8 @@ export const SETTING_HELP: Record<SettingKey, string> = {
     'Asks before playing a development or progress card (for example “Play Knight?”), showing what the card does, so you never play one by accident.',
   confirmTrade:
     'Shows the trade and asks before you accept someone’s offer, or before you complete a trade someone accepted from you. Bank trades are not affected.',
+  tradeLimit:
+    'When a trade would leave you holding more cards than your hand limit (7, plus 2 for each city wall in Cities & Knights), the trade window and the offer say so, and agreeing to that trade asks once more if you’re sure. Bank trades never add cards, so they never ask.',
   turnSound:
     'A short chime, only for you, when your turn starts or the game is waiting on you: a starting placement, a discard, a trade offered to you, gold or a Cities & Knights choice, or someone asking for the dice back or an undo.',
   gameSounds:

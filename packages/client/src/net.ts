@@ -99,6 +99,14 @@ export function setStored(key: string, value: string) {
   }
 }
 
+export function removeStored(key: string) {
+  try {
+    storage()?.removeItem(key);
+  } catch {
+    /* private mode: nothing was kept */
+  }
+}
+
 /** A map as the protocol carries it (editor maps only ever use the Seafarers module). */
 type MapMsg = Extract<ClientMsg, { t: 'saveMap' }>['map'];
 
@@ -473,6 +481,12 @@ export class Client {
   }
   deleteSaved(game: string) {
     this.send({ t: 'deleteSaved', game });
+  }
+  /** Close every open room so every name is free (the start page); this browser's seat goes too. */
+  closeAll() {
+    const last = getStored(LAST_ROOM);
+    if (last) removeStored(tokenKey(last));
+    this.send({ t: 'closeAll' });
   }
   loadMaps() {
     this.send({ t: 'maps' });

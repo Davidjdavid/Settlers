@@ -333,6 +333,8 @@ export class Rooms {
         return this.resume(conn, msg.game);
       case 'deleteSaved':
         return this.deleteSaved(conn, msg.game);
+      case 'closeAll':
+        return this.closeAll(conn);
       case 'stats':
         return this.statsFor(conn, msg.who);
       case 'maps':
@@ -737,6 +739,31 @@ export class Rooms {
     }
     this.store.endGame(gameId, 'deleted', this.now());
     this.log(`saved game ${gameId} deleted`);
+    conn.send({ t: 'saved', list: this.savedList() });
+  }
+
+  /**
+   * Close every open room, from the start page: for a name stuck at a table on another computer
+   * (a name is in use while a screen still sits in its seat). Every name is free to pick again;
+   * unfinished games stay in Saved Games, to resume any time.
+   */
+  private closeAll(conn: Conn) {
+    if (conn.room) return conn.send({ t: 'error', text: 'Leave this room first' });
+    const open = [...this.rooms.values()];
+    for (const room of open)
+      this.closeRoom(
+        room,
+        'Someone closed every room to free the names. Games in progress are in Saved Games.',
+      );
+    this.log(`every room closed (${open.length})`);
+    conn.send({
+      t: 'notice',
+      kind: 'info',
+      text: open.length
+        ? `Closed ${open.length} room${open.length === 1 ? '' : 's'}. Every name is free.`
+        : 'No rooms were open. Every name is free.',
+    });
+    conn.send({ t: 'profiles', list: this.profileList() });
     conn.send({ t: 'saved', list: this.savedList() });
   }
 

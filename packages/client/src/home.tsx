@@ -64,6 +64,7 @@ export function Home({ error }: { error: string | null }) {
   const st = useClient();
   const [code, setCode] = useState('');
   const [del, setDel] = useState<SavedGame | null>(null);
+  const [closing, setClosing] = useState(false);
   useEffect(() => {
     if (st.status === 'live') client.loadSaved();
   }, [st.status]);
@@ -125,6 +126,17 @@ export function Home({ error }: { error: string | null }) {
           </button>
         </form>
         {error ? <p className="err">{error}</p> : null}
+        <p className="hint freenames">
+          Your name greyed out (“in use”) because another computer still has a game open?{' '}
+          <button
+            type="button"
+            className="btn small ghost"
+            onClick={() => setClosing(true)}
+            data-testid="close-all"
+          >
+            End every game and free every name
+          </button>
+        </p>
         <div className="field" style={{ marginTop: 18 }}>
           <label>Saved games</label>
           {saved.length ? (
@@ -173,6 +185,16 @@ export function Home({ error }: { error: string | null }) {
           )}
         </div>
       </div>
+      {closing ? (
+        <ConfirmTwice
+          title="End every game and free every name?"
+          first="Every open room closes and everyone in them goes back to the start screen, so every name can be picked again. Games in progress stay in Saved Games, to resume any time."
+          second="Anyone playing right now is taken out of their game. Only do this when nobody is in the middle of one, or everyone agrees."
+          action="Close every room"
+          onConfirm={() => client.closeAll()}
+          onClose={() => setClosing(false)}
+        />
+      ) : null}
       {del ? (
         <ConfirmTwice
           title="Delete this saved game?"

@@ -644,6 +644,79 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await cpuOffer();
     await expect.poll(moves).toEqual([{ type: 'respond', id: 77, yes: false }]);
 
+    /* ---------- A trade over the hand limit (made-up view) ---------- */
+    // c holds 6 cards; whoever has the dice offers 3 ore for 1 wheat: 8 cards, over the limit of 7.
+    const overOffer = () =>
+      c.evaluate(() => {
+        const s = (window as any).__settlers;
+        const v = structuredClone(s.state().game);
+        Object.assign(v, { phase: 'play', winner: null, stage: 'main', dice: [3, 4] });
+        delete v.keep;
+        Object.assign(v.ck, { owe: [], walls: [] });
+        const from = (v.me + 1) % v.players.length;
+        v.turn = from;
+        v.players[from].cpu = false;
+        for (const k of Object.keys(v.hand.res)) v.hand.res[k] = 0;
+        v.hand.res.wheat = 6;
+        v.offers = [{ id: 78, from, give: { ore: 3 }, want: { wheat: 1 }, resp: {} }];
+        s.stage(v);
+        return v.players[from].nick as string;
+      });
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    const giver = await overOffer();
+    await expect(c.getByTestId('offer-overlimit')).toContainText(
+      'This trade puts you at 8 cards, over your limit of 7. If a 7 is rolled, you’d discard 4.',
+    );
+    await shot(c, 'trade-overlimit');
+    // Accepting asks as usual, then once more; no at the second question sends nothing.
+    await c.getByTestId('offer').getByRole('button', { name: 'Accept' }).click();
+    await expect(c.getByRole('dialog')).toContainText(`Accept ${giver}’s offer?`);
+    await c.getByTestId('ask-yes').click();
+    await expect(c.getByRole('dialog')).toContainText('Go over your hand limit?');
+    await expect(c.getByTestId('over-limit')).toContainText('you’d discard 4');
+    await c.getByTestId('ask-no').click();
+    await expect(c.getByRole('dialog')).toHaveCount(0);
+    expect(await moves()).toEqual([]);
+    await c.getByTestId('offer').getByRole('button', { name: 'Accept' }).click();
+    await c.getByTestId('ask-yes').click();
+    await c.getByTestId('ask-yes').click();
+    await expect.poll(moves).toEqual([{ type: 'respond', id: 78, yes: true }]);
+    // Off your turn the trade button names whoever has the dice; an offer that would put you over
+    // says so, and asks once more before it goes (they can take it at once).
+    await expect(c.getByTestId('trade')).toContainText(`Trade with ${giver}`);
+    await c.getByTestId('trade').click();
+    await expect(c.getByRole('dialog')).toContainText(`Offer ${giver} a trade`);
+    await c.click('[aria-label="More give wheat"]');
+    for (let i = 0; i < 3; i++) await c.click('[aria-label="More want ore"]');
+    await expect(c.getByTestId('trade-overlimit')).toContainText('puts you at 8 cards');
+    await c.getByTestId('offer-send').click();
+    await expect(c.getByTestId('trade-overlimit')).toContainText(`If ${giver} takes it`);
+    await shot(c, 'trade-overlimit-offer');
+    await c.getByTestId('offer-anyway').click();
+    await expect
+      .poll(async () => (await moves()).at(-1))
+      .toEqual({
+        type: 'offer',
+        give: { wheat: 1 },
+        want: { ore: 3 },
+      });
+    // Switched off in My settings: no warning, no second question.
+    await c.getByRole('button', { name: 'Menu', exact: true }).click();
+    await c.getByTestId('menu-settings').click();
+    await expect(c.getByTestId('setting-tradeLimit')).toBeChecked();
+    await c.getByTestId('setting-tradeLimit').click();
+    await c.getByTestId('settings-close').click();
+    await c.reload();
+    await expect(c.locator('#board')).toBeVisible();
+    await overOffer();
+    await expect(c.getByTestId('offer')).toBeVisible();
+    await expect(c.getByTestId('offer-overlimit')).toHaveCount(0);
+    await c.getByTestId('offer').getByRole('button', { name: 'Accept' }).click();
+    await c.getByTestId('ask-yes').click();
+    await expect.poll(moves).toEqual([{ type: 'respond', id: 78, yes: true }]);
+    await expect(c.getByRole('dialog')).toHaveCount(0);
+
     /* ---------- Play Alchemist: only before your roll (made-up view) ---------- */
     const alchemist = (stage: string) =>
       c.evaluate((stage) => {

@@ -126,3 +126,41 @@ test('the Stats page lists people, not CPUs, and a person can be deleted', async
   await expect(p.locator('[data-testid=stats-who][data-name=Gus]')).toHaveCount(0);
   await expect(t.pages[1]!.locator('.seat:not(.open)')).toHaveCount(1);
 });
+
+test('a name stuck at a table on another computer: end every game and free every name', async ({
+  browser,
+}) => {
+  // Ivy and Jo play on two computers; Ivy moves to a third and her name is in use.
+  const t = await seatedTable(browser, server, ['Ivy', 'Jo']);
+  const [ivy] = t.pages as [Page, Page];
+  await ivy.getByTestId('start').click();
+  for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
+  const p = await (await browser.newContext()).newPage();
+  await p.goto(server.url);
+  await p.fill('#pass', server.passphrase);
+  await p.click('button:has-text("Enter")');
+  await p.getByTestId('create').click();
+  await expect(p.locator('[data-testid=profile][data-name=Ivy]')).toBeDisabled();
+  await expect(p.locator('[data-testid=profile][data-name=Ivy]')).toContainText('in use');
+  // Back on the start page: ask twice, then every room closes.
+  await p.goto(server.url);
+  await p.getByTestId('close-all').click();
+  await expect(p.getByRole('dialog')).toContainText('Games in progress stay in Saved Games');
+  await p.getByRole('dialog').getByRole('button', { name: 'Continue' }).click();
+  await expect(p.getByRole('dialog')).toContainText('Anyone playing right now is taken out');
+  await p.getByRole('dialog').getByRole('button', { name: 'Close every room' }).click();
+  // (Rooms left open by the tests before this one close too.)
+  await expect(p.getByText(/^Closed \d+ rooms\. Every name is free\.$/)).toBeVisible();
+  // Both computers are back at the start, told why, with the game in Saved Games.
+  for (const q of t.pages) {
+    await expect(q.getByTestId('create')).toBeVisible();
+    await expect(q.getByText(/closed every room/)).toBeVisible();
+    await expect(q.getByTestId('saved-game').filter({ hasText: 'Ivy' })).toHaveCount(1);
+  }
+  await expect(p.getByTestId('saved-game').filter({ hasText: 'Ivy' })).toHaveCount(1);
+  // Ivy's name can be picked again.
+  await p.getByTestId('create').click();
+  await expect(p.locator('[data-testid=profile][data-name=Ivy]')).toBeEnabled();
+  await expect(p.locator('[data-testid=profile][data-name=Ivy]')).not.toContainText('in use');
+  expect(t.errors).toEqual([]);
+});

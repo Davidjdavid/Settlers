@@ -33,7 +33,7 @@ import { DicePin, useLayoutWidth } from './dicepin';
 import { HandCards } from './hand';
 import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
-import { handRisk } from './handrisk';
+import { handRisk, tradeRisk, type TradeRisk } from './handrisk';
 import {
   BOARD_OWES, BarbarianBox, BarbarianChip, CardFace, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
   myOwe, owePrompt, paramOf,
@@ -528,6 +528,23 @@ export function Game({
     q: { title: string; sub?: string; yes: string; body?: React.ReactNode },
     go: () => void,
   ) => (settingOn(my, k) ? setSheet({ k: 'ask', ...q, onYes: go }) : go());
+  /** Agreeing to a trade that puts you over your hand limit asks once more (setting `tradeLimit`). */
+  const warnOver = settingOn(my, 'tradeLimit');
+  const askOver = (risk: TradeRisk | null, go: () => void) =>
+    warnOver && risk
+      ? setSheet({
+          k: 'ask',
+          title: 'Go over your hand limit?',
+          yes: 'Trade anyway',
+          onYes: go,
+          body: (
+            <p className="tradeq" data-testid="over-limit">
+              {risk.text}
+              {v.turn === me ? ' You can still spend them before you end your turn.' : ''}
+            </p>
+          ),
+        })
+      : go();
   /** Play a progress card once its targets are picked (or show which picks remain). */
   const cardPick = (x: number, touch: boolean) => {
     if (!card) return;
@@ -827,7 +844,8 @@ export function Game({
     me == null ? 0 : v.offers.filter((o) => o.from !== me && o.resp[me] == null && (o.from === v.turn || v.turn === me)).length; // prettier-ignore
   const tradeButtons = (players: string | null, bank: string | null): PromptButton[] => [
     {
-      label: 'Trade with players',
+      // Off your turn you can only trade with whoever's playing, so the button names them.
+      label: v.turn === me ? 'Trade with players' : `Trade with ${cur}`,
       on: () => setSheet({ k: 'trade', tab: 'players' }),
       testid: 'trade',
       kind: 'trade',
@@ -1234,8 +1252,10 @@ export function Game({
   const myPid = room.me;
   const disconnected = room.seats.map((x, i) => ({ ...x, i })).filter((x) => !x.connected);
 
-  const mainEl = (
-    <main className="main">
+  // The banners, the board and the prompt: the standard screen and the new one (docs/isle.md)
+  // lay them out their own way.
+  const bannersEl = (
+    <>
       {pr ? (
         <div className="banner" data-testid="reset-banner">
           {pr.pid === myPid ? (
@@ -1347,112 +1367,118 @@ export function Game({
           </span>
         </div>
       ) : null}
-      <div className="board-wrap">
-        <Board
-          view={v}
-          style={room.mySettings?.artStyle}
-          targets={targets}
-          myColor={me != null ? PCOL[v.players[me]!.color] : null}
-          onVert={onVert}
-          onEdge={onEdge}
-          onHex={onHex}
-          preview={previewAt}
-          pending={placing?.ghosts ?? smithGhosts}
-          flash={raid?.lost.map((l) => l.v)}
-        />
-        {/* Hidden while you still pick which city to lose: the prompt says so, and the board stays clear. */}
-        {raid && !(me != null && raid.attack.losers.includes(me) && !raid.lost.some((l) => l.p === me)) ? (
-          <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
-        ) : null}
-        {my?.dicePin && !phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} /> : null}
-        {settingOn(my, 'diceCorner') ? (
-          <RollDice
-            dice={v.dice}
-            {...(v.ck ? { event: v.ck.event } : {})}
-            canRoll={false}
-            onRoll={() => {}}
-            sound={false}
-            corner
-          />
-        ) : null}
-        {celebrating ? (
-          <Celebration
-            color={PCOL[v.players[v.winner!]!.color]}
-            text={`${v.winner === me ? 'You win' : `${nameOf(v, v.winner)} wins`}${v.keep?.on ? ' in overtime' : ''}!`}
-            onDone={() => setCelebrating(false)}
-          />
-        ) : v.phase === 'over' && !hideOver ? (
-          <div className="overlay endoverlay">
-            <GameOver v={v} stats={stats ?? null} onHide={() => setHideOver(true)} />
-          </div>
-        ) : null}
-      </div>
-      <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
-        {gains ? (
-          <div className="gainflash" key={gains.n} data-testid="gain-flash" aria-live="polite">
-            <span className="gf-you">You got</span>
-            {Object.entries(gains.cards).map(([k, n]) => (
-              <span
-                key={k}
-                className="gf-card"
-                style={{ ['--c' as string]: CARD_COLOR[k as keyof typeof CARD_COLOR] }}
-              >
-                +{n} {CARD_LABEL[k as keyof typeof CARD_LABEL]}
-              </span>
-            ))}
-          </div>
-        ) : null}
+    </>
+  );
+  const boardEl = (
+    <div className="board-wrap">
+      <Board
+        view={v}
+        style={room.mySettings?.artStyle}
+        targets={targets}
+        myColor={me != null ? PCOL[v.players[me]!.color] : null}
+        onVert={onVert}
+        onEdge={onEdge}
+        onHex={onHex}
+        preview={previewAt}
+        pending={placing?.ghosts ?? smithGhosts}
+        flash={raid?.lost.map((l) => l.v)}
+      />
+      {/* Hidden while you still pick which city to lose: the prompt says so, and the board stays clear. */}
+      {raid && !(me != null && raid.attack.losers.includes(me) && !raid.lost.some((l) => l.p === me)) ? (
+        <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
+      ) : null}
+      {my?.dicePin && !phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} /> : null}
+      {settingOn(my, 'diceCorner') ? (
         <RollDice
           dice={v.dice}
           {...(v.ck ? { event: v.ck.event } : {})}
-          canRoll={canRoll}
-          onRoll={() => client.act({ type: 'roll' })}
-          sound={settingOn(my, 'gameSounds')}
-          rollRef={rollRef}
+          canRoll={false}
+          onRoll={() => {}}
+          sound={false}
+          corner
         />
-        <div className="msg">
-          <strong>{pm.title}</strong>
-          {pm.sub ? <span>{pm.sub}</span> : null}
+      ) : null}
+      {celebrating ? (
+        <Celebration
+          color={PCOL[v.players[v.winner!]!.color]}
+          text={`${v.winner === me ? 'You win' : `${nameOf(v, v.winner)} wins`}${v.keep?.on ? ' in overtime' : ''}!`}
+          onDone={() => setCelebrating(false)}
+        />
+      ) : v.phase === 'over' && !hideOver ? (
+        <div className="overlay endoverlay">
+          <GameOver v={v} stats={stats ?? null} onHide={() => setHideOver(true)} />
         </div>
-        {pm.buttons?.length ? (
-          <div className="acts">
-            {pm.buttons.map((b) => (
-              <button
-                key={b.label}
-                className={`btn${b.primary ? ' primary' : ''}${b.kind ? ` actbtn ${b.kind}btn` : ''}`}
-                disabled={busy || b.off != null}
-                title={b.off}
-                onClick={b.on}
-                data-testid={b.testid}
-              >
-                {b.kind ? (
-                  <span
-                    className="acticon"
-                    aria-hidden="true"
-                    dangerouslySetInnerHTML={{ __html: ACT_ICON[b.kind] }}
-                  />
-                ) : null}
-                {b.label}
-                {b.warn ? (
-                  <span
-                    className="endwarn"
-                    title={b.warn}
-                    data-testid={`${b.testid}-warn`}
-                    aria-label={b.warn}
-                  >
-                    ⚠
-                  </span>
-                ) : null}
-                {b.badge ? (
-                  <span className="badge" data-testid={`${b.testid}-badge`}>
-                    {b.badge}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        ) : null}
+      ) : null}
+    </div>
+  );
+  const promptEl = (
+    <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
+      {gains ? (
+        <div className="gainflash" key={gains.n} data-testid="gain-flash" aria-live="polite">
+          <span className="gf-you">You got</span>
+          {Object.entries(gains.cards).map(([k, n]) => (
+            <span
+              key={k}
+              className="gf-card"
+              style={{ ['--c' as string]: CARD_COLOR[k as keyof typeof CARD_COLOR] }}
+            >
+              +{n} {CARD_LABEL[k as keyof typeof CARD_LABEL]}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <RollDice
+        dice={v.dice}
+        {...(v.ck ? { event: v.ck.event } : {})}
+        canRoll={canRoll}
+        onRoll={() => client.act({ type: 'roll' })}
+        sound={settingOn(my, 'gameSounds')}
+        rollRef={rollRef}
+      />
+      <div className="msg">
+        <strong>{pm.title}</strong>
+        {pm.sub ? <span>{pm.sub}</span> : null}
       </div>
+      {pm.buttons?.length ? (
+        <div className="acts">
+          {pm.buttons.map((b) => (
+            <button
+              key={b.label}
+              className={`btn${b.primary ? ' primary' : ''}${b.kind ? ` actbtn ${b.kind}btn` : ''}`}
+              disabled={busy || b.off != null}
+              title={b.off}
+              onClick={b.on}
+              data-testid={b.testid}
+            >
+              {b.kind ? (
+                <span
+                  className="acticon"
+                  aria-hidden="true"
+                  dangerouslySetInnerHTML={{ __html: ACT_ICON[b.kind] }}
+                />
+              ) : null}
+              {b.label}
+              {b.warn ? (
+                <span className="endwarn" title={b.warn} data-testid={`${b.testid}-warn`} aria-label={b.warn}>
+                  ⚠
+                </span>
+              ) : null}
+              {b.badge ? (
+                <span className="badge" data-testid={`${b.testid}-badge`}>
+                  {b.badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+  const mainEl = (
+    <main className="main">
+      {bannersEl}
+      {boardEl}
+      {promptEl}
     </main>
   );
   const boxes =
@@ -1475,7 +1501,13 @@ export function Game({
   const handEl = (
     <section className="dock-wrap" aria-label="Your cards and actions">
       {my?.dicePin && phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} phone /> : null}
-      <Offers v={v} busy={busy} ask={(q, go) => ask('confirmTrade', q, go)} />
+      <Offers
+        v={v}
+        busy={busy}
+        ask={(q, go) => ask('confirmTrade', q, go)}
+        warnOver={warnOver}
+        askOver={askOver}
+      />
       {boxes?.hand}
       {lay ? null : (
         <>
@@ -1686,124 +1718,10 @@ export function Game({
       )}
     </section>
   );
-  return (
-    <div className={`app${lay ? ' custom' : ''}${editing ? ' editing' : ''}`}>
-      <header className="top">
-        <div className="brand">
-          <span dangerouslySetInnerHTML={{ __html: BRAND_SVG }} style={{ display: 'contents' }} />
-          <span>Settlers</span>
-        </div>
-        <div className="turnchip" data-testid="turnchip">
-          {v.phase === 'over' ? (
-            <>
-              <span className="dot" style={{ background: PCOL[v.players[v.winner!]!.color] }} />
-              <span className="label">{nameOf(v, v.winner)} won</span>
-            </>
-          ) : (
-            <>
-              <span className="dot" style={{ background: PCOL[v.players[v.turn]!.color] }} />
-              <span className="label">{mine ? 'Your turn' : cur}</span>
-              <span className="sub">
-                {
-                  {
-                    setup: 'setup',
-                    preroll: 'to roll',
-                    discard: 'discarding',
-                    robber: 'robber',
-                    roads: 'building',
-                    main: 'playing',
-                    gold: 'choosing gold',
-                    ck: 'choosing',
-                    treasure: 'treasure',
-                  }[v.stage]
-                }
-              </span>
-            </>
-          )}
-        </div>
-        <button className="turnchip roomchip" onClick={() => setSheet({ k: 'menu' })} title="Room menu">
-          <span className="sub">Room</span>
-          <span className="label">{room.code}</span>
-        </button>
-        {/* SPEC 8.5: the target, always on screen (raised by Keep playing). */}
-        <span className="turnchip goalchip" data-testid="goal" title={`First to ${v.winVP} points wins`}>
-          <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
-            <path
-              d="M3 13V1.5M3 2h8l-2 3 2 3H3"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="sub">First to</span>
-          <span className="label">{v.winVP}</span>
-        </span>
-        {v.ck ? <BarbarianChip v={v} /> : null}
-        <div className="spacer" />
-        <span
-          className={`sync ${status === 'live' ? (busy ? 'busy' : 'live') : status === 'offline' ? 'off' : 'busy'}`}
-          title={status}
-          data-testid="sync"
-        />
-        <MusicButton onOpen={() => setSheet({ k: 'music' })} />
-        {dice ? (
-          <button className="btn small ghost" onClick={() => setSheet({ k: 'dice' })} data-testid="open-dice">
-            Dice<span className="wide-only"> stats</span>
-          </button>
-        ) : null}
-        <EventDie v={v} />
-        {me != null ? (
-          <button
-            className={`btn small ghost wide-only${editing ? ' on' : ''}`}
-            onClick={() => setEditing((x) => !x)}
-            data-testid="open-layout"
-            title="Move, float or hide the boxes on this screen"
-          >
-            Layout
-          </button>
-        ) : null}
-        <button className="iconbtn" type="button" aria-label="Menu" onClick={() => setSheet({ k: 'menu' })}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-      </header>
-
-      {lay ? (
-        <LayoutView
-          r={lay}
-          device={device}
-          editing={editing}
-          main={mainEl}
-          panels={{
-            players: playersEl,
-            talk: talkEl,
-            hand: handEl,
-            build: boxes?.build ?? null,
-            improve: boxes?.improve ?? null,
-            play: boxes?.play ?? null,
-            barbarians: barbEl,
-          }}
-          onChange={saveLayout}
-          onDone={() => setEditing(false)}
-        />
-      ) : (
-        <>
-          {mainEl}
-
-          {handEl}
-
-          <aside className="side">
-            {barbEl}
-            {playersEl}
-            {talkEl}
-          </aside>
-        </>
-      )}
-
+  const sheetsEl = (
+    <>
       {sheet?.k === 'trade' ? (
-        <TradeSheet v={v} tab={sheet.tab ?? 'players'} onClose={() => setSheet(null)} />
+        <TradeSheet v={v} tab={sheet.tab ?? 'players'} onClose={() => setSheet(null)} warnOver={warnOver} />
       ) : null}
       {sheet?.k === 'discard' && owes ? <DiscardSheet v={v} onClose={() => setSheet(null)} /> : null}
       {sheet?.k === 'plenty' ? <PlentySheet v={v} onClose={() => setSheet(null)} /> : null}
@@ -1956,6 +1874,125 @@ export function Game({
           onClose={() => setSheet(null)}
         />
       ) : null}
+    </>
+  );
+  return (
+    <div className={`app${lay ? ' custom' : ''}${editing ? ' editing' : ''}`}>
+      <header className="top">
+        <div className="brand">
+          <span dangerouslySetInnerHTML={{ __html: BRAND_SVG }} style={{ display: 'contents' }} />
+          <span>Settlers</span>
+        </div>
+        <div className="turnchip" data-testid="turnchip">
+          {v.phase === 'over' ? (
+            <>
+              <span className="dot" style={{ background: PCOL[v.players[v.winner!]!.color] }} />
+              <span className="label">{nameOf(v, v.winner)} won</span>
+            </>
+          ) : (
+            <>
+              <span className="dot" style={{ background: PCOL[v.players[v.turn]!.color] }} />
+              <span className="label">{mine ? 'Your turn' : cur}</span>
+              <span className="sub">
+                {
+                  {
+                    setup: 'setup',
+                    preroll: 'to roll',
+                    discard: 'discarding',
+                    robber: 'robber',
+                    roads: 'building',
+                    main: 'playing',
+                    gold: 'choosing gold',
+                    ck: 'choosing',
+                    treasure: 'treasure',
+                  }[v.stage]
+                }
+              </span>
+            </>
+          )}
+        </div>
+        <button className="turnchip roomchip" onClick={() => setSheet({ k: 'menu' })} title="Room menu">
+          <span className="sub">Room</span>
+          <span className="label">{room.code}</span>
+        </button>
+        {/* SPEC 8.5: the target, always on screen (raised by Keep playing). */}
+        <span className="turnchip goalchip" data-testid="goal" title={`First to ${v.winVP} points wins`}>
+          <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+            <path
+              d="M3 13V1.5M3 2h8l-2 3 2 3H3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="sub">First to</span>
+          <span className="label">{v.winVP}</span>
+        </span>
+        {v.ck ? <BarbarianChip v={v} /> : null}
+        <div className="spacer" />
+        <span
+          className={`sync ${status === 'live' ? (busy ? 'busy' : 'live') : status === 'offline' ? 'off' : 'busy'}`}
+          title={status}
+          data-testid="sync"
+        />
+        <MusicButton onOpen={() => setSheet({ k: 'music' })} />
+        {dice ? (
+          <button className="btn small ghost" onClick={() => setSheet({ k: 'dice' })} data-testid="open-dice">
+            Dice<span className="wide-only"> stats</span>
+          </button>
+        ) : null}
+        <EventDie v={v} />
+        {me != null ? (
+          <button
+            className={`btn small ghost wide-only${editing ? ' on' : ''}`}
+            onClick={() => setEditing((x) => !x)}
+            data-testid="open-layout"
+            title="Move, float or hide the boxes on this screen"
+          >
+            Layout
+          </button>
+        ) : null}
+        <button className="iconbtn" type="button" aria-label="Menu" onClick={() => setSheet({ k: 'menu' })}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+      </header>
+
+      {lay ? (
+        <LayoutView
+          r={lay}
+          device={device}
+          editing={editing}
+          main={mainEl}
+          panels={{
+            players: playersEl,
+            talk: talkEl,
+            hand: handEl,
+            build: boxes?.build ?? null,
+            improve: boxes?.improve ?? null,
+            play: boxes?.play ?? null,
+            barbarians: barbEl,
+          }}
+          onChange={saveLayout}
+          onDone={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          {mainEl}
+
+          {handEl}
+
+          <aside className="side">
+            {barbEl}
+            {playersEl}
+            {talkEl}
+          </aside>
+        </>
+      )}
+
+      {sheetsEl}
     </div>
   );
 }
@@ -2292,19 +2329,34 @@ function Offers({
   v,
   busy,
   ask,
+  warnOver,
+  askOver,
 }: {
   v: PlayerView;
   busy: boolean;
   ask: (q: { title: string; sub?: string; yes: string; body?: React.ReactNode }, go: () => void) => void;
+  /** Say when a trade would put you over your hand limit, and ask once more (SPEC 8.4). */
+  warnOver: boolean;
+  askOver: (risk: TradeRisk | null, go: () => void) => void;
 }) {
   if (v.phase !== 'play' || v.stage !== 'main' || !v.offers.length) return null;
   const me = v.me;
+  const s = stateFromView(v);
   return (
     <div className="offers">
       {v.offers.map((o) => {
         const fromCur = o.from === v.turn;
         const acceptors = v.players.map((_, i) => i).filter((i) => i !== o.from && o.resp[i] === 1);
         const myRes = v.hand?.res;
+        // What this trade would do to your hand: you give what you offered, or what they want.
+        const risk =
+          me == null
+            ? null
+            : me === o.from
+              ? tradeRisk(v, s, o.give, o.want)
+              : (fromCur || v.turn === me) && o.resp[me] == null
+                ? tradeRisk(v, s, o.want, o.give)
+                : null;
         return (
           <div className="offer" key={o.id} data-testid="offer">
             <div className="line">
@@ -2331,6 +2383,11 @@ function Offers({
                   ))}
               </div>
             ) : null}
+            {warnOver && risk ? (
+              <div className="overlimit" data-testid="offer-overlimit">
+                <span aria-hidden="true">⚠</span> {risk.text}
+              </div>
+            ) : null}
             <div className="row">
               {me === o.from ? (
                 <>
@@ -2351,7 +2408,8 @@ function Offers({
                                   </p>
                                 ),
                               },
-                              () => void client.act({ type: 'confirm', id: o.id, with: w }),
+                              () =>
+                                askOver(risk, () => void client.act({ type: 'confirm', id: o.id, with: w })),
                             )
                           }
                         >
@@ -2386,7 +2444,7 @@ function Offers({
                             </p>
                           ),
                         },
-                        () => void client.act({ type: 'respond', id: o.id, yes: true }),
+                        () => askOver(risk, () => void client.act({ type: 'respond', id: o.id, yes: true })),
                       )
                     }
                   >

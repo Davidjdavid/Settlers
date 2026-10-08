@@ -571,6 +571,14 @@ input:focus-visible,
 .btn.danger {
   color: var(--alarm);
 }
+/* A button that ends or deletes something: dark text on the alarm colour (was alarm on gold). */
+.btn.primary.danger {
+  background: var(--alarm);
+  color: #2a0d07;
+}
+.btn.primary.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--alarm) 85%, white);
+}
 .btn:disabled {
   opacity: 0.38;
   cursor: not-allowed;
@@ -1897,6 +1905,24 @@ a.btn {
 .rejoin-nick {
   width: 130px;
   padding: 6px 9px;
+}
+/* A trade that would put you over your hand limit (SPEC 8.4). */
+.overlimit {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--alarm) 60%, transparent);
+  background: color-mix(in srgb, var(--alarm) 12%, transparent);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.overlimit > span[aria-hidden] {
+  color: var(--alarm);
+  font-weight: 700;
+}
+.tgrid .overlimit {
+  grid-column: 1 / -1;
 }
 .tradeq {
   display: flex;

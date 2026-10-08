@@ -26,6 +26,7 @@ import {
   TRACK_ORDER,
   cardIcon,
 } from './art';
+import { tradeRisk } from './handrisk';
 import { client } from './net';
 import { cardsText, nameOf } from './text';
 
@@ -191,10 +192,13 @@ export function TradeSheet({
   v,
   onClose,
   tab: start = 'players',
+  warnOver = true,
 }: {
   v: PlayerView;
   onClose: () => void;
   tab?: 'players' | 'bank';
+  /** Say when the offer would put you over your hand limit (setting `tradeLimit`, SPEC 8.4). */
+  warnOver?: boolean;
 }) {
   const me = v.me!;
   const myTurn = v.turn === me;
@@ -215,6 +219,15 @@ export function TradeSheet({
   const lots = kinds.reduce((a, r) => a + Math.floor((bGive[r] ?? 0) / rateOf(r)), 0);
   const gets = total(bGet);
   const bankOK = lots > 0 && lots === gets;
+  // An offer that would put you over your hand limit says so. Off your turn the trade happens as
+  // soon as the player whose turn it is takes it, so sending it asks once more; on your turn you
+  // are asked when you pick who to trade with.
+  const risk = warnOver && canOffer ? tradeRisk(v, s, give, want) : null;
+  const [sure, setSure] = useState(false);
+  const send = () => {
+    void client.act({ type: 'offer', give, want });
+    onClose();
+  };
   const bankTrade = () => {
     const give = Object.fromEntries(kinds.filter((r) => bGive[r]).map((r) => [r, bGive[r]!]));
     const get = Object.fromEntries(kinds.filter((r) => bGet[r]).map((r) => [r, bGet[r]!]));
@@ -240,16 +253,25 @@ export function TradeSheet({
       onClose={onClose}
       foot={
         tab === 'players' ? (
-          <button
-            className="btn primary"
-            disabled={!canOffer}
-            onClick={() => {
-              void client.act({ type: 'offer', give, want });
-              onClose();
-            }}
-          >
-            Offer {cardsText(give)} for {cardsText(want)}
-          </button>
+          risk && sure ? (
+            <>
+              <button className="btn ghost" onClick={() => setSure(false)} data-testid="offer-change">
+                Change it
+              </button>
+              <button className="btn primary" onClick={send} data-testid="offer-anyway">
+                Offer anyway
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn primary"
+              disabled={!canOffer}
+              data-testid="offer-send"
+              onClick={() => (risk && !myTurn ? setSure(true) : send())}
+            >
+              Offer {cardsText(give)} for {cardsText(want)}
+            </button>
+          )
         ) : (
           <button className="btn primary" disabled={!bankOK} data-testid="bank-trade" onClick={bankTrade}>
             {bankOK
@@ -289,16 +311,28 @@ export function TradeSheet({
                 label={`give ${r}`}
                 value={give[r] ?? 0}
                 max={has(r)}
-                onChange={(x) => setGive({ ...give, [r]: x })}
+                onChange={(x) => {
+                  setGive({ ...give, [r]: x });
+                  setSure(false);
+                }}
               />
               <Ctl
                 label={`want ${r}`}
                 value={want[r] ?? 0}
                 max={19}
-                onChange={(x) => setWant({ ...want, [r]: x })}
+                onChange={(x) => {
+                  setWant({ ...want, [r]: x });
+                  setSure(false);
+                }}
               />
             </div>
           ))}
+          {risk ? (
+            <p className="overlimit" data-testid="trade-overlimit">
+              <span aria-hidden="true">⚠</span> {risk.text}
+              {sure ? ` If ${nameOf(v, v.turn)} takes it, the trade happens at once. Offer it anyway?` : ''}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="tgrid" data-testid="bank-basket">
