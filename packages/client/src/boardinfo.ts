@@ -147,7 +147,11 @@ export function spotLabel(view: PlayerView, spot: Spot, rolled?: readonly number
       });
       const robbed = view.board.robber === spot.h;
       return `${tileName(view, spot.h)} · comes up ${ways} in 36 rolls (${Math.round((ways / 36) * 100)}%)${times} · ${
-        robbed ? 'the robber is on it: it pays nothing' : pays.length ? `pays ${pays.join(', ')}` : 'pays nobody yet'
+        robbed
+          ? 'the robber is on it: it pays nothing'
+          : pays.length
+            ? `pays ${pays.join(', ')}`
+            : 'pays nobody yet'
       }`;
     }
     case 'knight': {
