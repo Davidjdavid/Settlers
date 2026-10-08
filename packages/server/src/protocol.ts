@@ -12,6 +12,7 @@ import type {
   GameEvent,
   LogNote,
   GameStats,
+  RollEntry,
   GenRules,
   MapData,
   Persona,
@@ -600,6 +601,8 @@ export interface DiceInfo {
   /** Event die faces (C&K). */
   events: Record<string, number>;
   chosen: number;
+  /** Every roll in order (SPEC 13.3); absent for games from before it was kept. */
+  list?: RollEntry[];
 }
 
 /** A game in the saved list (SPEC 5.7). */

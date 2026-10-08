@@ -12,9 +12,11 @@ import {
   sumCards,
   type Color,
   type GameStats,
+  type RollEntry,
   type VPPart,
 } from '@settlers/engine';
 import type { DiceInfo, GameStatsInfo } from '@settlers/server/protocol';
+import { diceFacts } from './dicefacts';
 import { CARD_LABEL, DEV_LABEL, PCOL, PROGRESS_LABEL, TILE_COLOR } from './art';
 import { Brand, MODE_NAME, MapPreview } from './home';
 import { client, useClient } from './net';
@@ -109,7 +111,84 @@ export function EventDieChart({ events }: { events: Record<string, number> }) {
   );
 }
 
-/** The live dice panel during a game (SPEC 5.4). */
+/** One die face, drawn with its pips. */
+function DieFace({ n }: { n: number }) {
+  const P: Record<number, [number, number][]> = {
+    1: [[8, 8]],
+    2: [[4.5, 4.5], [11.5, 11.5]],
+    3: [[4.5, 4.5], [8, 8], [11.5, 11.5]],
+    4: [[4.5, 4.5], [11.5, 4.5], [4.5, 11.5], [11.5, 11.5]],
+    5: [[4.5, 4.5], [11.5, 4.5], [8, 8], [4.5, 11.5], [11.5, 11.5]],
+    6: [[4.5, 4], [11.5, 4], [4.5, 8], [11.5, 8], [4.5, 12], [11.5, 12]],
+  }; // prettier-ignore
+  return (
+    <svg className="dieface" viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="15" height="15" rx="3.5" />
+      {(P[n] ?? []).map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="1.6" />
+      ))}
+    </svg>
+  );
+}
+
+const FACE_WORD: Record<string, string> = {
+  ship: 'ship',
+  trade: 'yellow',
+  politics: 'blue',
+  science: 'green',
+};
+
+/** Every roll so far, newest first (SPEC 13.3); a run of one total is marked. */
+function RollList({ list, names }: { list: RollEntry[]; names: string[] }) {
+  const [all, setAll] = useState(false);
+  const SHOW = 12;
+  // Rolls in a run of the same total (two or more in a row) are marked.
+  const totals = list.map((r) => r.d[0] + r.d[1]);
+  const inRun = totals.map(
+    (t, i) =>
+      !list[i]!.set &&
+      ((i > 0 && totals[i - 1] === t && !list[i - 1]!.set) ||
+        (i + 1 < totals.length && totals[i + 1] === t && !list[i + 1]!.set)),
+  );
+  const rows = list.map((r, i) => ({ r, i })).reverse();
+  const shown = all ? rows : rows.slice(0, SHOW);
+  return (
+    <div className="rolls" data-testid="roll-list">
+      <ol>
+        {shown.map(({ r, i }) => {
+          const t = r.d[0] + r.d[1];
+          return (
+            <li
+              key={i}
+              className={`rollrow${t === 7 ? ' seven' : ''}${inRun[i] ? ' run' : ''}`}
+              data-testid="roll-row"
+              data-total={t}
+            >
+              <span className="rn">#{i + 1}</span>
+              <span className="rt">Turn {r.turn}</span>
+              <span className="rp">{names[r.p] ?? 'Someone'}</span>
+              <span className="rd">
+                <DieFace n={r.d[0]} />
+                <DieFace n={r.d[1]} />
+              </span>
+              <b className="rs">{t}</b>
+              {r.again ? <span className="rtag">rolled again</span> : null}
+              {r.set ? <span className="rtag">Alchemist</span> : null}
+              {r.e ? <span className={`rtag face-${r.e}`}>{FACE_WORD[r.e]}</span> : null}
+            </li>
+          );
+        })}
+      </ol>
+      {rows.length > SHOW ? (
+        <button className="btn small ghost" data-testid="roll-list-all" onClick={() => setAll(!all)}>
+          {all ? 'Show the latest only' : `Show all ${rows.length} rolls`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The live dice panel during a game (SPEC 5.4, 13.3). */
 export function DicePanel({
   dice,
   names,
@@ -150,6 +229,25 @@ export function DicePanel({
         </>
       }
     >
+      {dice.list ? (
+        <>
+          <h3 className="sheeth">What stands out</h3>
+          <ul className="facts" data-testid="dice-facts">
+            {diceFacts(dice.list, names).map((f, i) => (
+              <li key={i} className={`fact ${f.k}`} data-k={f.k}>
+                {f.text}
+              </li>
+            ))}
+          </ul>
+          <h3 className="sheeth">Every roll</h3>
+          {dice.list.length ? (
+            <RollList list={dice.list} names={names} />
+          ) : (
+            <p className="sub">No rolls yet.</p>
+          )}
+          <h3 className="sheeth">The numbers</h3>
+        </>
+      ) : null}
       <DiceChart dice={dice.dice} />
       {dry.length ? (
         <p className="callouts" data-testid="droughts">
@@ -389,6 +487,15 @@ export function GameStatsView({
           </tbody>
         </table>
       </div>
+      {stats.rollList?.length ? (
+        <ul className="facts" data-testid="game-dice-facts">
+          {diceFacts(stats.rollList, names).map((f, i) => (
+            <li key={i} className={`fact ${f.k}`} data-k={f.k}>
+              {f.text}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <DiceChart dice={stats.dice} title="Dice this game" />
       <EventDieChart events={stats.events} />
     </div>

@@ -4205,3 +4205,112 @@ button.vp {
   cursor: pointer;
   justify-self: start;
 }
+
+/* The dice panel (SPEC 13.3): what stands out, then every roll, then the numbers. */
+.sheet h3.sheeth {
+  margin: 14px 0 6px;
+  font: 700 12px var(--ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet h3.sheeth:first-child {
+  margin-top: 0;
+}
+.facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.fact {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border-left: 4px solid var(--line-2);
+  font-size: 14px;
+  line-height: 1.35;
+}
+.fact.streak,
+.fact.mine {
+  border-left-color: var(--lantern);
+}
+.fact.hot {
+  border-left-color: #ff8a75;
+}
+.fact.cold,
+.fact.dry {
+  border-left-color: #7fb8c2;
+}
+.rolls ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+.rollrow {
+  display: grid;
+  grid-template-columns: 3em 4.6em minmax(0, 1fr) auto 1.8em;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  border-left: 3px solid transparent;
+}
+.rollrow:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.rollrow .rn,
+.rollrow .rt {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.rollrow .rp {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rollrow .rd {
+  display: inline-flex;
+  gap: 3px;
+}
+.rollrow .rs {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rollrow.seven .rs {
+  color: #ff8a75;
+}
+.rollrow.run {
+  border-left-color: var(--lantern);
+  background: rgba(255, 210, 122, 0.08);
+}
+.rollrow .rtag {
+  grid-column: 3 / -1;
+  justify-self: start;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--panel-3);
+  color: var(--ink-2);
+}
+.dieface {
+  width: 16px;
+  height: 16px;
+}
+.dieface rect {
+  fill: #f4efe4;
+  stroke: rgba(0, 0, 0, 0.35);
+}
+.dieface circle {
+  fill: #1d1d1d;
+}
+.rollrow.seven .dieface circle {
+  fill: #b3261e;
+}
+.rolls .btn {
+  margin-top: 6px;
+}

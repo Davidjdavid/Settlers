@@ -84,6 +84,33 @@ test('undo a whole turn, the bank basket, and arranging your cards', async ({ br
       await expect(p.getByTestId('log')).toContainText('turn was undone, back to just after the roll');
     }
 
+    // The dice panel (SPEC 13.3): what stands out first, then every roll (newest first), then the
+    // numbers as before.
+    const d = a;
+    await d.getByTestId('open-dice').click();
+    await expect(d.getByTestId('dice-facts').locator('[data-k=sevens]')).toContainText('Sevens:');
+    await expect(d.getByTestId('dice-facts').locator('[data-k=fair]')).toBeVisible();
+    const list = await d.evaluate(() => (window as any).__settlers.state().dice.list);
+    expect(list.length).toBeGreaterThan(0);
+    const newest = list[list.length - 1];
+    const firstRow = d.getByTestId('roll-row').first();
+    await expect(firstRow).toHaveAttribute('data-total', String(newest.d[0] + newest.d[1]));
+    await expect(firstRow).toContainText(`#${list.length}`);
+    await expect(firstRow.locator('.dieface')).toHaveCount(2);
+    await expect(d.getByTestId('roll-row')).toHaveCount(Math.min(12, list.length));
+    if (list.length > 12) {
+      await d.getByTestId('roll-list-all').click();
+      await expect(d.getByTestId('roll-row')).toHaveCount(list.length);
+    }
+    await expect(d.getByTestId('dice-chart')).toBeVisible();
+    if (SHOTS) {
+      await d.screenshot({ path: `${SHOTS}/m13-dice-panel.png` });
+      await d.setViewportSize({ width: 390, height: 844 });
+      await d.screenshot({ path: `${SHOTS}/m13-dice-panel-phone.png` });
+      await d.setViewportSize({ width: 1280, height: 860 });
+    }
+    await d.keyboard.press('Escape');
+
     // The bank basket, on a made-up view: 8 sheep and 4 wheat (4:1) for 2 brick and an ore.
     const b = others[0]!;
     const staged = await view(b);

@@ -1791,6 +1791,7 @@ export class Rooms {
       rolls: st.players.map((p) => p.rolls),
       events: st.events,
       chosen: st.chosen,
+      ...(st.rollList ? { list: st.rollList } : {}),
     };
     return room.game!.state.phase === 'over' ? { dice, stats: st } : { dice };
   }

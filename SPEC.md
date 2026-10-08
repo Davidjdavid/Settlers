@@ -1132,6 +1132,19 @@ Notes from a full game with friends: it worked, but one screen crashed upgrading
   - The bank must have every card you get.
   - It is exactly the same as making those single bank trades one after another. The log shows it as one line, and it can be undone like a bank trade.
 
+### 13.3 Dice: every roll, and stats people want to read
+
+One player rolled four 7s in a row, and the dice panel's numbers ("no 5 in 14 rolls") didn't help anyone make sense of it. The Dice panel now reads top to bottom:
+
+- **What stands out**, in plain sentences, only the ones worth saying:
+  - **Streaks.** The longest run of one total, both in a row overall and on one player's own turns ("Ann rolled 7 on four turns running"). Each says how often that happens: "about 1 game in 40 with this many rolls".
+  - **Hot and cold numbers.** A total that has come up much more or less than two dice would give ("8s are hot: 11 so far, about 6 expected"). Also a total that hasn't come up for an unusually long time.
+  - **Sevens.** How many, against how many were expected, and who has rolled the most.
+  - **Do the dice look fair?** A spread this uneven turns up in about N games out of 10 (from a chi-square test, worded plainly). Below 30 rolls it says it's too early to tell. It always says where the dice come from: each die is rolled by the server's secure random generator (5.3).
+- **Every roll**, newest first: the roll's number, the turn, who rolled, both dice and the total. 7s are marked. Rolls in a streak are marked as part of it. A 7 rolled again (house rule) and a roll set by the Alchemist are labelled. The event die is shown in Knights.
+- **The numbers**, at the bottom: the chart of totals against two dice, rolls per player, the event die, as before.
+- Rolls are public, so the list is sent to everyone. The server keeps it in the game's stats, worked out from the saved moves like every other stat (`rollList`). Games from before have no list, and the panel shows only the numbers.
+
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
 - Options for a more competent CPU player.

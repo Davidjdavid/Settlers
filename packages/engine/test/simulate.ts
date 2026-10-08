@@ -629,6 +629,20 @@ export function statsCheck(
   const rolls = live.dice.reduce((a, b) => a + b, 0);
   if (rolls !== live.rollLog.length) bad.push(`dice chart ${rolls} rolls, log ${live.rollLog.length}`);
   if (live.dice[0] || live.dice[1]) bad.push('dice chart has totals below 2');
+  // Every roll in the list (SPEC 13.3): the counted ones are the chart's, in order, by the same player.
+  const counted = (live.rollList ?? []).filter((r) => !r.set);
+  if (
+    JSON.stringify(counted.map((r) => [r.p, r.d[0] + r.d[1]])) !==
+    JSON.stringify(live.rollLog.map((r) => [r.p, r.t]))
+  )
+    bad.push('roll list does not match the dice chart');
+  if ((live.rollList ?? []).filter((r) => r.set).length !== live.chosen)
+    bad.push('roll list set rolls != chosen');
+  const perPlayer = live.players.map(
+    (_, q) => (live.rollList ?? []).filter((r) => r.p === q && !r.again).length,
+  );
+  if (JSON.stringify(perPlayer) !== JSON.stringify(live.players.map((x) => x.rolls)))
+    bad.push(`roll list per player ${perPlayer} != rolls ${live.players.map((x) => x.rolls)}`);
   // After keep playing, the game's result is still its first win (SPEC 8.9); overtime wins are listed.
   const first = s.keep?.on ? s.keep.first.p : s.winner;
   if (live.winner !== first) bad.push(`stats winner ${live.winner} != ${first}`);

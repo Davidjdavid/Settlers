@@ -22,6 +22,7 @@ import {
   type GameState,
   type Resource,
   type Seat,
+  type Track,
   type VPPart,
 } from './types';
 
@@ -56,6 +57,16 @@ export interface PlayerStats {
   unexplained: number;
 }
 
+/** One roll of the dice (SPEC 13.3). */
+export interface RollEntry {
+  p: Seat;
+  d: [number, number];
+  turn: number;
+  e?: 'ship' | Track;
+  again?: true;
+  set?: true;
+}
+
 export interface GameStats {
   /** How many times each total 2–12 was rolled (index = total), chosen Alchemist rolls excluded. */
   dice: number[];
@@ -63,6 +74,11 @@ export interface GameStats {
   rollLog: { p: Seat; t: number }[];
   /** Rolls set by the Alchemist (not random, so not in `dice`). */
   chosen: number;
+  /**
+   * Every roll in order (SPEC 13.3): who, both dice, the turn, the event die; `again` for a 7
+   * rolled again under a house rule, `set` for dice the Alchemist chose. Absent in old stats.
+   */
+  rollList?: RollEntry[];
   /** Event die faces (Cities & Knights). */
   events: Record<string, number>;
   /** Each player's total points at the end of each round of turns (index = turn number). */
@@ -105,6 +121,7 @@ export function emptyStats(n: number): GameStats {
   return {
     dice: new Array<number>(13).fill(0),
     rollLog: [],
+    rollList: [],
     chosen: 0,
     events: {},
     pointsByTurn: [],
@@ -245,6 +262,16 @@ export class StatsFold {
           st.dice[e.d[0] + e.d[1]]!++;
           st.rollLog.push({ p, t: e.d[0] + e.d[1] });
         }
+      // Every roll, for the list (SPEC 13.3); the event die goes with the roll that counts.
+      const face = events.find((e) => e.k === 'eventDie');
+      for (const e of events) {
+        if (e.k !== 'roll') continue;
+        const r: RollEntry = { p, d: [e.d[0], e.d[1]], turn: next.turnN };
+        if (e.redo) r.again = true;
+        else if (face?.k === 'eventDie') r.e = face.face;
+        if (chosen) r.set = true;
+        (st.rollList ??= []).push(r);
+      }
       // Luck: what these buildings would have produced, on average, from this roll.
       if (!chosen)
         for (let t = 2; t <= 12; t++) {
