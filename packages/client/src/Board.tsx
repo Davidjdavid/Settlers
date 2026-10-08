@@ -268,11 +268,9 @@ function pirateSVG(g: Geometry, i: number): string {
 }
 
 /**
- * A knight: a shield in the owner's colour, clearly bigger for each level, with its level as 1, 2
- * or 3 rank chevrons across the shield (SPEC 13.2: a small number was hard to read); gold ring when
- * active.
+ * A knight: a shield in the owner's colour, bigger for each level, with its level (1, 2 or 3) on a
+ * light badge; gold ring when active.
  */
-const KNIGHT_NAME = ['', 'Basic', 'Strong', 'Mighty'];
 function knightSVG(
   g: Geometry,
   v: number,
@@ -287,19 +285,10 @@ function knightSVG(
   const x = V.x * K;
   const y = V.y * K;
   // Basic, strong and mighty knights differ in size, so a glance tells them apart.
-  const n = Math.max(1, Math.min(3, lvl));
-  const r = [0.15, 0.15, 0.2, 0.25][n]! * K;
-  // Rank chevrons, light with a dark edge so they read on any colour.
-  const cw = r * 0.62;
-  const ch = r * 0.3;
-  const step = r * 0.36;
-  const y0 = y - ((n - 1) * step) / 2 - ch * 0.35;
-  let marks = '';
-  for (let i = 0; i < n; i++) {
-    const yy = y0 + i * step;
-    marks += `<path d="M${f1(x - cw)} ${f1(yy)}L${f1(x)} ${f1(yy + ch)}L${f1(x + cw)} ${f1(yy)}" fill="none" stroke="#0b1418" stroke-width="${f1(r * 0.36)}" stroke-linecap="round" stroke-linejoin="round"/><path d="M${f1(x - cw)} ${f1(yy)}L${f1(x)} ${f1(yy + ch)}L${f1(x + cw)} ${f1(yy)}" fill="none" stroke="#fff6dc" stroke-width="${f1(r * 0.2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-  }
-  const badge = `<g class="klvl" data-n="${n}"><title>${KNIGHT_NAME[n]} knight (level ${n})</title>${marks}</g>`;
+  const r = [0.17, 0.17, 0.2, 0.23][lvl]! * K;
+  const bx = x + r * 0.78;
+  const by = y + r * 0.72;
+  const badge = `<circle cx="${f1(bx)}" cy="${f1(by)}" r="${f1(0.095 * K)}" fill="#fff6dc" stroke="#0b1418" stroke-width="1.8"/><text x="${f1(bx)}" y="${f1(by)}" text-anchor="middle" dominant-baseline="central" font-size="${f1(0.13 * K)}" font-weight="800" fill="#0b1418" class="klvl">${lvl}</text>`;
   // Level by shape as well (SPEC 5.11): strong has a crest, mighty a crown.
   const top = y - r * 1.05;
   const crest =

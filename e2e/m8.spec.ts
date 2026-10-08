@@ -547,11 +547,8 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await expect(c.locator('#board')).toBeVisible();
     let tv = await tapView('settlement');
     // Every knight shows its level on a badge.
-    for (const [i, at] of tv.knights.entries()) {
-      // Shown as 1, 2 or 3 rank chevrons (each a dark edge and a light stripe).
-      await expect(c.locator(`#board [data-knight="${at}"] .klvl`)).toHaveAttribute('data-n', String(i + 1));
-      await expect(c.locator(`#board [data-knight="${at}"] .klvl path`)).toHaveCount(2 * (i + 1));
-    }
+    for (const [i, at] of tv.knights.entries())
+      await expect(c.locator(`#board [data-knight="${at}"] .klvl`)).toHaveText(String(i + 1));
     if (process.env.SHOTS)
       await c.locator('#board').screenshot({ path: `${process.env.SHOTS}/m8-knight-levels.png` });
     // A settlement: tap it, confirm, and it becomes a city.
