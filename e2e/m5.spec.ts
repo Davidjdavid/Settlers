@@ -15,7 +15,7 @@
 
 import { expect, test, type BrowserContextOptions, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { baseGame, sitAs, view, type Frame } from './table';
+import { baseGame, lobbyStep, sitAs, startGame, view, type Frame } from './table';
 
 test.use({ actionTimeout: 15000 });
 test.setTimeout(20 * 60 * 1000);
@@ -74,9 +74,11 @@ test('three people play a whole game with the Milestone 5 features', async ({ br
     }
     await expect(a.locator('.seat:not(.open)')).toHaveCount(3);
     // A short game: 6 points.
+    await lobbyStep(a, 'game');
     for (let i = 0; i < 4; i++) await a.click('[aria-label="Fewer points"]');
+    await lobbyStep(c, 'game');
     await expect(c.getByTestId('win-vp')).toHaveText('6');
-    await a.click('[data-testid=start]');
+    await startGame(a);
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
 
     const seatOf = async (p: Page): Promise<number> => (await view(p)).me;

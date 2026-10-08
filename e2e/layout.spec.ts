@@ -11,7 +11,7 @@
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { confirmPlace, playUntil, seatedTable, view } from './table';
+import { confirmPlace, playUntil, seatedTable, startGame, view } from './table';
 
 const SHOTS = process.env.SHOTS;
 const shot = async (p: Page, name: string) => {
@@ -44,7 +44,7 @@ test('your own layout on a laptop, a tablet and a phone', async ({ browser }) =>
   await lap.setViewportSize({ width: 1366, height: 768 });
   await tab.setViewportSize({ width: 1024, height: 768 });
   await phone.setViewportSize({ width: 390, height: 844 });
-  await lap.getByTestId('start').click();
+  await startGame(lap);
   for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
   // The standard screen to begin with: nothing custom.
   for (const p of t.pages) await expect(p.locator('.app.custom')).toHaveCount(0);

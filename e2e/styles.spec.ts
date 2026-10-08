@@ -9,7 +9,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { confirmPlace, playUntil, seatedTable, view } from './table';
+import { confirmPlace, lobbyStep, playUntil, seatedTable, startGame, view } from './table';
 
 const SHOTS = process.env.SHOTS;
 const STYLES = [
@@ -83,9 +83,11 @@ test('everyone picks their own board style, at the table and mid-game', async ({
     await expect(a.getByTestId('mapboard')).toHaveAttribute('data-style', 'pixel');
 
     /* ---------- The game ---------- */
+    await lobbyStep(a, 'game');
     await a.click('[data-testid=mode-knights]');
+    await lobbyStep(c, 'game');
     await expect(c.getByTestId('mode-knights')).toHaveClass(/on/);
-    await a.click('[data-testid=start]');
+    await startGame(a);
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     await expect(a.locator('#board')).toHaveAttribute('data-style', 'pixel');
     await expect(b.locator('#board')).toHaveAttribute('data-style', 'classic');

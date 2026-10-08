@@ -12,7 +12,16 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, confirmPlace, playUntil, seatedTable, turnPage, view } from './table';
+import {
+  checkFrames,
+  confirmPlace,
+  lobbyStep,
+  playUntil,
+  seatedTable,
+  startGame,
+  turnPage,
+  view,
+} from './table';
 
 test('three players play a full Seafarers game', async ({ browser }) => {
   const server = new TestServer(await freePort(), 'sea passphrase');
@@ -22,6 +31,7 @@ test('three players play a full Seafarers game', async ({ browser }) => {
     const [a, b, c] = t.pages as [Page, Page, Page];
 
     // Options, picked by clicking, are shown to everyone.
+    for (const p of t.pages) await lobbyStep(p, 'game');
     await a.click('[data-testid=mode-seafarers]');
     await expect(b.getByTestId('mode-seafarers')).toHaveClass(/on/);
     await expect(c.getByTestId('win-vp')).toHaveText('14');
@@ -30,7 +40,7 @@ test('three players play a full Seafarers game', async ({ browser }) => {
     // A shorter game: 10 points to win, set with the minus button.
     for (let i = 0; i < 4; i++) await a.click('[aria-label="Fewer points"]');
     await expect(c.getByTestId('win-vp')).toHaveText('10');
-    await a.click('[data-testid=start]');
+    await startGame(a);
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     const v0 = await view(a);
     expect(v0.rules.modules).toEqual(['seafarers']);

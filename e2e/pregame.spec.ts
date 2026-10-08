@@ -9,7 +9,16 @@
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { freePort, TestServer } from './server';
-import { checkFrames, confirmPlace, playUntil, seatedTable, view, type Table } from './table';
+import {
+  checkFrames,
+  confirmPlace,
+  lobbyStep,
+  playUntil,
+  seatedTable,
+  startGame,
+  view,
+  type Table,
+} from './table';
 
 test.use({ actionTimeout: 15_000 });
 test.setTimeout(20 * 60_000);
@@ -83,6 +92,8 @@ async function playToEnd(t: Table) {
 test('three browsers share the table, then play on a generated board', async ({ browser }) => {
   const t = await seatedTable(browser, server, ['Joe', 'Alex', 'Sam']);
   const [joe, alex, sam] = t.pages as [Page, Page, Page];
+  // The lobby's last step: who goes first and Ready (the board is beside it throughout).
+  for (const p of t.pages) await lobbyStep(p, 'start');
   await sameBoard(t);
   await expect(joe.getByTestId('board-source')).toContainText('Standard board');
 
@@ -135,9 +146,11 @@ test('three browsers share the table, then play on a generated board', async ({ 
   }
   expect(warnings.size, 'boards with different warnings were tried').toBeGreaterThan(1);
   // Changing a rule on the other side doesn't move them either.
+  await lobbyStep(joe, 'game');
   await joe.getByTestId('mode-knights').click();
   await joe.getByTestId('mode-base').click();
   expect(await spots()).toEqual(at0);
+  await lobbyStep(joe, 'start');
 
   // Alex edits the board: drag one tile onto another.
   await alex.getByTestId('edit-board').check();
@@ -185,7 +198,7 @@ test('three browsers share the table, then play on a generated board', async ({ 
   const order = [...circle.slice(circle.indexOf(first)), ...circle.slice(0, circle.indexOf(first))];
 
   const final = (await tableOf(joe)).board.map;
-  await alex.getByTestId('start').click();
+  await startGame(alex);
   for (const p of t.pages) await expect(p.getByTestId('lobby')).toHaveCount(0);
   await startsOnTableBoard(t, final);
   const v = await view(joe);
@@ -218,6 +231,7 @@ test('a full game on a custom map', async ({ browser }) => {
 
   const t = await seatedTable(browser, server, ['Ann', 'Ben', 'Cy']);
   const [ann] = t.pages as [Page, Page, Page];
+  for (const p of t.pages) await lobbyStep(p, 'start');
   await ann.getByTestId('board-kind').selectOption('saved');
   await expect(ann.getByTestId('board-map')).toHaveValue(/^m-/);
   for (const p of t.pages) await expect(p.getByTestId('board-source')).toContainText('Saved map · Ore heart');
@@ -231,7 +245,7 @@ test('a full game on a custom map', async ({ browser }) => {
   await t.pages[2]!.locator('[data-testid=chair][data-name=Cy]').click();
   for (const p of t.pages) await expect(p.getByTestId('order-line')).toContainText('① Cy');
   await shot(ann, 'pregame-3-custom');
-  // On a phone the table stacks above the room card and nothing spills sideways.
+  // On a phone the table stacks below the room card and nothing spills sideways.
   const phone = t.pages[1]!;
   await phone.setViewportSize({ width: 390, height: 820 });
   await expect(phone.getByTestId('table-board')).toBeVisible();
@@ -239,7 +253,7 @@ test('a full game on a custom map', async ({ browser }) => {
     await phone.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
   ).toBeLessThanOrEqual(0);
   await shot(phone, 'pregame-4-phone');
-  await ann.getByTestId('start').click();
+  await startGame(ann);
   for (const p of t.pages) await expect(p.getByTestId('lobby')).toHaveCount(0);
   await startsOnTableBoard(t, board);
   expect((await view(ann)).players[0].nick).toBe('Cy');

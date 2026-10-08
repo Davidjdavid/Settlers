@@ -16,7 +16,16 @@
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, confirmPlace, playUntil, seatedTable, view, type Table } from './table';
+import {
+  checkFrames,
+  confirmPlace,
+  lobbyStep,
+  playUntil,
+  seatedTable,
+  startGame,
+  view,
+  type Table,
+} from './table';
 
 const SHOTS = process.env.SHOTS;
 const shot = async (p: Page, name: string) => {
@@ -146,6 +155,7 @@ test('a Seafarers map from the editor, played to the end; then the Fog Islands',
   /* ---------- Played at the table ---------- */
   const t = await seatedTable(browser, server, ['Ann', 'Ben', 'Cy']);
   const [ann] = t.pages as [Page, Page, Page];
+  await lobbyStep(ann, 'game');
   await ann.getByTestId('mode-seafarers').click();
   await ann.getByTestId('board-kind').selectOption('saved');
   await expect(ann.getByTestId('board-map')).toHaveValue(/^m-/);
@@ -158,7 +168,7 @@ test('a Seafarers map from the editor, played to the end; then the Fog Islands',
   expect(golds.length).toBeGreaterThan(0);
   for (const g of golds) expect(REGION.some(([q, r]) => q === g.q && r === g.r)).toBe(true);
   await shot(ann, 'table');
-  await ann.getByTestId('start').click();
+  await startGame(ann);
   for (const p of t.pages) await expect(p.getByTestId('lobby')).toHaveCount(0);
   const v = await view(ann);
   expect(v.board.hexes.map((h: { t: string; n: number }) => `${h.t}${h.n}`)).toEqual(
@@ -218,12 +228,13 @@ test('a Seafarers map from the editor, played to the end; then the Fog Islands',
   /* ---------- The Fog Islands from the lobby ---------- */
   const f = await seatedTable(browser, server, ['Dee', 'Eve', 'Fay']);
   const [dee] = f.pages as [Page, Page, Page];
+  for (const p of f.pages) await lobbyStep(p, 'game');
   await dee.getByTestId('mode-seafarers').click();
   await dee.getByTestId('scenario-fog-islands').click();
   for (const p of f.pages)
     await expect(p.getByTestId('scenario-fog-islands')).toHaveAttribute('aria-checked', 'true');
   await expect(f.pages[2]!.getByTestId('win-vp')).toHaveText('12');
-  await dee.getByTestId('start').click();
+  await startGame(dee);
   for (const p of f.pages) await expect(p.locator('#board')).toBeVisible();
   const fv = await view(dee);
   expect(fv.rules.mapId).toBe('fog-islands');

@@ -8,7 +8,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, playUntil, seatedTable, view } from './table';
+import { checkFrames, playUntil, seatedTable, startGame, view } from './table';
 
 test('two people and a CPU play a full game', async ({ browser }) => {
   const server = new TestServer(await freePort(), 'cpu passphrase', { CPU_DELAY_MS: '40' });
@@ -25,7 +25,7 @@ test('two people and a CPU play a full game', async ({ browser }) => {
     await b.getByTestId('cpu-color').selectOption('purple');
     await expect(a.getByTestId('cpu-nick')).toHaveValue('Turnip');
     await expect(a.getByTestId('cpu-color')).toHaveValue('purple');
-    await a.click('[data-testid=start]');
+    await startGame(a);
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
     const v0 = await view(a);
     const cpu = v0.players.findIndex((p: { cpu?: boolean }) => p.cpu);

@@ -1114,6 +1114,7 @@ Notes from a full game with friends: it worked, but one screen crashed upgrading
 ### 13.2 Smaller asks
 
 - **The coin card is silver**, much lighter than ore, so the two can't be mixed up (checked in every colour vision).
+- **Gold fields are a gold mine**: dark rock with bright gold on it, in every board style, so they can't be taken for wheat. A test checks they differ strongly from wheat in every style and colour vision.
 - **A knight's level shows as 1, 2 or 3 rank chevrons** across its shield, and the shield grows with each level (the crest and the mighty knight's crown stay). Hovering or holding a knight names it ("Strong knight (level 2)").
 - **Arranging your cards.** Drag a card in your hand to another spot to swap them, in any order. The hand is a grid: one row of five in base games and Seafarers; two rows of five with Cities & Knights, each commodity under the resource it comes from (paper under wood, cloth under sheep, coin under ore), which is also how it starts. Your arrangement is saved on your profile, one for each kind of game, and "Reset" puts it back. It changes only your screen.
 - **Undo a whole turn** (house rule `undoTurn`, which works with Undo and is on with it in new rooms; old games are unchanged).
@@ -1162,7 +1163,47 @@ Players missed what happened: Longest Road changing hands, points racking up, a 
   - **A setting** in My settings: Moments: Everything / Big moments (default) / Off. Saved on your profile, like other settings. Wins and the barbarians keep their own scenes.
 - **The scoreboard.** Each player in the players box shows their place (1st, 2nd…), ties sharing a place. When points change, the place badge pulses. When a place changes, an arrow shows which way for a few seconds.
 - **The round recap.** When a round of turns ends, a moment sums it up: each player's points gained that round and any award that changed hands ("Round 6: Ann +2, Bob +1, Longest Road to Bob"). It's skipped when nothing changed. It's a big moment.
+- **Richer hovers** (8.3), by pointing at something or pressing and holding it:
+  - A number token says how often it comes up ("comes up 5 in 36 rolls (14%)"), how often it has this game, and whom it pays (or that the robber stops it).
+  - A settlement or city says which tiles it's on and about how many cards it brings in every 10 rolls.
 - All of this comes from the events and views every screen already gets, so it shows nothing secret: your own hidden points count only on your own screen.
+
+### 13.5 The start-up screen in steps
+
+The lobby showed everything at once, and the group didn't know what to do next. It's now four steps, each with one obvious button:
+
+1. **Players**: the seats, your colour, Add CPU, the invite link. Button: "Next: the game".
+2. **The game**: a one-line summary of what's picked ("Full game · Heading for New Shores · 17 points · limited bank · 2 house rules"), then the mode, map, points to win, bank and house rules, as before. Button: "Next: the board".
+3. **The board**: the shared table board, as before (new board, edit, saved maps). Button: "Next: who goes first".
+4. **Start**: the same summary, who goes first, Ready, and **Start game**. The button says what's still missing instead, if anything ("Needs 3 or 4 players", "Finish the roll for who goes first").
+
+- Numbered tabs across the top show where you are and tick each step that's done. Any tab can be opened at any time. Who's at the table shows under them on every step.
+- Each screen moves through the steps on its own; a change anyone makes still shows on every screen at once.
+- The board stays in view the whole time beside the steps on wide screens. On a phone it's below the steps, and opening step 3 scrolls to it.
+- Anyone seated can change anything, as before (there's no host). Someone not seated sees the summary and "Who are you?".
+- A screen opening the lobby starts at the first step that isn't done (usually Players).
+
+### 13.6 Looks: the whole screen in a different style
+
+Board styles (3 October) change only the board. A **look** changes the whole screen: the frame, panels, buttons, players, hand, dice and log, and the board's tiles, all designed together. The group picks favourites from mock-up screenshots first; then those are built. No 3D.
+
+- **Original**: today's screen, kept so the others can be compared with it.
+- **Nintendo-feel**: bright, rounded and bouncy. Chunky buttons that squash when pressed, bold friendly type, a sky-blue table, cheerful tiles. Inspired by, never copying.
+- **Game Night**: a real board on a wooden table. Your cards fanned in your hand, each player's mat in front of them, tumbling dice.
+- **Live Broadcast**: a sports broadcast. A scoreboard bar along the top, a news ticker of what's happening, replays of big moments, stat overlays, and a momentum graph of everyone's points.
+- **Universe-style**: like the screenshot the group shared. Painted tiles raised on sandy edges, ribbon banners for each player across the top, a column of square buttons on the left, a dark offer panel with big tick and cross, and a red hand bar along the bottom. Our own drawings only: no copied art, portraits or logos.
+
+Rules for every look:
+
+- **Each look has its own tile art**, and gold never looks like wheat (13.2).
+- **Switch any time**, mid-game too, from a Look button in the top bar. It's yours alone, saved on your profile like the board style.
+- **A look changes only how things are drawn**, never what's where or what a click does: the same buttons, the same test ids, the same click targets. Every look passes the same checks as the original:
+  - every number shows its pips;
+  - harbors sit over the water;
+  - pieces stand out on every tile;
+  - nothing spills off a phone's screen;
+  - reduced motion is respected.
+- **Mock-ups first**: screenshots of each look on a laptop and a phone in the middle of a Full game, for the group to compare and vote on.
 
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).

@@ -18,7 +18,18 @@
 
 import { expect, test, type BrowserContextOptions, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, confirmPlace, playUntil, baseGame, sitAs, view, type Frame, type Table } from './table';
+import {
+  baseGame,
+  checkFrames,
+  confirmPlace,
+  lobbyStep,
+  playUntil,
+  sitAs,
+  startGame,
+  view,
+  type Frame,
+  type Table,
+} from './table';
 
 test.use({ actionTimeout: 15000 });
 test.setTimeout(30 * 60 * 1000);
@@ -91,6 +102,7 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     const t: Table = { pages, frames, errors, code };
 
     /* ---------- Lobby: Knights and the bank ---------- */
+    for (const p of pages) await lobbyStep(p, 'game');
     await a.click('[data-testid=mode-knights]');
     for (let i = 0; i < 5; i++) await a.click('[aria-label="Fewer points"]');
     await expect(c.getByTestId('win-vp')).toHaveText('8');
@@ -104,7 +116,7 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     for (const p of [a, c])
       await expect(p.getByTestId('bank-limited')).toHaveAttribute('aria-checked', 'true');
     await shot(c, 'lobby-phone', true);
-    await a.click('[data-testid=start]');
+    await startGame(a);
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
     const seats = [(await view(a)).me, (await view(b)).me, (await view(c)).me];
     expect((await view(a)).rules.bank).toBe('limited');

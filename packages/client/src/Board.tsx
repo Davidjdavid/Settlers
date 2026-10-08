@@ -442,6 +442,8 @@ export function Board(props: {
   flash?: number[];
   /** The art style this screen draws in (a personal setting). */
   style?: string;
+  /** How often each total has come up this game, for the number tokens' labels. */
+  rolled?: readonly number[];
 }) {
   const { view, targets } = props;
   const style = useStyle(props.style);
@@ -681,7 +683,7 @@ export function Board(props: {
     showInfo(key ? null : infoAt(ev.clientX, ev.clientY));
   };
   const shown = info && spots.find((x) => JSON.stringify(x.spot) === info.key);
-  const label = shown ? spotLabel(view, shown.spot as Spot) : null;
+  const label = shown ? spotLabel(view, shown.spot as Spot, props.rolled) : null;
   const boxW = wrap.current?.clientWidth ?? 0;
 
   return (

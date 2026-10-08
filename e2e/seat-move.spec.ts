@@ -7,7 +7,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { seatedTable, view } from './table';
+import { seatedTable, startGame, view } from './table';
 
 test.use({ actionTimeout: 10_000 });
 test.setTimeout(3 * 60_000);
@@ -33,7 +33,7 @@ test('your seat moves to the screen you pick your name on, in the lobby and mid-
 }) => {
   const t = await seatedTable(browser, server, ['Dave', 'Eve']);
   const [dave, eve] = t.pages as [Page, Page];
-  await expect(dave.getByTestId('start')).toBeVisible();
+  await expect(dave.getByTestId('step-start')).toBeVisible();
 
   /* ---------- The lobby ---------- */
   const tab = await freshBrowser(browser, t.code);
@@ -44,14 +44,14 @@ test('your seat moves to the screen you pick your name on, in the lobby and mid-
   await expect(tab.getByTestId('move-hint')).toContainText('another screen');
   await expect(tab.getByTestId('sit')).toHaveText('Move my seat here');
   await tab.getByTestId('sit').click();
-  await expect(tab.getByTestId('start')).toBeVisible();
+  await expect(tab.getByTestId('step-start')).toBeVisible();
   // The first screen is told and now sees the join form.
   await expect(dave.getByText('Your seat moved to another screen')).toBeVisible();
   await expect(dave.getByTestId('sit')).toBeVisible();
   await expect(eve.locator('.seat:not(.open)')).toHaveCount(2);
 
   /* ---------- Mid-game ---------- */
-  await tab.getByTestId('start').click();
+  await startGame(tab);
   await expect.poll(async () => (await view(tab))?.me).toEqual(expect.any(Number));
   const seat = (await view(tab)).me;
   const phone = await freshBrowser(browser, t.code);

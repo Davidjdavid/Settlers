@@ -236,7 +236,7 @@ const PIXEL_TILE: Record<Terrain, string> = {
   wheat: '#f0c65a',
   ore: '#9aa4b0',
   desert: '#e9d49c',
-  gold: '#d8a530',
+  gold: '#5b4a3a',
   sea: '#3d6fd6',
   fog: '#7a8890',
 };
@@ -287,7 +287,7 @@ const WOOD_TILE: Record<Terrain, string> = {
   wheat: '#dcb556',
   ore: '#8e928c',
   desert: '#dcc794',
-  gold: '#b98a2a',
+  gold: '#5c4a33',
   sea: '#4f7f88',
   fog: '#7b8183',
 };
@@ -338,7 +338,7 @@ const FLAT_TILE: Record<Terrain, string> = {
   wheat: '#f6c945',
   ore: '#8f9bab',
   desert: '#efe2bd',
-  gold: '#e2a917',
+  gold: '#4a3f36',
   sea: '#2f86c9',
   fog: '#7d8a92',
 };
@@ -384,7 +384,7 @@ const NIGHT_TILE: Record<Terrain, string> = {
   wheat: '#7f6320',
   ore: '#414a56',
   desert: '#5d5342',
-  gold: '#80600f',
+  gold: '#122027',
   sea: '#0a1a2e',
   fog: '#323b42',
 };
@@ -432,7 +432,7 @@ const CRAYON_TILE: Record<Terrain, string> = {
   wheat: '#f1c33f',
   ore: '#8d96a3',
   desert: '#e6d3a0',
-  gold: '#e0a92a',
+  gold: '#6a5640',
   sea: '#4a8fd8',
   fog: '#9aa4aa',
 };
@@ -483,7 +483,7 @@ const SMASH_TILE: Record<Terrain, string> = {
   wheat: '#f0bf3a',
   ore: '#8c95a8',
   desert: '#d8c494',
-  gold: '#f0b020',
+  gold: '#3d3326',
   sea: '#1a1240',
   fog: '#5a5a7a',
 };
@@ -542,7 +542,7 @@ const PLAT_TILE: Record<Terrain, string> = {
   wheat: '#f6c93c',
   ore: '#a3aab8',
   desert: '#f2d596',
-  gold: '#ffbf1f',
+  gold: '#5a4632',
   sea: '#62b2ff',
   fog: '#b4bccd',
 };
@@ -662,7 +662,7 @@ const USA_TILE: Record<Terrain, string> = {
   wheat: '#e8b84a',
   ore: '#8a94a6',
   desert: '#e4d2a4',
-  gold: '#d9a62a',
+  gold: '#4f4234',
   sea: '#1b2f6b',
   fog: '#6b7486',
 };
@@ -758,7 +758,7 @@ const PIK_TILE: Record<Terrain, string> = {
   wheat: '#d9c25a',
   ore: '#8d8f86',
   desert: '#d8c08c',
-  gold: '#c9a23a',
+  gold: '#5b4b38',
   sea: '#3c8f8a',
   fog: '#7b8a7e',
 };

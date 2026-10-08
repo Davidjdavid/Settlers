@@ -9,7 +9,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { baseGame, sitAs } from './table';
+import { baseGame, sitAs, startGame } from './table';
 
 interface Frame {
   t: string;
@@ -59,7 +59,7 @@ test('three players play a full game, surviving a reload and a server crash', as
       await sitAs(p, nicks[i + 1]!);
     }
     await expect(a.locator('.seat:not(.open)')).toHaveCount(3);
-    await a.click('[data-testid=start]');
+    await startGame(a);
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
 
     const view = (p: Page) => p.evaluate(() => (window as any).__settlers.state().game);

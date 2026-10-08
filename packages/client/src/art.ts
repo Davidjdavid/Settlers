@@ -17,7 +17,8 @@ export const TILE_COLOR: Record<Terrain, string> = {
   wheat: '#e9b94a',
   ore: '#7e8a99',
   desert: '#d7c69c',
-  gold: '#9c6b12',
+  // A gold mine: dark rock with bright nuggets, so it can't be taken for wheat (SPEC 13.2).
+  gold: '#5a4a38',
   sea: '#1f5f73',
   fog: '#5d6b73',
 };

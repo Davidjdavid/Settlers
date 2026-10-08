@@ -2669,6 +2669,10 @@ button.vp {
   .lobbywrap.withtable {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* The steps first, so their button is at hand; the board below (SPEC 13.5). */
+  .lobbywrap.withtable > .card {
+    order: -1;
+  }
 }
 .lobbywrap > .card {
   width: 100%;
@@ -4452,5 +4456,79 @@ button.vp {
 @media (prefers-reduced-motion: reduce) {
   .place.pulse {
     animation: none;
+  }
+}
+
+/* The lobby in steps (SPEC 13.5). */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--ink-2);
+  font: 600 13px var(--ui);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.step .sn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--panel-3);
+  font: 750 11px var(--ui);
+}
+.step.done .sn {
+  background: #2f7a45;
+  color: #fff;
+}
+.step.on {
+  border-color: var(--lantern);
+  color: var(--ink);
+  background: rgba(255, 210, 122, 0.08);
+}
+.step.on .sn {
+  background: var(--lantern);
+  color: #2b1a05;
+}
+.gamesummary {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.stepfoot {
+  margin-top: 6px;
+}
+.stepfoot .btn.primary {
+  flex: 1 1 auto;
+  font-size: 16px;
+  padding-block: 12px;
+}
+.stephint {
+  margin-bottom: 12px;
+}
+@container app (max-width: 480px) {
+  .step {
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    padding: 6px 4px;
   }
 }

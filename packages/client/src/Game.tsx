@@ -1353,6 +1353,7 @@ export function Game({
         <Board
           view={v}
           style={room.mySettings?.artStyle}
+          {...(dice ? { rolled: dice.dice } : {})}
           targets={targets}
           myColor={me != null ? PCOL[v.players[me]!.color] : null}
           onVert={onVert}

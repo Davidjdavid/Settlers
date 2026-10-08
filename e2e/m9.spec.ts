@@ -12,7 +12,17 @@
 
 import { expect, test, type BrowserContextOptions, type Page } from '@playwright/test';
 import { TestServer, freePort } from './server';
-import { checkFrames, playUntil, baseGame, sitAs, view, type Frame, type Table } from './table';
+import {
+  checkFrames,
+  playUntil,
+  baseGame,
+  lobbyStep,
+  sitAs,
+  startGame,
+  view,
+  type Frame,
+  type Table,
+} from './table';
 
 test.use({ actionTimeout: 15000 });
 test.setTimeout(30 * 60 * 1000);
@@ -68,9 +78,10 @@ test('Milestone 9b: sounds with their own settings, and the dice pinned on scree
     await sitAs(c, 'Cat', 'orange');
     await expect(a.locator('.seat:not(.open)')).toHaveCount(3);
     const t: Table = { pages, frames, errors, code };
+    await lobbyStep(a, 'game');
     await a.click('[data-testid=mode-knights]');
     for (let i = 0; i < 5; i++) await a.click('[aria-label="Fewer points"]');
-    await a.click('[data-testid=start]');
+    await startGame(a);
     for (const p of pages) await expect(p.locator('#board')).toBeVisible();
     const seats = [(await view(a)).me, (await view(b)).me, (await view(c)).me];
     // Pinned before anyone has rolled: the chart says so instead of showing an empty box.
