@@ -520,7 +520,6 @@ export function MenuSheet({
   onRules,
   onQuit,
   onLayout,
-  onLook,
 }: {
   v: PlayerView | null;
   code: string;
@@ -534,8 +533,6 @@ export function MenuSheet({
   onQuit?: () => void;
   /** "Edit layout" (SPEC 11). */
   onLayout?: () => void;
-  /** "Look" (SPEC 13.6): on tablets and phones the top bar has no room for its button. */
-  onLook?: () => void;
 }) {
   const link = `${location.origin}/r/${code}`;
   const seated = v?.me != null;
@@ -570,11 +567,6 @@ export function MenuSheet({
         {onLayout ? (
           <button className="btn" onClick={onLayout} data-testid="menu-layout">
             Edit layout
-          </button>
-        ) : null}
-        {onLook ? (
-          <button className="btn" onClick={onLook} data-testid="menu-look">
-            Look
           </button>
         ) : null}
         {onRules && v ? (

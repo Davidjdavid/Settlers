@@ -33,10 +33,6 @@ export const STYLES = [
   'platformer',
   'american',
   'pikmin',
-  'toybox',
-  'tabletop',
-  'broadcast',
-  'painted',
 ] as const;
 export type ArtStyle = (typeof STYLES)[number];
 export const STYLE_LABEL: Record<ArtStyle, string> = {
@@ -50,10 +46,6 @@ export const STYLE_LABEL: Record<ArtStyle, string> = {
   platformer: 'Platformer',
   american: 'American',
   pikmin: 'Pikmin',
-  toybox: 'Toybox',
-  tabletop: 'Table',
-  broadcast: 'Broadcast',
-  painted: 'Painted',
 };
 export const STYLE_HELP: Record<ArtStyle, string> = {
   classic: 'The standard look.',
@@ -70,12 +62,6 @@ export const STYLE_HELP: Record<ArtStyle, string> = {
     'Stars and stripes: a starry navy sea with fireworks, red-and-white shores and navy badges for the numbers.',
   pikmin:
     'A tiny explorer in a giant garden: a lily-pad pond, big leaves and flowers, little sprout creatures, and the numbers on round pellets.',
-  toybox:
-    'Bright plastic toy tiles with chunky white edges, round friendly pictures and white number badges.',
-  tabletop:
-    'Cardboard tiles lifted off the table with a soft shadow, finely drawn pictures and cardboard number discs.',
-  broadcast: 'A navy pitch of flat team-colour tiles, one bold icon each, and numbers on score chips.',
-  painted: 'Painted land on tiles raised on thick sandy edges, with cream number discs.',
 };
 
 export interface Theme {
@@ -859,280 +845,6 @@ const pikmin: Theme = {
   crisp: false,
 };
 
-/* ---------- The looks' own boards (SPEC 13.6) ---------- */
-
-/* Toybox (the Nintendo-feel look): bright plastic tiles with chunky white edges, round friendly
-   pictures with dark outlines, and white number badges ringed in colour. */
-const TOY_TILE: Record<Terrain, string> = {
-  wood: '#34b75a',
-  brick: '#f2743f',
-  sheep: '#a6e35a',
-  wheat: '#ffd23f',
-  ore: '#a7b4c6',
-  desert: '#ffe6a3',
-  gold: '#4b3a5e',
-  sea: '#22b4ea',
-  fog: '#cfd8e6',
-};
-const TOY_INK = '#2b2b3a';
-const toyLine = `stroke="${TOY_INK}" stroke-width="1.3" stroke-linejoin="round"`;
-const TOY_GLYPH: Record<Terrain, string> = {
-  wood: `<rect x="-1.8" y="3" width="3.6" height="7" rx="1.4" fill="#8a5a2b" ${toyLine}/><circle cx="0" cy="-3" r="7.6" fill="#1f9a46" ${toyLine}/><circle cx="-2.6" cy="-5.6" r="2.4" fill="#7fe08f" opacity=".8"/>`,
-  brick: `<g ${toyLine} fill="#d9541f"><rect x="-10" y="1" width="9.5" height="6.5" rx="2.2"/><rect x=".5" y="1" width="9.5" height="6.5" rx="2.2"/><rect x="-4.8" y="-6.5" width="9.5" height="6.5" rx="2.2"/></g><g fill="#ffd2b8" opacity=".85"><rect x="-8.4" y="2.3" width="4" height="1.6" rx=".8"/><rect x="2" y="2.3" width="4" height="1.6" rx=".8"/><rect x="-3.3" y="-5.2" width="4" height="1.6" rx=".8"/></g>`,
-  sheep: `<g fill="#ffffff" ${toyLine}><circle cx="-5" cy="0" r="4"/><circle cx="0" cy="-2.5" r="4.6"/><circle cx="4.6" cy="0" r="4"/><circle cx="0" cy="2.4" r="4"/></g><ellipse cx="7.8" cy="-2.6" rx="3" ry="3.4" fill="${TOY_INK}"/><circle cx="8.6" cy="-3.4" r=".8" fill="#fff"/><g fill="${TOY_INK}"><rect x="-4.5" y="5" width="2" height="5" rx="1"/><rect x="2.5" y="5" width="2" height="5" rx="1"/></g>`,
-  wheat: `<path d="M0 11V-2" stroke="#b77a12" stroke-width="2" stroke-linecap="round"/><g fill="#f5b400" ${toyLine}><ellipse cx="0" cy="-7" rx="2.6" ry="4"/><ellipse cx="-3.6" cy="-2.5" rx="2.4" ry="3.6" transform="rotate(-30 -3.6 -2.5)"/><ellipse cx="3.6" cy="-2.5" rx="2.4" ry="3.6" transform="rotate(30 3.6 -2.5)"/><ellipse cx="-3.2" cy="3" rx="2.2" ry="3.3" transform="rotate(-30 -3.2 3)"/><ellipse cx="3.2" cy="3" rx="2.2" ry="3.3" transform="rotate(30 3.2 3)"/></g>`,
-  ore: `<path d="M-9 6-5-6 0-9 6-5 9 6 0 10z" fill="#6e7f99" ${toyLine}/><path d="M-5-6 0-9 6-5 0-2z" fill="#c9d6ea"/><path d="M-9 6-5-6 0-2 0 10z" fill="#8798b3"/><circle cx="-1" cy="-6" r="1.2" fill="#fff"/>`,
-  gold: `<path d="M0-10 2.9-3.2 10-2.6 4.6 2.2 6.2 9.4 0 5.6-6.2 9.4-4.6 2.2-10-2.6-2.9-3.2z" fill="#ffd23f" ${toyLine}/><path d="M0-6 1.6-2 0 1.2-1.6-2z" fill="#fff7c4"/><circle cx="8" cy="-8" r="1.6" fill="#fff7c4"/>`,
-  sea: `<g fill="#ffffff" opacity=".85"><circle cx="-6" cy="2" r="2"/><circle cx="-1" cy="-1" r="2.6"/><circle cx="5" cy="1" r="1.8"/></g>`,
-  fog: `<g fill="#ffffff" ${toyLine}><circle cx="-5" cy="1" r="4.4"/><circle cx="1" cy="-2" r="5.6"/><circle cx="6.5" cy="2" r="3.8"/><rect x="-9" y="1.5" width="19" height="5" rx="2.5"/></g>`,
-  desert: `<path d="M-2 10V-6a2.4 2.4 0 0 1 4.8 0v16z" fill="#4caf50" ${toyLine}/><path d="M2.6 1h3a1.6 1.6 0 0 0 1.6-1.6v-3a1.6 1.6 0 0 1 3.2 0v3A4.8 4.8 0 0 1 5.6 4.2h-3z" fill="#4caf50" ${toyLine}/><circle cx="-6" cy="8" r="2" fill="#ff8fb1"/>`,
-};
-const toyToken = (cx: number, cy: number, n: number): string => {
-  const red = n === 6 || n === 8;
-  const ring = red ? '#ff4d6d' : TOY_INK;
-  return `<circle cx="${f1(cx)}" cy="${f1(cy + 0.03 * K)}" r="${0.36 * K}" fill="rgba(0,0,0,.22)"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.36 * K}" fill="#ffffff" stroke="${ring}" stroke-width="${0.06 * K}"/><text x="${f1(cx)}" y="${f1(cy - 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.3 : 0.36) * K}" fill="${red ? '#e5243f' : TOY_INK}" font-family="Figtree, system-ui, sans-serif" font-weight="800">${n}</text>${pips(cx, cy + 0.2 * K, n, red ? '#e5243f' : TOY_INK)}`;
-};
-const toybox: Theme = {
-  id: 'toybox',
-  tile: TOY_TILE,
-  glyph: TOY_GLYPH,
-  decor: 'scatter',
-  glyphScale: 1.18,
-  tileArt: null,
-  glyphAttr: () => '',
-  seaDefs: `<pattern id="tb-bubbles" width="70" height="60" patternUnits="userSpaceOnUse"><circle cx="12" cy="14" r="5" fill="#ffffff" opacity=".18"/><circle cx="22" cy="8" r="2.5" fill="#ffffff" opacity=".22"/><circle cx="50" cy="42" r="4" fill="#ffffff" opacity=".16"/></pattern><linearGradient id="tb-shine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".38"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".12"/></linearGradient>${glyphSymbols(TOY_GLYPH)}`,
-  sea: (box) => `<rect ${box} fill="#1aa7e0"/><rect ${box} fill="url(#tb-bubbles)"/>`,
-  seaHex: (cx, cy, i) =>
-    `<polygon points="${hexPts(cx, cy, 0.95 * K)}" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.35)" stroke-width="2.5" data-sea="${i}"/>`,
-  beach: ['#fff6cf', '#ffe08a'],
-  hexStroke: () => '#ffffff',
-  hexStrokeW: 6,
-  tileTexture: () => 'url(#tb-shine)',
-  building: null,
-  road: null,
-  innerRing: null,
-  overlay: () => '',
-  token: toyToken,
-  port: disc('#ffffff', '#1477b8', TOY_INK, 4),
-  text: (x, y, s, size, color, weight = 800) =>
-    plainText(x, y, s, size, color, weight).replace(
-      '<text ',
-      '<text font-family="Figtree, system-ui, sans-serif" ',
-    ),
-  edge: () => TOY_INK,
-  underlay: () => '',
-  boardFilter: null,
-  piecesOpen: '',
-  piecesClose: '',
-  crisp: false,
-};
-
-/* Table (the Game Night look): cardboard tiles with a paper grain, lifted off the table with a
-   soft shadow, finely drawn pictures, and cardboard number discs with serif numbers. */
-const TT_TILE: Record<Terrain, string> = {
-  wood: '#4c7a3c',
-  brick: '#b3623d',
-  sheep: '#9dbf5f',
-  wheat: '#e2bb57',
-  ore: '#8d9399',
-  desert: '#d8c08a',
-  gold: '#3f3a34',
-  sea: '#3c7c9c',
-  fog: '#9aa3a6',
-};
-const ttLine = 'stroke="#2a2016" stroke-width=".7" stroke-linejoin="round"';
-const TT_GLYPH: Record<Terrain, string> = {
-  wood: `<g ${ttLine}><path d="M-4-10-9 0h3l-4 6h11z" fill="#2f5e2a"/><path d="M4-11-1-1h3L-2 6h12l-4-6h3z" fill="#264f22"/></g><rect x="-5.4" y="6" width="1.6" height="4" fill="#5a3b1e"/><rect x="3.2" y="6" width="1.6" height="4" fill="#5a3b1e"/>`,
-  brick: `<g ${ttLine} fill="#8c3d1f"><path d="M-11 9q4-9 11-9t11 9z"/></g><g fill="#c56a43" ${ttLine}><rect x="-6" y="-7" width="5" height="3"/><rect x="-1" y="-7" width="5" height="3"/><rect x="-3.5" y="-10" width="5" height="3"/></g>`,
-  sheep: `<path d="M-8 1q-1-6 5-6 2-3 6-1 5 0 5 5 1 5-4 6h-8q-5-.5-4-4z" fill="#f3efe4" ${ttLine}/><ellipse cx="8" cy="-1" rx="2.4" ry="2.8" fill="#2e2a25"/><path d="M-4 6v4M3 6v4" stroke="#2e2a25" stroke-width="1.4"/>`,
-  wheat: `<g stroke="#8a6214" stroke-width="1" fill="none"><path d="M-4 11V-4M0 11V-7M4 11V-4"/></g><g fill="#c9971d" ${ttLine}><ellipse cx="-4" cy="-6" rx="1.4" ry="3"/><ellipse cx="0" cy="-9" rx="1.4" ry="3"/><ellipse cx="4" cy="-6" rx="1.4" ry="3"/></g><path d="M-6 4h12" stroke="#7a5410" stroke-width="1.2"/>`,
-  ore: `<path d="M-11 9-4-5l3 4 4-8 8 18z" fill="#5d646b" ${ttLine}/><path d="M3-9l2.6 5.4-2.2-1-1.8 1.4zM-4-5l1.6 3.2-1.6-.6-1.4.8z" fill="#f2f4f5"/>`,
-  gold: `<g fill="#e7b828" ${ttLine}><path d="M-8 7l3-5 5 1 2 4z"/><path d="M1 8l2-6 6 2 1 4z"/><path d="M-4 1l2-5 5 1 1 4z"/></g><g fill="#fff3b0"><circle cx="-5" cy="3" r=".9"/><circle cx="5" cy="4" r=".9"/><circle cx="-1" cy="-2" r=".9"/></g>`,
-  sea: `<path d="M-9 3q4.5-3 9 0t9 0" fill="none" stroke="#d4ecf2" stroke-width="1.2" stroke-linecap="round" opacity=".6"/>`,
-  fog: `<g fill="#dfe4e5" opacity=".9"><ellipse cx="-3" cy="1" rx="7" ry="3.6"/><ellipse cx="4" cy="-1" rx="6" ry="3.4"/></g>`,
-  desert: `<path d="M-11 8q5-6 11-3t11-2v5z" fill="#c3a46a" ${ttLine}/><path d="M-1 5V-6a1.6 1.6 0 0 1 3.2 0V5z" fill="#5e7d3a" ${ttLine}/>`,
-};
-const ttToken = (cx: number, cy: number, n: number): string => {
-  const red = n === 6 || n === 8;
-  const ink = red ? '#9b2418' : '#2a2016';
-  return `<circle cx="${f1(cx + 0.02 * K)}" cy="${f1(cy + 0.04 * K)}" r="${0.34 * K}" fill="rgba(20,12,4,.35)"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="url(#tt-disc)" stroke="#6b5233" stroke-width="2"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.34 * K}" fill="url(#tt-grain)"/><text x="${f1(cx)}" y="${f1(cy - 0.03 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.27 : 0.32) * K}" fill="${ink}" font-family="'Young Serif', Georgia, serif">${n}</text>${pips(cx, cy + 0.19 * K, n, ink)}`;
-};
-const tabletop: Theme = {
-  id: 'tabletop',
-  tile: TT_TILE,
-  glyph: TT_GLYPH,
-  decor: 'scatter',
-  glyphScale: 1.1,
-  tileArt: null,
-  glyphAttr: () => '',
-  seaDefs: `<pattern id="tt-grain" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="9" height="9" fill="none"/><path d="M0 2h3M5 6h3M2 8h2" stroke="#000" stroke-width=".5" opacity=".07"/><path d="M6 1h2M1 5h2" stroke="#fff" stroke-width=".5" opacity=".08"/></pattern><radialGradient id="tt-disc" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="#f6ead0"/><stop offset="1" stop-color="#dcc79a"/></radialGradient><filter id="tt-lift" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#1a0f05" flood-opacity=".45"/></filter><pattern id="tt-waves" width="60" height="30" patternUnits="userSpaceOnUse"><path d="M3 16q13-8 26 0t26 0" fill="none" stroke="#a9d3e0" stroke-width="1.4" opacity=".35"/></pattern>${glyphSymbols(TT_GLYPH)}`,
-  sea: (box) =>
-    `<rect ${box} fill="#2f6d8c"/><rect ${box} fill="url(#tt-waves)"/><rect ${box} fill="url(#tt-grain)"/><rect ${box} fill="none" stroke="#1c4558" stroke-width="6"/>`,
-  seaHex: (cx, cy, i) =>
-    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="none" stroke="rgba(214,236,242,.18)" stroke-width="1.5" data-sea="${i}"/>`,
-  beach: ['#e3cf9c', '#c8ae76'],
-  hexStroke: () => '#2a2016',
-  hexStrokeW: 2.5,
-  tileTexture: () => 'url(#tt-grain)',
-  building: null,
-  road: null,
-  innerRing: 'rgba(255,248,230,.12)',
-  overlay: () => '',
-  token: ttToken,
-  port: disc('#f1e4c4', '#6b5233', '#2a2016'),
-  text: (x, y, s, size, color, weight = 400) =>
-    plainText(x, y, s, size, color, weight).replace(
-      '<text ',
-      `<text font-family="'Young Serif', Georgia, serif" `,
-    ),
-  edge: edgeOf,
-  underlay: () => '',
-  boardFilter: 'url(#tt-lift)',
-  piecesOpen: '',
-  piecesClose: '',
-  crisp: false,
-};
-
-/* Broadcast (the Live Broadcast look): a pitch of flat team-colour tiles on deep navy, one bold
-   white icon per tile, and numbers on dark score chips. */
-const BC_TILE: Record<Terrain, string> = {
-  wood: '#17a05a',
-  brick: '#ec5a3c',
-  sheep: '#7fd35a',
-  wheat: '#f7c243',
-  ore: '#8c9db4',
-  desert: '#e7d4a3',
-  gold: '#1d2638',
-  sea: '#0a1730',
-  fog: '#4f5d74',
-};
-const bcIcon = (d: string) => `<g fill="#ffffff" opacity=".92">${d}</g>`;
-const BC_GLYPH: Record<Terrain, string> = {
-  wood: bcIcon('<path d="M0-11 8 3H3v8h-6V3h-5z"/>'),
-  brick: bcIcon(
-    '<rect x="-10" y="1" width="9" height="6" rx="1"/><rect x="1" y="1" width="9" height="6" rx="1"/><rect x="-4.5" y="-6.5" width="9" height="6" rx="1"/>',
-  ),
-  sheep: bcIcon(
-    '<path d="M-9 2a5 5 0 0 1 5-6 5 5 0 0 1 8 0 5 5 0 0 1 5 6 4 4 0 0 1-4 4h-10a4 4 0 0 1-4-4z"/><rect x="-5" y="6" width="2" height="4"/><rect x="3" y="6" width="2" height="4"/>',
-  ),
-  wheat: bcIcon(
-    '<rect x="-1" y="-3" width="2" height="14"/><ellipse cx="0" cy="-7" rx="2.4" ry="4"/><ellipse cx="-4" cy="-1" rx="2" ry="3.4" transform="rotate(-30 -4 -1)"/><ellipse cx="4" cy="-1" rx="2" ry="3.4" transform="rotate(30 4 -1)"/>',
-  ),
-  ore: bcIcon('<path d="M-11 9-3-7l4 6 4-7 7 17z"/>'),
-  gold: '<g fill="#ffcf3f"><path d="M0-10 3-3h7l-5.6 4.4 2.2 7.2L0 4.4-6.6 8.6l2.2-7.2L-10-3h7z"/></g>',
-  sea: '<path d="M-10 0h20" stroke="#2a4d7a" stroke-width="1"/>',
-  fog: bcIcon('<path d="M-9 4a4 4 0 0 1 2-7 5 5 0 0 1 9-2 4 4 0 0 1 6 4 3 3 0 0 1-1 5z" opacity=".7"/>'),
-  desert: bcIcon('<path d="M-11 8q5-6 11-3t11-2v5z" opacity=".55"/>'),
-};
-const bcToken = (cx: number, cy: number, n: number): string => {
-  const red = n === 6 || n === 8;
-  const w = 0.62 * K;
-  const h = 0.5 * K;
-  return `<rect x="${f1(cx - w / 2)}" y="${f1(cy - h / 2)}" width="${f1(w)}" height="${f1(h)}" rx="${f1(0.08 * K)}" fill="#0b1a33" stroke="${red ? '#ff3b5c' : '#3fd0ff'}" stroke-width="${f1(0.035 * K)}"/><text x="${f1(cx)}" y="${f1(cy - 0.05 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${0.27 * K}" fill="${red ? '#ff5470' : '#ffffff'}" font-family="Figtree, system-ui, sans-serif" font-weight="800" letter-spacing="-.5">${n}</text>${pips(cx, cy + 0.14 * K, n, red ? '#ff5470' : '#9fe7ff')}`;
-};
-const broadcast: Theme = {
-  id: 'broadcast',
-  tile: BC_TILE,
-  glyph: BC_GLYPH,
-  decor: 'single',
-  glyphScale: 1,
-  tileArt: null,
-  glyphAttr: () => '',
-  seaDefs: `<pattern id="bc-grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#1d3561" stroke-width="1"/></pattern><linearGradient id="bc-sheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".16"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/></linearGradient><radialGradient id="bc-glow" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#16305e"/><stop offset="1" stop-color="#070f22"/></radialGradient>${glyphSymbols(BC_GLYPH)}`,
-  sea: (box) => `<rect ${box} fill="url(#bc-glow)"/><rect ${box} fill="url(#bc-grid)" opacity=".6"/>`,
-  seaHex: (cx, cy, i) =>
-    `<polygon points="${hexPts(cx, cy, 0.96 * K)}" fill="none" stroke="rgba(63,208,255,.14)" stroke-width="1.5" data-sea="${i}"/>`,
-  beach: ['#0a1730', '#13284d'],
-  hexStroke: () => '#0a1730',
-  hexStrokeW: 5,
-  tileTexture: () => 'url(#bc-sheen)',
-  building: null,
-  road: null,
-  innerRing: null,
-  overlay: () => '',
-  token: bcToken,
-  port: disc('#0b1a33', '#3fd0ff', '#ffffff', 3),
-  text: (x, y, s, size, color, weight = 800) =>
-    plainText(x, y, s, size, color === '#10181c' ? '#ffffff' : color, weight).replace(
-      '<text ',
-      '<text font-family="Figtree, system-ui, sans-serif" ',
-    ),
-  edge: edgeOf,
-  underlay: () => '',
-  boardFilter: null,
-  piecesOpen: '',
-  piecesClose: '',
-  crisp: false,
-};
-
-/* Painted (the Universe-style look): painted terrain on tiles raised on thick sandy edges, dense
-   tree clusters, striped fields and grey peaks, and cream number discs with bold serif numbers. */
-const PT_TILE: Record<Terrain, string> = {
-  wood: '#3d7834',
-  brick: '#c4683a',
-  sheep: '#8dc44b',
-  wheat: '#e6b33d',
-  ore: '#999a95',
-  desert: '#e3c98e',
-  gold: '#4a3f35',
-  sea: '#3a7cbe',
-  fog: '#a6b1b4',
-};
-const PT_GLYPH: Record<Terrain, string> = {
-  wood: '<g><circle cx="-5" cy="2" r="4.6" fill="#24561f"/><circle cx="4" cy="1" r="5" fill="#2a6324"/><circle cx="0" cy="-4" r="5.4" fill="#33752b"/><circle cx="-2" cy="-6" r="2.2" fill="#5fa04c" opacity=".7"/><circle cx="5" cy="-1" r="1.8" fill="#5fa04c" opacity=".6"/><rect x="-.8" y="5" width="1.6" height="4" fill="#4a2f16"/></g>',
-  brick:
-    '<path d="M-11 8q3-8 8-8 2-4 6-3 6 1 8 11z" fill="#9c4a24"/><g fill="#d98a5c"><rect x="-6" y="0" width="4" height="2.4" rx=".4"/><rect x="-1" y="-2" width="4" height="2.4" rx=".4"/><rect x="3" y="2" width="4" height="2.4" rx=".4"/></g><path d="M-9 8q3-5 7-5" stroke="#e7a37a" stroke-width="1" fill="none" opacity=".6"/>',
-  sheep:
-    '<g><ellipse cx="-1" cy="0" rx="6.6" ry="4.6" fill="#f7f4ec"/><circle cx="-4" cy="-2.6" r="2.6" fill="#ffffff"/><circle cx="1.5" cy="-3.2" r="2.8" fill="#ffffff"/><ellipse cx="6.2" cy="-1.4" rx="2.2" ry="2.6" fill="#3a332c"/><rect x="-4.6" y="3.6" width="1.6" height="4" fill="#3a332c"/><rect x="1.6" y="3.6" width="1.6" height="4" fill="#3a332c"/></g>',
-  wheat:
-    '<g stroke-linecap="round"><path d="M-10 6 6-10" stroke="#c48a14" stroke-width="2.4"/><path d="M-6 10 10-6" stroke="#c48a14" stroke-width="2.4"/><path d="M-11 1 1-11" stroke="#f3cf63" stroke-width="2"/><path d="M-2 11 11-2" stroke="#f3cf63" stroke-width="2"/></g>',
-  ore: '<path d="M-11 9-4-7 0-2 4-10 11 9z" fill="#6f716c"/><path d="M-4-7-6.4-2.2-3.8-3.6-1.8-1.6zM4-10 1.4-4.6 4-6l2.6 1.6z" fill="#ffffff"/><path d="M4-10 11 9H7z" fill="#5b5d58"/>',
-  gold: '<g><path d="M-10 7q4-4 9-2t10 0" stroke="#e8c04a" stroke-width="2.2" fill="none"/><circle cx="-4" cy="2" r="2.2" fill="#ffd54a"/><circle cx="3" cy="0" r="2.6" fill="#ffd54a"/><circle cx="7" cy="4" r="1.8" fill="#ffd54a"/><circle cx="2.2" cy="-.8" r=".9" fill="#fff6c8"/></g>',
-  sea: '<path d="M-8 2q4-3 8 0t8 0" fill="none" stroke="#bfe0f5" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>',
-  fog: '<g fill="#e6ecee" opacity=".9"><circle cx="-4" cy="1" r="4.4"/><circle cx="2" cy="-1.5" r="5.2"/><circle cx="6.5" cy="2" r="3.6"/></g>',
-  desert:
-    '<path d="M-11 7q6-7 12-3t10-1v4z" fill="#cdae6c"/><path d="M-11 9q8-4 22 0" stroke="#f1dfae" stroke-width="1.2" fill="none"/>',
-};
-const ptToken = (cx: number, cy: number, n: number): string => {
-  const red = n === 6 || n === 8;
-  const ink = red ? '#b3211b' : '#1c1814';
-  return `<ellipse cx="${f1(cx + 0.03 * K)}" cy="${f1(cy + 0.06 * K)}" rx="${0.35 * K}" ry="${0.33 * K}" fill="rgba(30,18,6,.4)"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="${0.35 * K}" fill="url(#pt-disc)" stroke="#a88d5c" stroke-width="2"/><text x="${f1(cx)}" y="${f1(cy - 0.04 * K)}" text-anchor="middle" dominant-baseline="central" font-size="${(n >= 10 ? 0.29 : 0.34) * K}" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-weight="700" stroke="#fff6e0" stroke-width="1.2" paint-order="stroke">${n}</text>${pips(cx, cy + 0.2 * K, n, ink)}`;
-};
-const painted: Theme = {
-  id: 'painted',
-  tile: PT_TILE,
-  glyph: PT_GLYPH,
-  decor: 'scatter',
-  glyphScale: 1.28,
-  tileArt: null,
-  glyphAttr: () => '',
-  seaDefs: `<radialGradient id="pt-disc" cx="40%" cy="32%" r="75%"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#e6d6b0"/></radialGradient><radialGradient id="pt-light" cx="45%" cy="35%" r="70%"><stop offset="0" stop-color="#ffffff" stop-opacity=".22"/><stop offset=".7" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".18"/></radialGradient><pattern id="pt-ripples" width="80" height="44" patternUnits="userSpaceOnUse"><path d="M4 22q9-6 18 0t18 0" fill="none" stroke="#a9d1f0" stroke-width="1.4" opacity=".35"/><path d="M44 38q9-6 18 0" fill="none" stroke="#a9d1f0" stroke-width="1.2" opacity=".25"/></pattern>${glyphSymbols(PT_GLYPH)}`,
-  sea: (box) => `<rect ${box} fill="#3474b4"/><rect ${box} fill="url(#pt-ripples)"/>`,
-  seaHex: (cx, cy, i) =>
-    `<polygon points="${hexPts(cx, cy, 0.97 * K)}" fill="rgba(255,255,255,.04)" stroke="rgba(200,230,250,.28)" stroke-width="2" data-sea="${i}"/>`,
-  beach: ['#ead6a2', '#cfb276'],
-  hexStroke: () => '#dcc38c',
-  hexStrokeW: 7,
-  tileTexture: () => 'url(#pt-light)',
-  building: null,
-  road: null,
-  innerRing: 'rgba(120,90,40,.35)',
-  overlay: () => '',
-  token: ptToken,
-  port: disc('#f3e6c4', '#a88d5c', '#1c1814', 3),
-  text: (x, y, s, size, color, weight = 700) =>
-    plainText(x, y, s, size, color, weight).replace(
-      '<text ',
-      `<text font-family="Georgia, 'Times New Roman', serif" `,
-    ),
-  edge: edgeOf,
-  underlay: () => '',
-  boardFilter: null,
-  piecesOpen: '',
-  piecesClose: '',
-  crisp: false,
-};
-
 export const THEMES: Record<ArtStyle, Theme> = {
   classic,
   pixel,
@@ -1144,10 +856,6 @@ export const THEMES: Record<ArtStyle, Theme> = {
   platformer,
   american,
   pikmin,
-  toybox,
-  tabletop,
-  broadcast,
-  painted,
 };
 
 let current: Theme = classic;
@@ -1172,10 +880,6 @@ export const GROUNDS: Record<ArtStyle, Record<string, string>> = {
   platformer: { ...PLAT_TILE, water: '#62b2ff' },
   american: { ...USA_TILE, water: '#a3162b', water2: '#f4efe6', water3: '#14275e' },
   pikmin: { ...PIK_TILE, water: '#2f7f7a' },
-  toybox: { ...TOY_TILE, water: '#1aa7e0' },
-  tabletop: { ...TT_TILE, water: '#2f6d8c' },
-  broadcast: { ...BC_TILE, water: '#0a1730' },
-  painted: { ...PT_TILE, water: '#3474b4' },
 };
 /** Styles whose pieces stand out by a light outline rather than by their colour (night). */
 export const OUTLINED: readonly ArtStyle[] = ['night', 'smash'];

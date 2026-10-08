@@ -10,7 +10,6 @@ import '@fontsource/figtree/latin-700.css';
 import '@fontsource/figtree/latin-800.css';
 import '@fontsource/young-serif/latin-400.css';
 import './styles.css';
-import './looks.css';
 import { applySize } from './display';
 import { played } from './sound';
 

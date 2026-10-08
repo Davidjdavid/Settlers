@@ -233,14 +233,8 @@ export const SettingsSchema = z.strictObject({
       'platformer',
       'american',
       'pikmin',
-      'toybox',
-      'tabletop',
-      'broadcast',
-      'painted',
     ])
     .optional(),
-  /** SPEC 13.6: the whole screen's look; the original unless set. */
-  look: z.enum(['original', 'nintendo', 'gamenight', 'broadcast', 'universe']).optional(),
   /** Turn down every trade a CPU offers you, at once (off unless true). */
   noCpuTrades: z.boolean().optional(),
   /** SPEC 9.4: master volume, and each sound's switch, volume and style. */
