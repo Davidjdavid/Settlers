@@ -1,12 +1,27 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { legalActions, type GameState } from '@settlers/engine';
 import { ClientMsgSchema, type ClientMsg, type ServerMsg } from '../src/protocol';
 import { Rooms, type Conn } from '../src/rooms';
 import { Store } from '../src/store';
 import { joinAs, moves } from './util';
+
+// The server's dice, with the next roll's number dice rigged when a test sets them.
+const rig = vi.hoisted(() => ({ next: null as number[] | null }));
+vi.mock('../src/dice', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/dice')>();
+  return {
+    ...real,
+    diceForRoll: (pairs?: number, deck?: boolean) => {
+      const r = real.diceForRoll(pairs, deck);
+      const d = rig.next;
+      rig.next = null;
+      return d ? { ...r, d: [...d, ...r.d.slice(d.length)] } : r;
+    },
+  };
+});
 
 class FakeConn implements Conn {
   room: Conn['room'] = null;
@@ -201,7 +216,12 @@ describe('game rules during the game', () => {
     expect(rooms.getRoom(code)!.options.houseRules.bank3to1).toBe(true);
   });
 
-  it('dice are handed back through the server', () => {
+  it.each([
+    ['any roll', null],
+    // A 7: the robber's move can be undone, until the turn ends (CI caught this case at random).
+    ['a 7', [3, 4]],
+  ])('dice are handed back through the server (%s)', (_, dice) => {
+    rig.next = dice;
     const { code, conns } = table(['Ann', 'Bob']);
     send(conns[0]!, { t: 'start' });
     const by = (p: number) => conns.find((c) => c.pid === state(code).players[p]!.pid)!;
@@ -212,23 +232,35 @@ describe('game rules during the game', () => {
     }
     const first = state(code).turn;
     send(by(first), { t: 'act', id: 'roll', action: { type: 'roll' } });
+    if (dice) expect(state(code).dice).toEqual(dice);
     while (state(code).stage !== 'main') {
       const s = state(code);
       const p = s.stage === 'discard' ? Number(Object.keys(s.discard!)[0]) : s.turn;
-      const a = moves(s, p).find((x) => x.type !== 'respond')!;
+      // The robber where it robs nobody: a move that can still be undone.
+      const all = moves(s, p).filter((x) => x.type !== 'respond');
+      const a = all.find((x) => x.type === 'robber' && x.victim == null) ?? all[0]!;
       send(by(p), {
         t: 'act',
         id: `x${n++}`,
         action: s.stage === 'discard' ? { type: 'discard', cards: { wood: s.discard![p]! } } : a,
       });
     }
-    const before = JSON.stringify({ ...state(code), seq: 0 });
+    const before = structuredClone(state(code));
     send(by(first), { t: 'act', id: 'end', action: { type: 'end' } });
     const next = state(code).turn;
     send(by(first), { t: 'act', id: 'ask', action: { type: 'askBack' } });
     expect(by(next).last('update').game!.back).toEqual({ from: first, asked: true, refused: false });
     send(by(next), { t: 'act', id: 'give', action: { type: 'handBack' } });
     expect(state(code).turn).toBe(first);
-    expect(JSON.stringify({ ...state(code), seq: 0 })).toBe(before);
+    // The turn comes back exactly as it was, field by field, but for the move count and an Undo
+    // offered for the move before ending, which a hand-back doesn't bring back (SPEC 4.4).
+    const now = state(code);
+    const keys = [...new Set([...Object.keys(now), ...Object.keys(before)])];
+    const changed = keys.filter(
+      (k) => JSON.stringify((now as never)[k]) !== JSON.stringify((before as never)[k]),
+    );
+    expect(changed).toEqual(before.undo ? ['seq', 'undo'] : ['seq']);
+    expect(now.undo).toBeUndefined();
+    if (dice) expect(before.undo).toBeDefined();
   });
 });

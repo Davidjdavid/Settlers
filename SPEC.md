@@ -195,6 +195,7 @@ These come from years of misclicks in Catan Universe, so they are about feel. If
   - ships built that turn still unable to move (Seafarers);
   - knights activated that turn still unable to act (Cities & Knights);
   - their trade offers (**D5**).
+  - Not an "Undo" that was on offer for the move just before ending: that chance is gone. With "Undo a whole turn" on (13.2) the turn can still be undone.
 - **Only one step back,** to the player just before. Once handed back, that player's turn goes on normally. When they end it again, the next player can be asked again.
 - **A CPU always hands the dice back** when asked.
 - **During setup:** a starting settlement and road, once placed, stay placed. A game option (off by default) allows handing the dice back during the starting placements too (**D6**).
