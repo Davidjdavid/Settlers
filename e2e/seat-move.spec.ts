@@ -85,7 +85,9 @@ test('your seat moves to the screen you pick your name on, in the lobby and mid-
   expect(t.errors).toEqual([]);
 });
 
-test('the Stats page lists people, not CPUs, and a person can be deleted', async ({ browser }) => {
+test('the Stats page lists people, not CPUs; a starred person can’t be deleted, anyone else can', async ({
+  browser,
+}) => {
   const t = await seatedTable(browser, server, ['Gus', 'Hal']);
   const p = await freshBrowser(browser, t.code);
   // A name made here but never seated.
@@ -105,6 +107,24 @@ test('the Stats page lists people, not CPUs, and a person can be deleted', async
     .click();
   await p.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
   await expect(p.locator('[data-testid=stats-who][data-name=Typo]')).toHaveCount(0);
+  // A star keeps a person from being deleted or merged away until it comes off, kept on a reload.
+  const hal = p.locator('[data-testid=stats-who][data-name=Hal]');
+  await hal.click();
+  await p.getByTestId('star-profile').click();
+  await expect(p.getByTestId('star-profile')).toHaveAttribute('aria-pressed', 'true');
+  await expect(p.getByTestId('delete-profile')).toHaveCount(0);
+  await expect(p.getByTestId('star-note')).toHaveText('Starred, so Hal can’t be deleted.');
+  await expect(hal.locator('.star')).toBeVisible();
+  await expect(p.locator('select[aria-label="Merge this name"] option', { hasText: 'Hal' })).toBeDisabled();
+  await p.reload();
+  await hal.click();
+  await expect(p.getByTestId('star-profile')).toHaveAttribute('aria-pressed', 'true');
+  await expect(p.getByTestId('delete-profile')).toHaveCount(0);
+  await p.getByTestId('star-profile').click();
+  await expect(p.getByTestId('star-profile')).toHaveAttribute('aria-pressed', 'false');
+  await expect(hal.locator('.star')).toHaveCount(0);
+  await expect(p.getByTestId('delete-profile')).toBeVisible();
+  await expect(p.locator('select[aria-label="Merge this name"] option', { hasText: 'Hal' })).toBeEnabled();
   // Someone playing right now can't be.
   const del = async (name: string) => {
     await p.locator(`[data-testid=stats-who][data-name=${name}]`).click();

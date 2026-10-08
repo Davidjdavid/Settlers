@@ -2315,6 +2315,15 @@ button.vp {
   border-style: dashed;
   color: var(--ink-2);
 }
+/* A starred person (the Stats page): can't be deleted or merged away. */
+.profile .star {
+  margin-left: 5px;
+  color: #e9b94a;
+}
+.btn.starred {
+  border-color: #e9b94a;
+  color: #e9b94a;
+}
 .newprofile {
   display: flex;
   flex-wrap: wrap;
@@ -3785,56 +3794,6 @@ button.vp {
 .prompt {
   position: relative;
 }
-.gainflash {
-  position: absolute;
-  left: 10px;
-  bottom: calc(100% + 8px);
-  z-index: 20;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 12px;
-  background: rgba(10, 27, 35, 0.92);
-  border: 1px solid var(--line-2);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-  animation: gainflash 3.2s ease forwards;
-}
-.gf-you {
-  font-size: 13px;
-  color: var(--ink-2);
-}
-.gf-card {
-  padding: 3px 9px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 15px;
-  color: #0b1418;
-  background: var(--c);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
-}
-@keyframes gainflash {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  12%,
-  75% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .gainflash {
-    animation: none;
-  }
-}
 
 /* The barbarians, harder to miss: a big count that warms up as they close in, a verdict, and a
    chip in the top bar that's always in view. */
@@ -4298,4 +4257,308 @@ button.vp {
 }
 .rolls .btn {
   margin-top: 6px;
+}
+
+/* House rules that last a while: a badge in the board's corner, and a notice when one runs out. */
+.hr-corner {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 4;
+  display: grid;
+  gap: 6px;
+  max-width: min(320px, 60%);
+  pointer-events: auto;
+}
+.hr-rule {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 7px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(10, 27, 35, 0.86);
+  border: 1.5px solid var(--lantern);
+  color: #fff6dc;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.hr-rule i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--lantern);
+  animation: hr-blink 1.4s ease-in-out infinite;
+}
+.hr-rule b {
+  font-weight: 700;
+}
+.hr-rule small {
+  grid-column: 2;
+  color: #e6d8b0;
+  font-size: 11px;
+}
+@keyframes hr-blink {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+.hr-over {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(420px, 90%);
+  padding: 18px 22px;
+  border-radius: 18px;
+  background: #fffaf0;
+  color: #1f2440;
+  text-align: center;
+  box-shadow:
+    0 0 0 4px var(--lantern),
+    0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.hr-over-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a5a00;
+}
+.hr-over b {
+  font: 400 22px/1.2 var(--display);
+}
+.hr-over p {
+  margin: 0;
+  color: #3d4462;
+  font-size: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hr-rule i {
+    animation: none;
+  }
+}
+
+/* ---------- The cards you just got (gainshow.tsx, 10 October) ---------- */
+.gainshow {
+  --gs-w: 72px;
+  --gs-h: 100px;
+  --gs-gap: 10px;
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+.gs-row {
+  display: flex;
+  gap: var(--gs-gap);
+  perspective: 700px;
+}
+/* The bank: a deck of cards face down, first in the row; yours are dealt out of it. */
+.gs-bank {
+  position: relative;
+  width: var(--gs-w);
+  height: var(--gs-h);
+  margin-right: 6px;
+  animation: gs-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.gs-bank i {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: repeating-linear-gradient(45deg, #2a4a57 0 5px, #1b3d4a 5px 10px);
+  border: 3px solid #f6efdc;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+.gs-bank i:nth-child(1) {
+  transform: translate(-5px, 4px) rotate(-5deg);
+}
+.gs-bank i:nth-child(2) {
+  transform: translate(-2px, 2px) rotate(-2deg);
+}
+.gs-bank span {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f6efdc;
+  color: #1b3d4a;
+  font: 800 12px var(--ui);
+  letter-spacing: 0.04em;
+}
+.gs-card {
+  position: relative;
+  width: var(--gs-w);
+  height: var(--gs-h);
+  transform-style: preserve-3d;
+  animation: gs-deal 0.45s cubic-bezier(0.2, 0.75, 0.3, 1.15) both;
+  animation-delay: calc(250ms + var(--i) * 150ms);
+  will-change: transform, opacity;
+}
+.gs-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  backface-visibility: hidden;
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.18);
+}
+.gs-front {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  padding: 8px 4px 6px;
+  background: var(--c);
+  border: 3px solid #fffaf0;
+  box-sizing: border-box;
+}
+.gs-icon svg {
+  width: 42px;
+  height: 42px;
+  display: block;
+}
+.gs-name {
+  font: 800 12px var(--ui);
+  color: #1f2440;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.gs-back {
+  transform: rotateY(180deg);
+  background: repeating-linear-gradient(45deg, #2a4a57 0 5px, #1b3d4a 5px 10px);
+  border: 3px solid #f6efdc;
+}
+.gs-text {
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: #fffdf6;
+  color: #1f2440;
+  font: 600 22px/1.2 var(--ui);
+  box-shadow:
+    0 0 0 4px var(--gs-ring, #3fb36b),
+    0 10px 28px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  animation: gs-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.25s both;
+}
+.gs-text b {
+  font-weight: 800;
+}
+.gs-text small {
+  font-size: 15px;
+  opacity: 0.75;
+}
+.gainshow.leaving .gs-text,
+.gainshow.leaving .gs-bank,
+.gainshow.calm.leaving {
+  transition: opacity 0.35s ease;
+  opacity: 0;
+}
+@keyframes gs-deal {
+  from {
+    transform: translateX(var(--dx)) scale(0.9) rotateY(180deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(0, 0) scale(1) rotateY(0deg);
+    opacity: 1;
+  }
+}
+@keyframes gs-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+/* A short laptop screen: smaller cards. */
+@media (max-height: 760px) {
+  .gainshow {
+    --gs-w: 58px;
+    --gs-h: 80px;
+    gap: 9px;
+  }
+  .gs-icon svg {
+    width: 34px;
+    height: 34px;
+  }
+  .gs-text {
+    font-size: 19px;
+    padding: 6px 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gs-card,
+  .gs-bank,
+  .gs-text {
+    animation: none;
+  }
+}
+
+/* A player's emblem in a disc of their colour (emblems.tsx). */
+.emblem {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+}
+.emblem svg {
+  display: block;
+}
+
+/* The emblem picker in the lobby (docs/isle.md 9). */
+.emblempick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.emblembtn {
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+}
+.emblembtn[aria-pressed='true'] {
+  border-color: var(--ink);
+}
+.emblembtn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.emblembtn:not(:disabled):hover {
+  border-color: var(--line-2);
+}
+
+/* The screen picker in the room menu (docs/isle.md 15). */
+.menu-screens {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.menu-screens .seg {
+  margin-left: 0;
 }

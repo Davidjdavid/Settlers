@@ -2,6 +2,8 @@
 
 The design brief for a whole new game screen (8 October). The group asked for one new UI, made as if Nintendo were making their own Settlers, as a mock-up first. This is the plan the mock-up follows; the build follows the mock-up once the group likes it.
 
+**Correction (10 October).** "Nintendo-style" means what Nintendo has always been praised for, from Ocarina of Time to Mario on the Switch: simple, clean, impossible to read two ways, everything in its place. It does not mean a toy look. The first build (sections 14–15) drifted into toys (a toy island, rounded heavy type, bubbly white panels, things bobbing and bouncing); it stays playable as the **Toy** screen in the menu, next to the standard one. The standard screen was praised for its efficiency (everything in its place, nothing to distract you), but to the people at the table who aren't programmers it looked like an engineer made it; that is what the group's notes asked us to fix. Section 9 now says what Nintendo-style means; the next looks start as image mock-ups (section 16), not code.
+
 ## 1. The job
 
 Four friends on a voice call, on laptops and phones. Most of the time it's someone else's turn and you're half looking. The screen has to:
@@ -24,7 +26,7 @@ The old screen fails 1–4: the roll is a small die in a corner, the log is the 
 - **Celia Hodent**, *The Gamer's Brain*: attention is scarce, so steer it with motion and sound at the moments that matter; people don't notice small changes; memory is rebuilt, so give recaps.
 - **Reviews of digital board games** (Wingspan, Scythe): the other players' state belongs on the main screen, not in menus; a short public recap of their turns; their turns may run faster.
 - **Animal Crossing**'s morning announcements: a friendly recap of what happened; but only when there's news (the filler was the complaint).
-- **Game feel** (Steve Swink; Jonasson and Purho's "Juice it or lose it"; Jesse Schell's lenses): squash and stretch, easing, particles, a little shake, all tuned to the game and never slowing it down.
+- **Game feel** (Steve Swink; Jesse Schell's lenses): every press answers at once, with easing; used sparingly, as Nintendo's menus do, and never slowing the game down.
 - **Refactoring UI**, *Don't Make Me Think*: hierarchy by size, weight and colour; quieten the rest to make one thing loud; cut needless words.
 
 ## 3. The four questions
@@ -36,31 +38,31 @@ The screen always answers four questions, loudest first, without the log:
 3. **Who's winning, and by how much?**
 4. **What can I do right now?**
 
-The UI matters more than the art: it could be plain boards and still work, if these four are right. The art (a toy island, section 9) comes second.
+The UI matters more than the art: it could be plain boards and still work, if these four are right.
 
 ## 4. Is it my turn?
 
-- **Your turn changes the whole screen**, not a label: a thick glowing frame in your colour round the window, your tray slides up, the big button bottom right (Roll, then End turn) appears and bobs, and "Your turn!" sweeps across with a jingle. In a background tab the title reads "● Your turn".
-- **Not your turn** is calm: a thin frame in the current player's colour, your tray lower, and in place of the big button "Joe is playing" with his face and what he's doing ("building", "trading").
-- **A turn order strip**: everyone's faces in order with a marker sliding to whoever's playing, and "You're next" when you are.
+- **Your turn changes the whole screen**, not a label: a frame in your colour round the window, the big button bottom right (Roll, then End turn) gets the cursor, and "Your turn" shows across the middle with a jingle. In a background tab the title reads "● Your turn".
+- **Not your turn** is calm: a thin frame in the current player's colour, and in place of the big button "Waiting for Joe" with their emblem and what they're doing ("building", "trading").
+- **The players in turn order** down the left, the cursor on whoever's playing, and "You're next" when you are.
 - **Anything waiting on you** (discard, a trade offer, gold) gets the same glow, smaller, with the one button you need.
 
 ## 5. Who's winning?
 
-- **A race track across the top**, from 0 to the target: each player's face is a token at their points. The leader wears a crown; ties sit side by side; the gaps show. Order and distance at a glance, without comparing numbers.
-- Points scored: the token hops forward with "+1" and a chime. The last two spaces glow red: "Sam is 2 from winning!".
+- **A race track across the top**, from 0 to the target: each player's emblem stands above their points, pointing down at the number, never covering it. Players on the same points crowd onto the one number (two stacked, three in a triangle, four in a square) with one pointer: side by side, they looked like different points. The leader wears a crown. Order and distance at a glance, without comparing numbers.
+- Points scored: "+1" by the token. The last two spaces are red.
 - Your token counts your hidden points; everyone else sees public points.
 
 ## 6. What just happened?
 
 - **Every roll takes the middle for about 2½ seconds**: the dice tumble, the total pops huge in the roller's colour ("Joe rolled 8", "Joe rolled green 3"), cards fly from the tiles to whoever earned them, and a caption says it ("You got 1 Wheat · Alex got 2 Ore"; a 7: "The robber's coming!" in red). Clicks go through.
 - **Things happen where they happen**: a city drops onto the board with a puff and "+1"; Longest Road glows along its route and the badge flies from the old owner to the new; the robber thuds down and its tile greys; a stolen card flies between the two seats; a trade swaps cards between them.
-- **Each seat shows its last action** ("built a city") for a few seconds.
+- **Each seat shows what they did since your last turn** on a small callout beside it, until their next turn (the group's pick over a separate list).
 - **The last five rolls** sit by the dice, newest first, in the rollers' colours.
 
 ## 7. When your turn comes
 
-- **"Since your last turn"**: a line per player's turn: their roll, what you got from it, what they did (built, played, traded, stole from you). Nothing happened, no card.
+- **What each player did since your last turn** stays on the callout beside their panel (section 6). (A separate "Since your last turn" list you had to OK was tried and dropped: it said the same thing twice.)
 - **"Replay last round"**: everyone's turns again on the board at double speed, like a sports replay.
 
 ## 8. Doing things
@@ -72,12 +74,20 @@ The UI matters more than the art: it could be plain boards and still work, if th
 - **Cards you get** fly into your tray and bump the count.
 - **On others' turns** their seat glows with what they're doing live; the board never moves by itself; you can still offer them a trade.
 
-## 9. The look
+## 9. The look: Nintendo's menu language
 
-- A toy island in a bright sea: thick hex tiles with little scenes (trees, sheep, fields, clay pits, peaks, a desert, gold in dark rock); no icons pasted on tiles.
-- Players sit around the island in turn order: you at the bottom, the next player on your left.
-- Rounded heavy type (Baloo 2 for numbers and headlines, M PLUS Rounded 1c for the rest), white rounded panels that look pressable, each player's colour on their seat, face and pieces.
-- **Laptop**: the race track along the top; the other players at the edges; the board in the middle; your tray along the bottom; dice, last rolls and the big button bottom right; announcements and the recap in the middle.
+What stays the same in Nintendo's screens from Ocarina of Time to the Switch, and what this screen takes from it:
+
+1. **The game fills the screen; the HUD sits at the edges, each thing always in the same place.** The board in the middle on the sea; the status along the top; the players down the left; the rolls and the log on the right; your cards along the bottom; the one main button bottom right.
+2. **Panels are plain and quiet**: dark and slightly see-through over the sea, a thin light edge, modestly rounded corners, white writing. One panel, one job, with a short title in small capitals.
+3. **One clean typeface** (Figtree) in a few sizes; numbers bold, and the same width so they don't jump. No rounded, bubbly lettering.
+4. **Few colours, each with one meaning**: the panels are neutral; a player's colour only marks that player (their emblem, a stripe); **cyan is the cursor**: what's active and what you can do; **gold** is first place and rewards; **red** only for danger (a 7, over the hand limit, about to win).
+5. **The cursor**: whose turn it is and the button to press have a bright outline that breathes gently. Nothing else moves by itself.
+6. **Messages come in a text box**, as in every Nintendo game: what happened, in plain words, with the name in that player's colour ("Dana rolled 8"). What you get shows like an item you've found: the cards, then "You got 2 Wheat and 1 Ore", then they go into your hand.
+7. **Motion is short and has a purpose**: slide or fade in 150–250 ms; a small pop only for something you get; no bobbing, no wobble.
+8. **Icons are flat and simple**, one style, always with a number or a word.
+9. **Emblems, not letters**: everyone picks an emblem (anchor, wheat, crown…), kept on their profile and one per table like colours; their emblem in a disc of their colour marks them everywhere on this screen. Letters failed: people at the table share first letters.
+- **Laptop**: the race track along the top; the other players at the edges; the board in the middle; your tray along the bottom; dice, last rolls and the big button bottom right; announcements in the middle.
 - **Phone**: the race track on top doubles as the players list (tap a face for details); the board; your tray and the big button at the bottom.
 - The log becomes a history drawer; detailed stats sit behind a tap.
 
@@ -87,7 +97,7 @@ The UI matters more than the art: it could be plain boards and still work, if th
 - Event die: the third die, with a coloured gate and a picture (flask, coins, crown) as well as its colour.
 - Improvements: three little buildings on your tray (Science, Trade, Politics) with their levels.
 - Knights: helmets on the board with 1–3 stars; active ones shine.
-- Ships: toy sailboats; the pirate: a dark ship; gold fields glitter; fog: soft clouds with a "?".
+- Ships, the pirate, gold and fog: as the board's art style draws them.
 
 ## 11. Sound and motion
 
@@ -95,7 +105,7 @@ Every motion has a sound: dice rattle and clack, tiles hop, cards swish, pieces 
 
 ## 12. Always
 
-- A player's colour always comes with their avatar and initial, never colour alone.
+- A player's colour always comes with their emblem, never colour alone.
 - Every number has its pips; 6 and 8 are red.
 - Text at least 14px on a phone; numbers big.
 - Everything is a tap; nothing only on hover.
@@ -120,7 +130,7 @@ What the reading says about each (the SixArm UI/UX Design Guide, Nielsen's heuri
 - **Visibility of system status** (Nielsen 1) and **discoverability** (Norman): anything you hold or owe is in view without scrolling. Your progress cards sit in your tray in the middle of the bottom edge, never below the fold. A card you just drew flies in and its slot glows until you've seen it. A card you can play now is lit.
 - **Change blindness** (NN/g): people miss changes outside where they're looking, even big ones. A short toast vanishes before it's read. So every important change gets two things: a **moment** (a callout in the middle of the screen, in the player's colour, with a sound) for the change itself, and a **lasting place** that shows the result (who holds it now). Things that matter less get a smaller cue on the seat that did them, and the log keeps everything.
 - **Rank by the cost of missing it**: big for points, awards and metropolises changing hands, a 7, the robber on your tile, a steal from you, the barbarians; medium for builds and cards played (on the player's seat for a few seconds); small for trades and everything else (the log).
-- **Information you've seen stays on screen** (Board Game Arena players): the last rolls stay; the recap waits until you close it; the awards shelf (below) never goes away.
+- **Information you've seen stays on screen** (Board Game Arena players): the last rolls stay; what each player did stays by their seat until their next turn; the awards shelf (below) never goes away.
 
 So the new screen adds:
 
@@ -132,9 +142,17 @@ So the new screen adds:
 
 Built in the real game as an opt-in setting ("New screen", in the menu and My settings), using the current board and its art styles, so the group can try it in a real game. Phones and tablets keep the standard screen for now. Laptop first (1366×768), up to large monitors (1920×1080 and wider).
 
-- **Top bar**: the menu (with the room code), the race track from 0 to the target with everyone's token, the awards shelf, the dice stats and music.
+- **Picking it**: Screen · Standard / Toy in the room menu, saved on your profile; only your screen changes.
+- **Top bar**: the menu (with the room code), the race track from 0 to the target with everyone's emblem, the awards shelf, the dice stats and music.
 - **Left column**: everyone's seat in turn order, a marker on whoever is playing and "You're next" when you are. Each seat: name and colour, points, cards in hand (red over the limit), development or progress cards by deck, knights and road length, awards, and what they just did.
 - **Middle**: the board. Over it: what to do now, and the moments.
-- **Right column**: the last five rolls (who, both dice, the event die), newest first and biggest; "Since your last turn"; then the log and table talk.
+- **Right column**: the last five rolls (who by emblem and name, both dice, the event die), newest first and biggest; then the log and table talk.
 - **Bottom strip**: your hand (section 14), with the big button at the right end: Roll, then End turn; when it's not your turn, whose turn it is and what they're doing.
-- **Your turn** puts a glowing frame in your colour round the whole screen and says "Your turn!" across the middle; the recap opens beside the board.
+- **Your turn** puts a glowing frame in your colour round the whole screen and says "Your turn!" across the middle.
+- **Beside each seat**, a callout with what they did since your last turn ("traded with the bank and built a road"), until their next turn; what someone does off their turn (a discard) shows there for a few seconds.
+- **Cards you get from a roll** (on both screens): a bank deck appears over the board, your cards are dealt out of it face up and big over "You got 2 Wheat and 1 Ore", then each flies into its spot in your hand (`gainshow.tsx`). The roll announcement lists everyone else's.
+- **Waiting**: when the game waits on someone (gold, a discard, a choice), their seat says so and, in place of the big button, "Waiting for Joe · picking gold".
+
+## 16. Next: mock-ups of a Nintendo-style screen
+
+Before any more code: a few image mock-ups of what the whole game screen could look like from scratch, as if made by someone who loves Nintendo for its design sense and was only told the rules of Catan, following section 9. The group picks a direction; then it's built as its own screen choice.

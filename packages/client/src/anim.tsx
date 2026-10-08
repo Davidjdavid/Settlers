@@ -70,7 +70,11 @@ function center(el: Element | null): Spot | null {
   if (!r.width && !r.height) return null;
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
-const playerSpot = (p: Seat) => center(document.querySelector(`[data-seat="${p}"]`));
+// The new screen's seat card if there is one (its race track marks seats too), else the player's row.
+const playerSpot = (p: Seat) =>
+  center(
+    document.querySelector(`.ip-seat[data-seat="${p}"]`) ?? document.querySelector(`[data-seat="${p}"]`),
+  );
 const bankSpot = () => center(document.querySelector('[data-bank]'));
 
 /** Expand counts into individual cards, capped so big trades don't flood the screen. */
@@ -149,7 +153,8 @@ function flightsFor(e: GameEvent, v: PlayerView): Flight[] {
         const t = hx.t;
         for (const vert of g.hexVerts[i]!) {
           const b = v.verts[vert];
-          if (!b || !(e.gains[b[0]]?.[t] ?? 0)) continue;
+          // Your own are dealt big from the bank instead (gainshow.tsx).
+          if (!b || b[0] === v.me || !(e.gains[b[0]]?.[t] ?? 0)) continue;
           move(Array(b[1]).fill({ kind: t }), hexScreenPoint(i), playerSpot(b[0]));
         }
       });
@@ -186,7 +191,7 @@ function flightsFor(e: GameEvent, v: PlayerView): Flight[] {
       move(cardsOf(e.got), bankSpot(), playerSpot(e.p));
       break;
     case 'gold':
-      move(cardsOf(e.got), bankSpot(), playerSpot(e.p));
+      if (e.p !== v.me) move(cardsOf(e.got), bankSpot(), playerSpot(e.p));
       break;
     case 'discover':
       if (e.got) move(cardsOf(e.got), hexScreenPoint(e.h), playerSpot(e.p));
@@ -203,7 +208,7 @@ function flightsFor(e: GameEvent, v: PlayerView): Flight[] {
         if (hx.n !== sum || i === v.board.robber || !com) return;
         for (const vert of g.hexVerts[i]!) {
           const b = v.verts[vert];
-          if (b && b[1] === 2 && e.gains[b[0]]?.[com])
+          if (b && b[1] === 2 && b[0] !== v.me && e.gains[b[0]]?.[com])
             move([{ kind: com }], hexScreenPoint(i), playerSpot(b[0]));
         }
       });

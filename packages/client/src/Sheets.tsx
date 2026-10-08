@@ -545,6 +545,13 @@ export function ConfirmTwice(props: {
 
 /* ---------- Menu ---------- */
 
+/** The game screens to pick from on a laptop or monitor (docs/isle.md 15). */
+type Screen = 'standard' | 'new';
+const SCREENS: [Screen, string][] = [
+  ['standard', 'Standard'],
+  ['new', 'Toy'],
+];
+
 export function MenuSheet({
   v,
   code,
@@ -562,8 +569,8 @@ export function MenuSheet({
   onClose: () => void;
   onEndGame: () => void;
   /** Which game screen this player uses (docs/isle.md 15), on laptops and monitors. */
-  screen?: 'standard' | 'new' | undefined;
-  onScreen?: (s: 'standard' | 'new') => void;
+  screen?: Screen | undefined;
+  onScreen?: (s: Screen) => void;
   /** "My settings", for a seated player. */
   onSettings?: () => void;
   /** The game's rules, changed by whoever has the dice. */
@@ -604,13 +611,23 @@ export function MenuSheet({
           </button>
         ) : null}
         {screen && onScreen ? (
-          <button
-            className={`btn${screen === 'standard' ? ' primary' : ''}`}
-            onClick={() => onScreen(screen === 'new' ? 'standard' : 'new')}
-            data-testid="menu-screen"
-          >
-            {screen === 'new' ? 'Back to the standard screen' : 'Try the new screen'}
-          </button>
+          <div className="menu-screens" role="group" aria-label="Screen" data-testid="menu-screen">
+            <span className="eyebrow">Screen</span>
+            <div className="seg">
+              {SCREENS.map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`btn small${screen === k ? ' on' : ''}`}
+                  aria-pressed={screen === k}
+                  onClick={() => screen !== k && onScreen(k)}
+                  data-testid={`menu-screen-${k}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : null}
         {onLayout ? (
           <button className="btn" onClick={onLayout} data-testid="menu-layout">

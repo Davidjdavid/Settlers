@@ -9,9 +9,12 @@ import {
   COMS,
   RES,
   isLogNote,
+  robberAwake,
+  stateFromView,
   type Card,
   type Cards,
   type GameEvent,
+  type Owe,
   type PlayerView,
   type Seat,
   type Track,
@@ -197,6 +200,8 @@ export interface RollNews extends Roll {
   got: { p: Seat; cards: Cards; gold?: number }[];
   /** A 7 rolled again first (no 7s yet). */
   redo: boolean;
+  /** A 7: whether the robber moves (Knights: not before the first attack), and who discards. */
+  seven: { robber: boolean; discard: Seat[] } | null;
 }
 
 /** The roll in a batch of new log items, if there is one. */
@@ -223,11 +228,17 @@ export function rollNews(items: readonly LogItem[], v: PlayerView): RollNews | n
       }
   }
   const order = [...got.keys()].sort((a, b) => (a === v.me ? -1 : b === v.me ? 1 : a - b));
+  const sum = roll.d[0] + roll.d[1];
+  const must = same.find((e): e is Extract<GameEvent, { k: 'mustDiscard' }> => e.k === 'mustDiscard');
   return {
     ...roll,
-    sum: roll.d[0] + roll.d[1],
+    sum,
     got: order.map((p) => ({ p, ...got.get(p)! })),
     redo: same.some((e) => e.k === 'roll' && e.redo),
+    seven:
+      sum === 7
+        ? { robber: robberAwake(stateFromView(v)), discard: must ? Object.keys(must.need).map(Number) : [] }
+        : null,
   };
 }
 
@@ -492,6 +503,19 @@ export function recapSince(log: readonly LogItem[], v: PlayerView, max = 8): Tur
     .map((t) => recapOf(v, t));
 }
 
+/**
+ * What each other player did since your last turn, for the bubble by their seat: their latest turn
+ * in `recapSince`, in words ("traded with the bank and built a road"). Turns where they did
+ * nothing but roll leave no bubble.
+ */
+export function sinceYourTurn(log: readonly LogItem[], v: PlayerView): Partial<Record<Seat, string>> {
+  const out: Partial<Record<Seat, string>> = {};
+  for (const t of recapSince(log, v, Infinity))
+    if (t.did.length) out[t.p] = andList(t.did);
+    else delete out[t.p];
+  return out;
+}
+
 /** Cards in words: "2 Wheat, 1 Ore". */
 export const cardsLine = cardsWord;
 
@@ -664,5 +688,99 @@ export function momentsIn(v: PlayerView, items: readonly LogItem[]): MomentData[
         break;
     }
   }
+  return out;
+}
+
+/* ---------- Who the game is waiting for, and why (docs/isle.md 4) ---------- */
+
+/** One thing the game is waiting on: who, and what they're doing, in a few words. */
+export interface Waiting {
+  who: Seat[];
+  /** "picking gold", "choosing a city to lose to the barbarians". */
+  what: string;
+}
+
+const OWE_WAIT: Record<Owe['k'], (v: PlayerView, o: Owe) => string> = {
+  loseCity: () => 'choosing a city to lose to the barbarians',
+  defenderDraw: () => 'drawing a progress card for beating the barbarians',
+  overflow: () => 'putting back a progress card (only 4 allowed)',
+  aqueduct: () => 'picking a free resource (Aqueduct)',
+  relocate: () => 'moving a knight that was chased away',
+  desert: () => 'removing a knight (Deserter)',
+  deserterPlace: () => 'placing a knight (Deserter)',
+  give: (v, o) => `giving ${'n' in o ? o.n : ''} cards to ${obj(v, 'to' in o ? o.to : null)} (Wedding)`,
+  discard: (_v, o) => `discarding ${'n' in o ? o.n : ''} cards (Saboteur)`,
+  harbor: () => 'offering resources for commodities (Commercial Harbor)',
+  harborGive: (v, o) => `giving ${obj(v, 'to' in o ? o.to : null)} a commodity (Commercial Harbor)`,
+  take: (v, o) => `taking cards from ${obj(v, 'from' in o ? o.from : null)} (Master Merchant)`,
+  spy: (v, o) => `taking a progress card from ${obj(v, 'from' in o ? o.from : null)} (Spy)`,
+  rebuild: () => 'rebuilding a road (Diplomat)',
+};
+
+/**
+ * Everything the game is waiting on right now, so nobody wonders whose turn it is or whether
+ * it's stuck: a discard after a 7, gold, a treasure, the barbarians' choices, a progress card
+ * over the limit, and the plain turn ("about to roll", "playing").
+ */
+export function waitingFor(v: PlayerView): Waiting[] {
+  if (v.phase !== 'play') return [];
+  const out: Waiting[] = [];
+  const add = (p: Seat, what: string) => {
+    const w = out.find((x) => x.what === what);
+    if (w) {
+      if (!w.who.includes(p)) w.who.push(p);
+    } else out.push({ who: [p], what });
+  };
+  const sea = v.rules.modules.includes('seafarers');
+  switch (v.stage) {
+    case 'setup':
+      add(v.turn, 'placing a starting settlement and road');
+      break;
+    case 'preroll':
+      add(v.turn, v.ck ? 'about to roll (or play a card first, like the Alchemist)' : 'about to roll');
+      break;
+    case 'discard':
+      for (const p of Object.keys(v.discard ?? {}).map(Number))
+        add(p, `discarding ${v.discard![p]} cards (a 7 was rolled)`);
+      break;
+    case 'robber':
+      add(v.turn, sea ? 'moving the robber or the pirate' : 'moving the robber');
+      break;
+    case 'roads':
+      add(
+        v.turn,
+        `placing ${v.freeRoads} free ${sea ? 'roads or ships' : v.freeRoads === 1 ? 'road' : 'roads'}`,
+      );
+      break;
+    case 'gold':
+      for (const [p, n] of Object.entries(v.sea?.gold?.owed ?? {}))
+        add(Number(p), `picking ${n} resource${n === 1 ? '' : 's'} from a gold field`);
+      break;
+    case 'treasure':
+      for (const o of v.tr?.owe ?? [])
+        add(
+          o.p,
+          o.k === 'deck'
+            ? 'picking a progress deck for a treasure'
+            : o.k === 'pick'
+              ? `picking ${o.n} resource${o.n === 1 ? '' : 's'} for a treasure`
+              : 'placing free roads and ships from a treasure',
+        );
+      break;
+    case 'ck':
+      for (const o of v.ck?.owe ?? []) add(o.p, OWE_WAIT[o.k](v, o));
+      break;
+    case 'main':
+      add(v.turn, 'playing');
+      break;
+  }
+  // Questions the table is answering (SPEC 4.4, 5.10, 13.2). An undo that could be asked for
+  // (the last move's) waits on nobody until it is.
+  if (v.undo?.asked)
+    for (let p = 0; p < v.players.length; p++)
+      if (p !== v.undo.p && !v.undo.ok.includes(p) && !v.players[p]!.cpu)
+        add(p, `answering ${obj(v, v.undo.p)}${v.undo.p === v.me ? 'r' : '’s'} request to undo`);
+  if (v.back?.asked && !v.back.refused)
+    add(v.turn, `deciding whether to give the dice back to ${obj(v, v.back.from)}`);
   return out;
 }

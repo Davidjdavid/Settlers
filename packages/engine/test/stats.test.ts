@@ -24,7 +24,7 @@ function run(s0: GameState, moves: [number, Action][]) {
 }
 
 describe('game stats (SPEC 5.5)', () => {
-  it('a roll: dice chart, production credited to its tile, luck against the real odds', () => {
+  it('a roll: dice chart, production credited to its tile', () => {
     let s = emptyBoard(3);
     const g = geo(s);
     // Seat 0 has one settlement, on the corner of a tile numbered 8.
@@ -41,12 +41,6 @@ describe('game stats (SPEC 5.5)', () => {
     expect(st.players[0]!.rolls).toBe(1);
     expect(st.players[0]!.got.production).toEqual({ [s.board.hexes[h]!.t]: 1 });
     expect(bestTile(st.players[0]!)).toEqual([h, 1]);
-    // Expected: this settlement touches tiles numbered n; each pays 1 with odds (6-|n-7|)/36.
-    const expected = g.verts[v]!.hexes.map((x) => s.board.hexes[x]!)
-      .filter((x) => x.n && x.t !== 'desert')
-      .reduce((a, x) => a + (6 - Math.abs(x.n - 7)) / 36, 0);
-    expect(st.players[0]!.luck.expected).toBeCloseTo(expected, 10);
-    expect(st.players[0]!.luck.got).toBe(1);
   });
 
   it('a steal: who robbed whom, and the card moves from robbed to steal', () => {

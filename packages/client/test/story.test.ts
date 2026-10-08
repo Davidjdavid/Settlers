@@ -7,7 +7,10 @@ import {
   eventsFor,
   geo,
   legalActions,
+  mustDiscard,
   newGame,
+  TABLE_TALK,
+  robberAwake,
   seedRng,
   viewFor,
   type Action,
@@ -20,7 +23,17 @@ import {
 } from '@settlers/engine';
 import type { LogItem } from '@settlers/server/protocol';
 import { act, emptyBoard, place, rigDice, setHand } from '../../engine/test/helpers';
-import { awards, didOf, lastRolls, momentsIn, race, recapSince, rollNews } from '../src/isle/story';
+import {
+  awards,
+  didOf,
+  lastRolls,
+  momentsIn,
+  race,
+  recapSince,
+  sinceYourTurn,
+  rollNews,
+  waitingFor,
+} from '../src/isle/story';
 
 /**
  * A bot game, keeping each seat's log as the server sends it. `each` sees the state, the move's
@@ -67,6 +80,7 @@ describe('the last rolls and the roll announcement (docs/isle.md 6)', () => {
     it(`${name}: every roll, newest first, with who got what`, () => {
       const rolls: { p: Seat; d: [number, number] }[] = [];
       let announced = 0;
+      let sevens = 0;
       play(`rolls-${name}`, config, n, (s, evs, logs) => {
         const r = evs.findLast((e): e is Extract<GameEvent, { k: 'roll' }> => e.k === 'roll' && !e.redo);
         for (let q = 0; q < n; q++) {
@@ -96,6 +110,15 @@ describe('the last rolls and the roll announcement (docs/isle.md 6)', () => {
           expect(cards).toEqual(want);
           if (news!.got.some((g) => g.p === q)) expect(news!.got[0]!.p).toBe(q);
           if (config.modules?.includes('citiesKnights')) expect(news!.e).toBeDefined();
+          // A 7: the robber only when it's awake (Knights: after the first attack), and who discards.
+          if (r.d[0] + r.d[1] === 7) {
+            sevens++;
+            expect(news!.seven!.robber).toBe(robberAwake(s));
+            const must = evs.find((e) => e.k === 'mustDiscard');
+            expect(news!.seven!.discard).toEqual(
+              must && must.k === 'mustDiscard' ? Object.keys(must.need).map(Number) : [],
+            );
+          } else expect(news!.seven).toBeNull();
         }
         if (r) rolls.unshift({ p: r.p, d: r.d });
         // The last five, newest first, the same on every screen.
@@ -103,6 +126,7 @@ describe('the last rolls and the roll announcement (docs/isle.md 6)', () => {
           expect(lastRolls(logs[q]!, 5).map(({ p, d }) => ({ p, d }))).toEqual(rolls.slice(0, 5));
       });
       expect(announced).toBeGreaterThan(20 * n);
+      expect(sevens).toBeGreaterThan(2);
     });
 });
 
@@ -218,6 +242,33 @@ describe('since your last turn (docs/isle.md 7)', () => {
     // P2's screen (on P0's turn): one turn of P0's, with both roads.
     const v = viewFor(g.s(), 2);
     expect(recapSince(g.logs[2]!, v).map((x) => [x.p, x.did])).toEqual([[0, ['built 2 roads']]]);
+  });
+
+  it('the bubbles by the seats: each other player’s latest turn in words, never yours', () => {
+    const g = game();
+    g.step(0, { type: 'roll' });
+    g.step(0, g.road(0));
+    g.step(0, { type: 'end' });
+    // P1 rolls and does nothing yet: no bubble for P1, P0's road stays.
+    g.rig();
+    g.step(1, { type: 'roll' });
+    expect(sinceYourTurn(g.logs[2]!, viewFor(g.s(), 2))).toEqual({ 0: 'built a road' });
+    g.step(1, g.road(1));
+    g.step(1, g.road(1));
+    expect(sinceYourTurn(g.logs[2]!, viewFor(g.s(), 2))).toEqual({ 0: 'built a road', 1: 'built 2 roads' });
+    // Never your own: P1's screen shows only P0's.
+    expect(sinceYourTurn(g.logs[1]!, viewFor(g.s(), 1))).toEqual({ 0: 'built a road' });
+    g.step(1, { type: 'end' });
+    // P2's turn: still both, until they play again.
+    expect(sinceYourTurn(g.logs[2]!, viewFor(g.s(), 2))).toEqual({ 0: 'built a road', 1: 'built 2 roads' });
+    g.rig();
+    g.step(2, { type: 'roll' });
+    g.step(2, { type: 'end' });
+    // P0's turn again: P0's own road has gone from P0's screen, P1's and P2's turns are there
+    // (P2 did nothing but roll: no bubble).
+    expect(sinceYourTurn(g.logs[0]!, viewFor(g.s(), 0))).toEqual({ 1: 'built 2 roads' });
+    // P1's screen: P0's turn was before P1's own, so only P2's (nothing) is left.
+    expect(sinceYourTurn(g.logs[1]!, viewFor(g.s(), 1))).toEqual({});
   });
 });
 
@@ -366,5 +417,65 @@ describe('moments: the big things, as they happen (docs/isle.md 14)', () => {
     ]);
     expect(got[0]!.detail).toMatch(/^Everyone trades with the bank at 3:1/);
     expect(got[2]!.detail).toBe('taken from you');
+  });
+});
+
+describe('who the game is waiting for (docs/isle.md 4)', () => {
+  for (const [name, config, n] of [
+    ...MODES,
+    ['Full game', { modules: ['seafarers', 'citiesKnights'], winVP: 16 }, 4] as [
+      string,
+      Partial<GameConfig>,
+      number,
+    ],
+  ])
+    it(`${name}: exactly the players with a move to make, on every screen`, () => {
+      const stages = new Set<string>();
+      play(`waiting-${name}`, config, n, (s) => {
+        // Who has a real move (offers and answers to them never hold the game up). Discards
+        // aren't listed as moves (any cards will do): mustDiscard says who owes one.
+        const movers = s.players
+          .map((_, p) => p)
+          .filter(
+            (p) =>
+              mustDiscard(s, p) > 0 ||
+              // Card choices (Saboteur, Wedding, Master Merchant…) aren't listed either.
+              (s.stage === 'ck' &&
+                s.ck!.owe.some((o) => o.p === p && ['discard', 'give', 'take'].includes(o.k))) ||
+              legalActions(s, p).some(
+                (a) =>
+                  !TABLE_TALK.includes(a.type) && !['offer', 'respond', 'cancel', 'confirm'].includes(a.type),
+              ),
+          );
+        for (let q = 0; q < n; q++) {
+          const w = waitingFor(viewFor(s, q));
+          const who = [...new Set(w.flatMap((x) => x.who))].sort();
+          expect(who, `${s.stage}: ${JSON.stringify(w)}`).toEqual(movers.sort());
+          for (const x of w) expect(x.what).toMatch(/^[a-z]/);
+        }
+        stages.add(s.stage);
+      });
+      expect(stages.size).toBeGreaterThan(3);
+    });
+
+  it('an undo that could be asked for waits on nobody; once asked, on everyone else', () => {
+    let checked = 0;
+    play('waiting-undo', { houseRules: { undo: true } }, 3, (s) => {
+      if (!s.undo || s.undo.asked || checked >= 5) return;
+      for (let q = 0; q < 3; q++)
+        expect(waitingFor(viewFor(s, q)).filter((w) => /undo/.test(w.what))).toEqual([]);
+      const r = applyAction(s, s.undo.p, { type: 'askUndo' });
+      if (!r.ok) throw new Error(r.error);
+      const others = [0, 1, 2].filter((p) => p !== s.undo!.p);
+      for (let q = 0; q < 3; q++)
+        expect(
+          waitingFor(viewFor(r.state, q))
+            .filter((w) => /request to undo/.test(w.what))
+            .flatMap((w) => w.who)
+            .sort(),
+        ).toEqual(others);
+      checked++;
+    });
+    expect(checked).toBe(5);
   });
 });

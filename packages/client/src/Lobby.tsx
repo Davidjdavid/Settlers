@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { COLORS, PLAYER_COLORS, SCENARIOS, type Color } from '@settlers/engine';
-import type { RoomInfo, RoomOptions } from '@settlers/server/protocol';
+import type { Emblem, RoomInfo, RoomOptions } from '@settlers/server/protocol';
 import { BRAND_SVG, PCOL, PEDGE, PNAME, K, cityPath, settlementPath } from './art';
 import { DICE_CHOICES, Help, RULE_HELP } from './help';
 import { MusicButton, MusicSheet } from './music';
@@ -11,6 +11,7 @@ import { client, useClient } from './net';
 import { Brand, ProfilePicker } from './home';
 import { TableBoardPanel, TurnOrderPanel } from './table';
 import { CpusPage } from './cpus';
+import { EMBLEMS, EMBLEM_LABEL, EmblemBadge } from './emblems';
 
 export function Login() {
   const [pass, setPass] = useState('');
@@ -115,7 +116,7 @@ export function Lobby({ room }: { room: RoomInfo }) {
               <CpuSeat key={s.pid} seat={s} taken={taken} />
             ) : (
               <div className="seat" key={s.pid}>
-                <span className="dot" style={{ background: PCOL[s.color] }} />
+                <EmblemBadge emblem={s.emblem} color={s.color} size={24} />
                 <span className="nm">{s.nick}</span>
                 {s.pid === room.me ? <span className="you">you</span> : null}
                 <span className={`online${s.connected ? '' : ' away'}`} />
@@ -137,6 +138,18 @@ export function Lobby({ room }: { room: RoomInfo }) {
                 value={mine.color}
                 taken={taken}
                 onPick={(c) => client.setColor(c)}
+              />
+            </div>
+            <div className="field">
+              <label>Your emblem</label>
+              <EmblemPicker
+                value={mine.emblem}
+                color={mine.color}
+                // Only someone's own pick is taken; one shown by default moves aside.
+                taken={
+                  new Set(room.seats.filter((s) => s.pid !== mine.pid && s.emblemOwn).map((s) => s.emblem))
+                }
+                onPick={(e) => client.setEmblem(e)}
               />
             </div>
             <Options room={room} editable />
@@ -297,6 +310,37 @@ function ColorPicker(props: {
   );
 }
 
+/**
+ * Emblem choices (docs/isle.md 9), in your colour. Kept on your profile; one someone else at the
+ * table shows is disabled.
+ */
+function EmblemPicker(props: {
+  value: Emblem;
+  color: Color;
+  taken: Set<Emblem>;
+  onPick: (e: Emblem) => void;
+}) {
+  return (
+    <div className="emblempick" role="group" aria-label="Your emblem">
+      {EMBLEMS.map((e) => (
+        <button
+          type="button"
+          key={e}
+          className="emblembtn"
+          title={EMBLEM_LABEL[e]}
+          aria-label={EMBLEM_LABEL[e]}
+          aria-pressed={props.value === e}
+          disabled={props.taken.has(e)}
+          data-emblem={e}
+          onClick={() => props.onPick(e)}
+        >
+          <EmblemBadge emblem={e} color={props.color} size={30} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** A CPU's seat: anyone in the lobby can rename it, recolour it or remove it. */
 function CpuSeat({ seat, taken }: { seat: RoomInfo['seats'][number]; taken: Set<Color> }) {
   const custom = useClient().cpus ?? [];
@@ -313,7 +357,7 @@ function CpuSeat({ seat, taken }: { seat: RoomInfo['seats'][number]; taken: Set<
   };
   return (
     <div className="seat cpuseat" data-testid="cpu-seat">
-      <span className="dot" style={{ background: PCOL[seat.color] }} />
+      <EmblemBadge emblem={seat.emblem} color={seat.color} size={24} />
       <input
         className="text cpunick"
         value={nick}

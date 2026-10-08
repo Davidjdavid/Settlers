@@ -277,8 +277,10 @@ export function CardFace({
   sub?: ReactNode;
 }) {
   const progress = c in PROGRESS_LABEL;
+  const name = progress ? PROGRESS_LABEL[c as Progress] : DEV_LABEL[c as DevType];
+  const help = progress ? PROGRESS_HELP[c as Progress] : DEV_HELP[c as DevType];
   return (
-    <span className="cardface">
+    <span className="cardface" title={`${name}: ${help}`}>
       <span
         className="art"
         style={progress ? { ['--c' as string]: TRACK_COLOR[trackOf(c as Progress)] } : undefined}
@@ -286,10 +288,10 @@ export function CardFace({
       />
       <span className="body">
         <span className="t">
-          {progress ? PROGRESS_LABEL[c as Progress] : DEV_LABEL[c as DevType]}
+          {name}
           {sub ? <span className="c"> {sub}</span> : null}
         </span>
-        <span className="d">{progress ? PROGRESS_HELP[c as Progress] : DEV_HELP[c as DevType]}</span>
+        <span className="d">{help}</span>
       </span>
     </span>
   );

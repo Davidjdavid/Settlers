@@ -29,14 +29,29 @@ export interface SeatRow {
   level?: CpuLevel | string;
   /** A custom CPU's personality as it was when picked, so later edits don't change this seat. */
   persona?: Persona;
+  /** The emblem the seat shows, fixed when the game starts (docs/isle.md 9); unused in the lobby. */
+  emblem?: string;
 }
 
 /** A player profile (SPEC 5.1): a name and a favourite colour, no password. */
+type ProfileSql = {
+  id: string;
+  name: string;
+  color: string;
+  created_at: number;
+  starred: number;
+  emblem: string | null;
+};
+
 export interface ProfileRow {
   id: string;
   name: string;
   color: Color;
   createdAt: number;
+  /** Starred: can't be deleted or merged away until the star comes off. */
+  starred?: boolean;
+  /** The emblem they picked (docs/isle.md 9); the server checks it's one of EMBLEMS. */
+  emblem?: string;
 }
 
 /** Who sat in each seat of a game, for stats: a profile, or a CPU of some level. */
@@ -270,6 +285,11 @@ export class Store {
     const pcols = this.db.prepare('PRAGMA table_info(profiles)').all() as { name: string }[];
     if (!pcols.some((c) => c.name === 'deleted_at'))
       this.db.exec('ALTER TABLE profiles ADD COLUMN deleted_at INTEGER');
+    // Schema 7: starred profiles can't be deleted or merged away.
+    if (!pcols.some((c) => c.name === 'starred'))
+      this.db.exec('ALTER TABLE profiles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0');
+    // Schema 8: the emblem each person picks (docs/isle.md 9).
+    if (!pcols.some((c) => c.name === 'emblem')) this.db.exec('ALTER TABLE profiles ADD COLUMN emblem TEXT');
     const gcols = this.db.prepare('PRAGMA table_info(games)').all() as { name: string }[];
     if (!gcols.some((c) => c.name === 'last_at'))
       this.db.exec('ALTER TABLE games ADD COLUMN last_at INTEGER');
@@ -369,35 +389,38 @@ export class Store {
       .run(p.id, p.name, nickKey(p.name), p.color, p.createdAt);
   }
 
-  private static profile(r: { id: string; name: string; color: string; created_at: number }): ProfileRow {
-    return { id: r.id, name: r.name, color: r.color as Color, createdAt: r.created_at };
+  private static profile(r: ProfileSql): ProfileRow {
+    const p: ProfileRow = { id: r.id, name: r.name, color: r.color as Color, createdAt: r.created_at };
+    if (r.starred) p.starred = true;
+    if (r.emblem) p.emblem = r.emblem;
+    return p;
   }
 
   /** Every profile still in use (merged ones are gone), by name. */
   profiles(): ProfileRow[] {
     const rows = this.db
       .prepare(
-        'SELECT id, name, color, created_at FROM profiles WHERE merged_into IS NULL AND deleted_at IS NULL ORDER BY name_key',
+        'SELECT id, name, color, created_at, starred, emblem FROM profiles WHERE merged_into IS NULL AND deleted_at IS NULL ORDER BY name_key',
       )
-      .all() as { id: string; name: string; color: string; created_at: number }[];
+      .all() as ProfileSql[];
     return rows.map(Store.profile);
   }
 
   profileById(id: string): ProfileRow | null {
     const r = this.db
       .prepare(
-        'SELECT id, name, color, created_at FROM profiles WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL',
+        'SELECT id, name, color, created_at, starred, emblem FROM profiles WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL',
       )
-      .get(id) as { id: string; name: string; color: string; created_at: number } | undefined;
+      .get(id) as ProfileSql | undefined;
     return r ? Store.profile(r) : null;
   }
 
   profileByName(name: string): ProfileRow | null {
     const r = this.db
       .prepare(
-        'SELECT id, name, color, created_at FROM profiles WHERE name_key = ? AND merged_into IS NULL AND deleted_at IS NULL',
+        'SELECT id, name, color, created_at, starred, emblem FROM profiles WHERE name_key = ? AND merged_into IS NULL AND deleted_at IS NULL',
       )
-      .get(nickKey(name)) as { id: string; name: string; color: string; created_at: number } | undefined;
+      .get(nickKey(name)) as ProfileSql | undefined;
     return r ? Store.profile(r) : null;
   }
 
@@ -431,6 +454,15 @@ export class Store {
       )
       .get(a, b) as { n: number };
     return r.n;
+  }
+
+  setProfileEmblem(id: string, emblem: string) {
+    this.db.prepare('UPDATE profiles SET emblem = ? WHERE id = ?').run(emblem, id);
+  }
+
+  /** A star keeps a profile from being deleted or merged away until it's taken off. */
+  starProfile(id: string, on: boolean) {
+    this.db.prepare('UPDATE profiles SET starred = ? WHERE id = ?').run(on ? 1 : 0, id);
   }
 
   /** A profile leaves the list (and its name is free again); its games keep their names. */

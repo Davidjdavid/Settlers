@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Action, Color, GameStats, GenRules, MapData, Persona, PlayerView } from '@settlers/engine';
 import type {
+  Emblem,
   MapInfo,
   PresetInfo,
   CpuInfo,
@@ -468,6 +469,10 @@ export class Client {
   deleteProfile(id: string) {
     this.send({ t: 'deleteProfile', id });
   }
+  /** A star keeps a person from being deleted or merged away by mistake. */
+  starProfile(id: string, on: boolean) {
+    this.send({ t: 'starProfile', id, on });
+  }
   mergeProfiles(from: string, into: string) {
     this.send({ t: 'mergeProfiles', from, into });
   }
@@ -549,6 +554,10 @@ export class Client {
   }
   setColor(color: Color) {
     this.send({ t: 'setColor', color });
+  }
+  /** Your emblem (docs/isle.md 9), kept on your profile. */
+  setEmblem(emblem: Emblem) {
+    this.send({ t: 'setEmblem', emblem });
   }
   stand() {
     this.send({ t: 'leave' });

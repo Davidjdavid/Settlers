@@ -6,8 +6,9 @@
  * - the race track, the awards shelf and every seat (points, cards, progress cards by deck) match
  *   the game all the way through;
  * - rolls by the big button: every screen announces the roll with its total, and the last rolls
- *   list it first; End turn by the big button;
- * - when your turn comes, "Since your last turn" is open with the other players' turns in order;
+ *   list it first; the cards the roll gives you are dealt big from the bank (exactly those cards),
+ *   then go into your hand; End turn by the big button;
+ * - what the others did since your last turn stays on bubbles by their seats (no list to OK);
  * - the trade buttons sit right beside your cards, and nothing overflows at any size;
  * - the game is played to the end, and the menu takes you back to the standard screen.
  * The rest of the moves are played by each browser's bot. `SHOTS=<dir>` saves screenshots.
@@ -41,6 +42,11 @@ test('the new screen: a Knights game on two laptops and a monitor', async ({ bro
   try {
     const t = await seatedTable(browser, server, ['Ann', 'Bob', 'Cat']);
     const [a, b, c] = t.pages as [Page, Page, Page];
+    // Emblems (docs/isle.md 9): Ann picks the crown in the lobby; Bob can't take it.
+    await a.locator('.emblembtn[data-emblem=crown]').click();
+    await expect(b.locator('.seat .emblem[data-emblem=crown]')).toHaveCount(1);
+    await expect(b.locator('.emblembtn[data-emblem=crown]')).toBeDisabled();
+    await expect(a.locator('.emblembtn[data-emblem=crown]')).toHaveAttribute('aria-pressed', 'true');
     await a.click('[data-testid=mode-knights]');
     await expect(c.getByTestId('mode-knights')).toHaveClass(/on/);
     for (let i = 0; i < 4; i++) await a.click('[aria-label="Fewer points"]');
@@ -49,17 +55,17 @@ test('the new screen: a Knights game on two laptops and a monitor', async ({ bro
     await a.click('[data-testid=start]');
     for (const p of t.pages) await expect(p.locator('#board')).toBeVisible();
 
-    /* ---------- Picking the new screen ---------- */
-    const pick = async (p: Page, label: RegExp) => {
+    /* ---------- Picking the toy screen ---------- */
+    const pick = async (p: Page, now: string, screen: string) => {
       await p.getByRole('button', { name: 'Menu', exact: true }).first().click();
-      await expect(p.getByTestId('menu-screen')).toHaveText(label);
-      await p.getByTestId('menu-screen').click();
+      await expect(p.getByTestId(`menu-screen-${now}`)).toHaveAttribute('aria-pressed', 'true');
+      await p.getByTestId(`menu-screen-${screen}`).click();
     };
-    await pick(a, /Try the new screen/);
+    await pick(a, 'standard', 'new');
     await expect(a.getByTestId('isle-play')).toBeVisible();
     // Only Ann's screen changed.
     await expect(b.getByTestId('isle-play')).toHaveCount(0);
-    for (const p of [b, c]) await pick(p, /Try the new screen/);
+    for (const p of [b, c]) await pick(p, 'standard', 'new');
     for (const p of t.pages) await expect(p.getByTestId('isle-play')).toBeVisible();
     // Saved on the profile: a reload keeps it.
     await c.reload();
@@ -75,7 +81,15 @@ test('the new screen: a Knights game on two laptops and a monitor', async ({ bro
     const checkScreen = async (p: Page) => {
       const v = await view(p);
       if (!v || v.phase === 'over') return;
+      const seats = await p.evaluate(() => (window as any).__settlers.state().room.seats);
       for (let s = 0; s < v.players.length; s++) {
+        // Everyone shows as their emblem, never a letter.
+        const emblem = seats.find((x: { pid: string }) => x.pid === v.players[s].pid).emblem;
+        await expect(p.locator(`[data-testid=seat-${s}] .emblem`).first()).toHaveAttribute(
+          'data-emblem',
+          emblem,
+        );
+        await expect(p.locator(`[data-testid=racer-${s}] .emblem`)).toHaveAttribute('data-emblem', emblem);
         await expect(p.getByTestId(`racer-${s}`)).toHaveAttribute('data-pts', String(pointsOn(v, s)));
         await expect(p.getByTestId(`cards-${s}`)).toContainText(String(v.players[s].resCount));
         for (const tr of ['science', 'trade', 'politics'])
@@ -104,34 +118,57 @@ test('the new screen: a Knights game on two laptops and a monitor', async ({ bro
     };
 
     /* ---------- Turns through the big button ---------- */
-    const done = { roll: 0, end: 0, recap: 0, beside: 0 };
+    const done = { roll: 0, end: 0, bubbles: 0, dealt: 0, beside: 0 };
     let checks = 0;
     const beforeStep = async (p: Page): Promise<boolean> => {
       await confirmPlace(p);
       const v = await view(p);
       if (!v || v.phase !== 'play' || v.turn !== v.me) return false;
       if (v.stage === 'preroll' && v.turnN > 3 && done.roll < 6) {
-        // Your turn: what happened since your last one is open, the others' turns in order.
-        const recap = p.getByTestId('recap');
-        await expect(recap).toHaveClass(/open/);
-        const seats = await recap
-          .locator('li')
-          .evaluateAll((els) => els.map((e) => Number((e as HTMLElement).dataset.seat)));
-        const n = v.players.length;
-        expect(seats).toEqual(Array.from({ length: n - 1 }, (_, i) => (v.me + 1 + i) % n));
-        done.recap++;
-        if (done.recap === 1) await shot(p, 'your-turn');
+        // Your turn: what the others did since your last one is on bubbles by their seats, and
+        // there's no separate list to OK.
+        await expect(p.getByTestId('recap')).toHaveCount(0);
+        const bubbles = async () =>
+          Object.fromEntries(
+            await p
+              .locator('[data-testid^=bubble-]')
+              .evaluateAll((els) => els.map((e) => [(e as HTMLElement).dataset.testid!, e.textContent!])),
+          );
+        // What someone just did off their turn shows for 4½ s; what they did since your turn stays.
+        const settle = done.roll < 2;
+        if (settle) await p.waitForTimeout(4700);
+        const before = await bubbles();
+        if (Object.keys(before).length) done.bubbles++;
+        if (done.roll === 0) await shot(p, 'your-turn');
         // Roll by the big button: every screen announces it.
         await p.getByTestId('roll').click();
         await expect.poll(async () => (await view(p)).stage).not.toBe('preroll');
         const after = await view(p);
         const sum = after.dice[0] + after.dice[1];
         for (const q of t.pages)
+          await expect(q.getByTestId('roll-show')).toHaveAttribute('data-sum', String(sum));
+        // The cards it gave you are dealt big: exactly those (the hand's change, up to 8 shown one
+        // by one), then they go into your hand.
+        const got = Object.entries(after.hand.res as Record<string, number>)
+          .map(([k, n]) => [k, n - (v.hand.res[k] ?? 0)] as const)
+          .filter(([, n]) => n > 0);
+        if (got.length) {
+          await expect(p.getByTestId('gain-text')).toContainText('You got');
+          if (got.reduce((a, [, n]) => a + n, 0) <= 8)
+            for (const [k, n] of got)
+              await expect(p.locator(`[data-testid=gain-card][data-res=${k}]`)).toHaveCount(n);
+          if (!done.dealt) await shot(p, 'dealt');
+          done.dealt++;
+          await expect(p.getByTestId('gain-show')).toHaveCount(0, { timeout: 8000 });
+        } else await expect(p.getByTestId('gain-show')).toHaveCount(0);
+        // Once announced, the roll heads the last rolls everywhere.
+        for (const q of t.pages)
           await expect(q.getByTestId('last-rolls').locator('li').first()).toHaveAttribute(
             'data-sum',
             String(sum),
           );
-        await expect(p.getByTestId('roll-show')).toHaveAttribute('data-sum', String(sum));
+        // The bubbles stayed (a 7 can bring discards, which show for a moment instead).
+        if (settle && sum !== 7) expect(await bubbles()).toEqual(before);
         if (done.roll === 0) await shot(p, 'roll');
         done.roll++;
         return true;
@@ -160,12 +197,13 @@ test('the new screen: a Knights game on two laptops and a monitor', async ({ bro
     });
     expect(done.roll).toBeGreaterThanOrEqual(3);
     expect(done.end).toBeGreaterThanOrEqual(2);
-    expect(done.recap).toBeGreaterThanOrEqual(3);
+    expect(done.bubbles).toBeGreaterThanOrEqual(1);
+    expect(done.dealt).toBeGreaterThanOrEqual(1);
 
     /* ---------- The end ---------- */
     for (const p of t.pages) await expect(p.getByTestId('game-over')).toBeVisible();
     await shot(c, 'over');
-    await pick(a, /Back to the standard screen/);
+    await pick(a, 'new', 'standard');
     await expect(a.getByTestId('isle-play')).toHaveCount(0);
     await expect(a.getByTestId('turnchip')).toBeVisible();
     expect(t.errors).toEqual([]);

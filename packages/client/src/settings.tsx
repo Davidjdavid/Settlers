@@ -26,6 +26,7 @@ const SETTINGS: SettingKey[] = [
   'confirmCard',
   'confirmTrade',
   'tradeLimit',
+  'ruleOk',
   'noCpuTrades',
   'turnSound',
   'gameSounds',

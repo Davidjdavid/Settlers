@@ -38,11 +38,13 @@ import {
 } from './table';
 import {
   DEFAULT_OPTIONS,
+  EMBLEMS,
   FULL_GAME_OPTIONS,
   OptionsSchema,
   SettingsSchema,
   type ClientMsg,
   type DiceInfo,
+  type Emblem,
   type PlayerSettings,
   type ProfileInfo,
   type SavedGame,
@@ -327,6 +329,8 @@ export class Rooms {
         return this.mergeProfiles(conn, msg.from, msg.into);
       case 'deleteProfile':
         return this.deleteProfile(conn, msg.id);
+      case 'starProfile':
+        return this.starProfile(conn, msg.id, msg.on);
       case 'saved':
         return conn.send({ t: 'saved', list: this.savedList() });
       case 'resume':
@@ -386,6 +390,8 @@ export class Rooms {
         return this.tableOp(conn, room, msg.op);
       case 'setColor':
         return this.setColor(conn, room, msg.color);
+      case 'setEmblem':
+        return this.setEmblem(conn, room, msg.emblem);
       case 'leave':
         return this.leave(conn, room);
       case 'start':
@@ -524,9 +530,14 @@ export class Rooms {
     for (const room of this.rooms.values())
       for (const seat of room.seats)
         if (seat.profileId && this.isConnected(room, seat.pid)) using.add(seat.profileId);
-    return this.store
-      .profiles()
-      .map((p) => ({ id: p.id, name: p.name, color: p.color, inUse: using.has(p.id) }));
+    return this.store.profiles().map((p) => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+      inUse: using.has(p.id),
+      ...(p.starred ? { starred: true } : {}),
+      ...(EMBLEMS.includes(p.emblem as Emblem) ? { emblem: p.emblem as Emblem } : {}),
+    }));
   }
 
   private newProfile(conn: Conn, rawName: string, color: Color) {
@@ -545,6 +556,8 @@ export class Rooms {
     const a = this.store.profileById(from);
     const b = this.store.profileById(into);
     if (!a || !b || a.id === b.id) return conn.send({ t: 'error', text: 'Pick two different names' });
+    // Merging makes the first name disappear.
+    if (a.starred) return conn.send({ t: 'error', text: `${a.name} has a star. Take it off first` });
     if (this.store.sharedGames(a.id, b.id))
       return conn.send({
         t: 'error',
@@ -566,6 +579,7 @@ export class Rooms {
       }
     });
     this.settings.delete(a.id);
+    this.emblems.delete(a.id);
     this.log(`profile ${a.name} merged into ${b.name}`);
     conn.send({ t: 'notice', kind: 'info', text: `${a.name} is now part of ${b.name}` });
     conn.send({ t: 'profiles', list: this.profileList() });
@@ -580,6 +594,7 @@ export class Rooms {
   private deleteProfile(conn: Conn, id: string) {
     const p = this.store.profileById(id);
     if (!p) return conn.send({ t: 'error', text: 'No such player' });
+    if (p.starred) return conn.send({ t: 'error', text: `${p.name} has a star. Take it off first` });
     const left: Room[] = [];
     for (const room of this.rooms.values()) {
       const seat = room.seats.find((st) => st.profileId === p.id);
@@ -604,9 +619,19 @@ export class Rooms {
     });
     for (const room of left) this.broadcast(room, this.takeSys(room));
     this.settings.delete(p.id);
+    this.emblems.delete(p.id);
     this.log(`profile ${p.name} deleted${left.length ? `, off ${left.length} tables` : ''}`);
     const off = left.length ? ` and taken off ${left.length} table${left.length > 1 ? 's' : ''}` : '';
     conn.send({ t: 'notice', kind: 'info', text: `${p.name} was deleted${off}` });
+    conn.send({ t: 'profiles', list: this.profileList() });
+  }
+
+  /** A star keeps a person from being deleted or merged away by mistake (the Stats page). */
+  private starProfile(conn: Conn, id: string, on: boolean) {
+    const p = this.store.profileById(id);
+    if (!p) return conn.send({ t: 'error', text: 'No such player' });
+    this.store.starProfile(p.id, on);
+    this.log(`profile ${p.name} ${on ? 'starred' : 'unstarred'}`);
     conn.send({ t: 'profiles', list: this.profileList() });
   }
 
@@ -707,6 +732,7 @@ export class Rooms {
       conns: new Set(),
       options: optionsFor(row.config),
     };
+    this.fixEmblems(room);
     this.store.tx(() => {
       this.store.insertRoom({
         code,
@@ -800,6 +826,66 @@ export class Rooms {
     seat.color = color;
     this.store.saveRoom(room.code, room.seats, null);
     this.broadcast(room, []);
+  }
+
+  /**
+   * Your emblem (docs/isle.md 9): kept on your profile, so it's yours at every table from now on.
+   * Any time you're seated (it's only how you're shown). Before the game, only someone else's own
+   * pick is taken (a seat showing one by default moves to another); during it, any emblem on
+   * screen is, so nobody's mark changes mid-game.
+   */
+  private setEmblem(conn: Conn, room: Room, emblem: Emblem) {
+    const i = room.seats.findIndex((s) => s.pid === conn.pid);
+    const seat = room.seats[i];
+    if (!seat?.profileId) return conn.send({ t: 'error', text: 'Take a seat first' });
+    if (this.emblemsOf(room).some((x, j) => j !== i && x.e === emblem && (x.own || room.game)))
+      return conn.send({ t: 'error', text: 'That emblem is taken' });
+    // Mid-game only this seat's mark changes (a game from before emblems is fixed first).
+    if (room.game) {
+      this.fixEmblems(room);
+      seat.emblem = emblem;
+    }
+    this.store.tx(() => {
+      this.store.setProfileEmblem(seat.profileId!, emblem);
+      if (room.game) this.store.saveRoom(room.code, room.seats, room.game.row.id);
+    });
+    this.emblems.set(seat.profileId, emblem);
+    this.broadcast(room, []);
+  }
+
+  /** The emblems on screen from now on, kept with the seats (at the start, a resume, a pick). */
+  private fixEmblems(room: Room) {
+    this.emblemsOf(room).forEach((x, i) => (room.seats[i]!.emblem = x.e));
+  }
+
+  /** Profiles' emblems, read from the database once. */
+  private emblems = new Map<string, Emblem | null>();
+  private profileEmblem(profileId: string): Emblem | null {
+    if (!this.emblems.has(profileId)) {
+      const e = this.store.profileById(profileId)?.emblem;
+      this.emblems.set(profileId, EMBLEMS.includes(e as Emblem) ? (e as Emblem) : null);
+    }
+    return this.emblems.get(profileId) ?? null;
+  }
+
+  /**
+   * Everyone's emblem at this table, by seat (`own`: their own pick). In a game, the ones fixed
+   * when it started (`SeatRow.emblem`), so nobody's mark changes as others pick. In the lobby, or
+   * a game from before emblems: their pick, unless someone earlier at the table picked it too;
+   * then (or with no pick, as for CPUs) the first one nobody here picked. Worked out each time,
+   * so old rooms and saved games get emblems too, and a pick shows at every table.
+   */
+  private emblemsOf(room: Room): { e: Emblem; own: boolean }[] {
+    const want = room.seats.map((s) => (s.profileId ? this.profileEmblem(s.profileId) : null));
+    if (room.game && room.seats.every((s) => EMBLEMS.includes(s.emblem as Emblem)))
+      return room.seats.map((s, i) => ({ e: s.emblem as Emblem, own: want[i] === s.emblem }));
+    const used = new Set(want.filter((e): e is Emblem => e != null));
+    return want.map((e, i) => {
+      if (e && want.indexOf(e) === i) return { e, own: true };
+      const free = EMBLEMS.find((x) => !used.has(x))!;
+      used.add(free);
+      return { e: free, own: false };
+    });
   }
 
   private leave(conn: Conn, room: Room) {
@@ -1103,6 +1189,7 @@ export class Rooms {
     } catch (e) {
       return conn.send({ t: 'error', text: e instanceof Error ? e.message : 'Couldn’t start the game' });
     }
+    this.fixEmblems(room);
     this.store.tx(() => {
       this.store.insertGame(row);
       for (const st of room.seats)
@@ -1732,12 +1819,15 @@ export class Rooms {
   roomInfo(room: Room, conn: Conn): RoomInfo {
     if (room.pendingReset && room.pendingReset.expiresAt < this.now()) room.pendingReset = null;
     const pr = room.pendingReset;
+    const emblems = this.emblemsOf(room);
     return {
       code: room.code,
-      seats: room.seats.map((s) => ({
+      seats: room.seats.map((s, i) => ({
         pid: s.pid,
         nick: s.nick,
         color: s.color,
+        emblem: emblems[i]!.e,
+        ...(emblems[i]!.own ? { emblemOwn: true } : {}),
         connected: this.isConnected(room, s.pid),
         ...(s.cpu ? { cpu: true, level: s.level ?? 'easy', levelName: this.levelName(s) } : {}),
         ...(s.profileId ? { profile: s.profileId } : {}),

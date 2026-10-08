@@ -9,13 +9,21 @@
 import '@fontsource/baloo-2/latin-600.css';
 import '@fontsource/baloo-2/latin-800.css';
 import './play.css';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   isLogNote,
   stateFromView,
   type Cards,
   type Color,
-  type GameEvent,
   type PlayerView,
   type Seat,
 } from '@settlers/engine';
@@ -25,7 +33,6 @@ import {
   CARD_LABEL,
   PCOL,
   PEDGE,
-  PROGRESS_LABEL,
   TRACK_COLOR,
   TRACK_LABEL,
   TRACK_ORDER,
@@ -33,25 +40,26 @@ import {
   eventDieSVG,
 } from '../art';
 import { BarbarianChip } from '../ck';
+import { EMBLEMS, EmblemBadge, inkOn, type Emblem } from '../emblems';
 import { RollDice } from '../dice';
 import { handRisk } from '../handrisk';
-import { RULE_HELP, settingOn } from '../help';
+import { settingOn } from '../help';
 import { MusicButton } from '../music';
 import { client, type Status } from '../net';
-import { EVENT_WORD, RULE_LABEL, nameOf, routeName } from '../text';
+import { EVENT_WORD, nameOf, routeName } from '../text';
 import {
   andList,
   awards,
-  cardsLine,
   didOf,
   lastRolls,
   race,
-  recapSince,
+  sinceYourTurn,
   rollNews,
   type Award,
   type Roll,
   type RollNews,
-  type TurnRecap,
+  type Waiting,
+  waitingFor,
   momentsIn,
   type MomentData,
 } from './story';
@@ -96,23 +104,53 @@ export interface IsleProps {
   onMusic: () => void;
 }
 
-/** A player's colour as CSS variables. */
+/** A player's colour as CSS variables: the colour, its edge and the writing on it. */
 const pc = (c: Color): CSSProperties =>
-  ({ ['--pc' as string]: PCOL[c], ['--pe' as string]: PEDGE(c) }) as CSSProperties;
+  ({
+    ['--pc' as string]: PCOL[c],
+    ['--pe' as string]: PEDGE(c),
+    ['--pi' as string]: inkOn(PCOL[c]),
+  }) as CSSProperties;
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-const initial = (nick: string) => (nick.trim()[0] ?? '?').toUpperCase();
+/** Each seat's emblem (docs/isle.md 9), from the room. */
+const Emblems = createContext<(p: Seat) => Emblem>(() => 'anchor');
 
-/** A player's token: their colour and initial (never colour alone, docs/isle.md 12). */
+/**
+ * A player's token: the emblem they picked, in a disc of their colour. Never their initial
+ * (people at the table share first letters); their name is beside it wherever it shows, or on
+ * hover on the race track (docs/isle.md 9, 12).
+ */
 function Token({ v, p, size = 30 }: { v: PlayerView; p: Seat; size?: number }) {
   const pl = v.players[p]!;
+  const emblemOf = useContext(Emblems);
   return (
-    <span className="ip-token" style={{ ...pc(pl.color), width: size, height: size, fontSize: size * 0.5 }}>
-      {initial(pl.nick)}
+    <span className="ip-token" style={{ width: size, height: size }} data-color={pl.color}>
+      <EmblemBadge emblem={emblemOf(p)} color={pl.color} size={size} label={pl.nick} />
     </span>
   );
 }
 
 /* ---------- Top: the race and the awards ---------- */
+
+/** Where each of 1–4 players on one number stands: [column, row] (columns of half a piece). */
+const PILE: Record<number, [number, number][]> = {
+  1: [[0, 0]],
+  2: [
+    [0, 0],
+    [0, 1],
+  ],
+  3: [
+    [-1, 0],
+    [1, 0],
+    [0, 1],
+  ],
+  4: [
+    [-1, 0],
+    [1, 0],
+    [-1, 1],
+    [1, 1],
+  ],
+};
 
 function RaceTrack({ v }: { v: PlayerView }) {
   const rs = race(v);
@@ -158,17 +196,36 @@ function RaceTrack({ v }: { v: PlayerView }) {
             )}
           </span>
         ))}
+        {[...new Set(rs.map((r) => Math.min(r.pts, max)))].map((x) => {
+          const on = rs.filter((r) => Math.min(r.pts, max) === x);
+          return (
+            <span
+              key={`at-${x}`}
+              className={`ip-pointer${on.length > 1 ? ' pile' : ''}`}
+              style={{
+                left: `${(x / max) * 100}%`,
+                ...(on.length === 1 ? pc(v.players[on[0]!.p]!.color) : {}),
+              }}
+              aria-hidden="true"
+            />
+          );
+        })}
         {rs.map((r) => {
-          const same = rs.filter((x) => x.pts === r.pts);
+          const same = rs.filter((x) => Math.min(x.pts, max) === Math.min(r.pts, max));
           const k = same.indexOf(r);
+          // Players on the same number crowd onto it like pawns on one space: two stacked, three
+          // in a triangle, four in a square, all over the one number (side by side, they looked
+          // like different points).
+          const [col, row] = PILE[same.length]?.[k] ?? [0, 0];
           return (
             <span
               key={r.p}
-              className={`ip-racer${r.lead ? ' lead' : ''}${r.p === v.me ? ' me' : ''}${r.p === v.turn && v.phase === 'play' ? ' turn' : ''}`}
+              className={`ip-racer${r.lead ? ' lead' : ''}${r.p === v.me ? ' me' : ''}${r.p === v.turn && v.phase === 'play' ? ' turn' : ''}${same.length > 1 ? ' pile' : ''}`}
               style={{
                 left: `${(Math.min(r.pts, max) / max) * 100}%`,
-                ['--k' as string]: k,
-                ['--n' as string]: same.length,
+                ['--col' as string]: col,
+                ['--row' as string]: row,
+                zIndex: 4 - row,
               }}
               data-seat={r.p}
               data-pts={r.pts}
@@ -186,7 +243,7 @@ function RaceTrack({ v }: { v: PlayerView }) {
                   />
                 </svg>
               ) : null}
-              <Token v={v} p={r.p} size={28} />
+              <Token v={v} p={r.p} size={same.length > 1 ? 18 : 22} />
               {pops
                 .filter((x) => x.p === r.p)
                 .map((x) => (
@@ -292,12 +349,15 @@ function SeatCard({
   connected,
   level,
   bubble,
+  waiting,
 }: {
   v: PlayerView;
   p: Seat;
   connected: boolean;
   level: string | null;
   bubble: string | null;
+  /** What the game is waiting on this player for, beyond their turn (gold, a discard, a choice). */
+  waiting: string | null;
 }) {
   const pl = v.players[p]!;
   const r = race(v)[p]!;
@@ -316,12 +376,16 @@ function SeatCard({
     : [];
   return (
     <div
-      className={`ip-seat${turn ? ' turn' : ''}${p === v.me ? ' me' : ''}${connected ? '' : ' away'}`}
+      className={`ip-seat${turn ? ' turn' : ''}${waiting ? ' waited' : ''}${p === v.me ? ' me' : ''}${connected ? '' : ' away'}`}
       style={pc(pl.color)}
       data-seat={p}
       data-testid={`seat-${p}`}
     >
-      {turn ? (
+      {waiting ? (
+        <span className="ip-seat-tag wait" data-testid={`seat-wait-${p}`}>
+          {p === v.me ? 'Your move' : 'Waiting on them'}
+        </span>
+      ) : turn ? (
         <span className="ip-seat-tag" data-testid="seat-turn">
           {p === v.me ? 'Your turn' : DOING[v.stage]}
         </span>
@@ -398,16 +462,16 @@ function SeatCard({
         </span>
       </div>
       {v.ck ? (
-        <div className="ip-seat-lvls" title="Science · Trade · Politics">
+        <div className="ip-seat-lvls">
           {TRACK_ORDER.map((t) => (
             <span
               key={t}
               className={`ip-lvl${metros.includes(t) ? ' metro' : ''}`}
               style={{ ['--c' as string]: TRACK_COLOR[t] }}
+              title={`${TRACK_LABEL[t]} level ${v.ck!.lvl[p]![t]}${metros.includes(t) ? ', with the metropolis' : ''}`}
+              data-track={t}
             >
-              {Array.from({ length: 5 }, (_, i) => (
-                <i key={i} className={i < v.ck!.lvl[p]![t] ? 'on' : ''} />
-              ))}
+              {TRACK_LABEL[t]} <b>{v.ck!.lvl[p]![t]}</b>
               {metros.includes(t) ? (
                 <svg
                   viewBox="0 0 32 32"
@@ -425,7 +489,14 @@ function SeatCard({
           {v.largest === p ? <span>Largest Army</span> : null}
         </div>
       ) : null}
-      {bubble ? (
+      {waiting ? (
+        <div className="ip-bubble wait" data-testid={`waiting-${p}`}>
+          <span className="ip-hourglass" aria-hidden="true">
+            ⏳
+          </span>{' '}
+          {waiting[0]!.toUpperCase() + waiting.slice(1)}…
+        </div>
+      ) : bubble ? (
         <div className="ip-bubble" key={bubble} data-testid={`bubble-${p}`}>
           {bubble}
         </div>
@@ -434,7 +505,7 @@ function SeatCard({
   );
 }
 
-/* ---------- Right: the last rolls and the recap ---------- */
+/* ---------- Right: the last rolls ---------- */
 
 function DiceFaces({ r, size }: { r: Roll; size: number }) {
   return (
@@ -448,11 +519,28 @@ function DiceFaces({ r, size }: { r: Roll; size: number }) {
   );
 }
 
-function LastRolls({ v, log }: { v: PlayerView; log: LogItem[] }) {
-  const rolls = useMemo(() => lastRolls(log, 5), [log]);
+function LastRolls({
+  v,
+  log,
+  showing,
+}: {
+  v: PlayerView;
+  log: LogItem[];
+  /** The roll being announced in the middle: it joins the list once that's done. */
+  showing: number | null;
+}) {
+  const rolls = useMemo(
+    () =>
+      lastRolls(log, 6)
+        .filter((r) => r.seq !== showing)
+        .slice(0, 5),
+    [log, showing],
+  );
   return (
     <section className="ip-card ip-rolls" data-testid="last-rolls" aria-label="Last rolls">
-      <h3>Last rolls</h3>
+      <div className="ip-rolls-head">
+        <h3>Last rolls</h3>
+      </div>
       {rolls.length ? (
         <ol>
           {rolls.map((r, i) => {
@@ -466,8 +554,9 @@ function LastRolls({ v, log }: { v: PlayerView; log: LogItem[] }) {
                 data-seat={r.p}
                 title={`${nameOf(v, r.p)} rolled ${r.d[0]} + ${r.d[1]} = ${sum}${r.e ? ` (${EVENT_WORD[r.e]})` : ''}`}
               >
-                <Token v={v} p={r.p} size={i === 0 ? 30 : 22} />
-                {i === 0 ? <DiceFaces r={r} size={30} /> : null}
+                <Token v={v} p={r.p} size={i === 0 ? 28 : 18} />
+                <span className="ip-roller">{r.p === v.me ? 'You' : v.players[r.p]!.nick}</span>
+                {i === 0 ? <DiceFaces r={r} size={28} /> : null}
                 <b className={`ip-sum${sum === 7 ? ' seven' : sum === 6 || sum === 8 ? ' hot' : ''}`}>
                   {sum}
                 </b>
@@ -483,85 +572,20 @@ function LastRolls({ v, log }: { v: PlayerView; log: LogItem[] }) {
   );
 }
 
-function RecapLine({ v, t }: { v: PlayerView; t: TurnRecap }) {
-  const sum = t.roll ? t.roll.d[0] + t.roll.d[1] : null;
-  const got = cardsLine(t.got);
-  const lost = cardsLine(t.lost);
-  return (
-    <li style={pc(v.players[t.p]!.color)} data-seat={t.p}>
-      <Token v={v} p={t.p} size={26} />
-      <div>
-        <b className="who">{nameOf(v, t.p)}</b>
-        {sum != null ? (
-          <span
-            className={`ip-sum small${sum === 7 ? ' seven' : ''}`}
-            title={t.roll!.e ? EVENT_WORD[t.roll!.e] : undefined}
-          >
-            {sum}
-          </span>
-        ) : null}
-        {got ? <span className="ip-got">You got {got}</span> : null}
-        {lost ? <span className="ip-lost">You lost {lost}</span> : null}
-        <span className="ip-did">
-          {t.did.length ? andList(t.did) : sum != null ? 'nothing else' : 'nothing yet'}
-        </span>
-        {t.news.map((n) => (
-          <span key={n} className="ip-news">
-            {n}
-          </span>
-        ))}
-      </div>
-    </li>
-  );
-}
-
-function Recap({
-  v,
-  log,
-  open,
-  setOpen,
-}: {
-  v: PlayerView;
-  log: LogItem[];
-  open: boolean;
-  setOpen: (o: boolean) => void;
-}) {
-  const list = useMemo(() => recapSince(log, v), [log, v]);
-  if (v.me == null || !list.length) return null;
-  const mineNow = v.turn === v.me && v.phase === 'play';
-  return (
-    <section className={`ip-card ip-recap${open ? ' open' : ''}${mineNow ? ' now' : ''}`} data-testid="recap">
-      <button type="button" className="ip-recap-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <h3>Since your last turn</h3>
-        <small>{list.length === 1 ? '1 turn' : `${list.length} turns`}</small>
-        <span className="chev" aria-hidden="true">
-          {open ? '▾' : '▸'}
-        </span>
-      </button>
-      {open ? (
-        <>
-          <ol>
-            {list.map((t, i) => (
-              <RecapLine key={i} v={v} t={t} />
-            ))}
-          </ol>
-          <button type="button" className="ip-gotit" onClick={() => setOpen(false)} data-testid="recap-close">
-            Got it
-          </button>
-        </>
-      ) : null}
-    </section>
-  );
-}
-
 /* ---------- Middle: the roll, the moments, your turn ---------- */
 
+/**
+ * The roll, in the middle. Your own cards are dealt big below it (gainshow.tsx), so they aren't
+ * listed here too, and it sits higher to leave them room.
+ */
 function RollShow({ v, news }: { v: PlayerView; news: RollNews }) {
   const pl = v.players[news.p]!;
   const seven = news.sum === 7;
+  const mineBig = news.got.some((g) => g.p === v.me && Object.values(g.cards).some((n) => (n ?? 0) > 0));
+  const got = mineBig ? news.got.filter((g) => g.p !== v.me) : news.got;
   return (
     <div
-      className={`ip-rollshow${seven ? ' seven' : ''}`}
+      className={`ip-rollshow${seven ? ' seven' : ''}${mineBig ? ' high' : ''}`}
       style={pc(pl.color)}
       data-testid="roll-show"
       data-sum={news.sum}
@@ -587,10 +611,20 @@ function RollShow({ v, news }: { v: PlayerView; news: RollNews }) {
             : `${EVENT_WORD[news.e]} gate: ${TRACK_LABEL[news.e]} cards`}
         </div>
       ) : null}
-      {seven ? <div className="ip-rollshow-seven">The robber’s coming!</div> : null}
+      {news.seven ? (
+        <div className="ip-rollshow-seven">
+          {news.seven.robber ? 'The robber’s coming!' : 'No robber until the barbarians attack'}
+          {news.seven.discard.length ? (
+            <small>
+              {andList(news.seven.discard.map((p) => (p === v.me ? 'you' : nameOf(v, p))))} discard
+              {news.seven.discard.length === 1 && news.seven.discard[0] !== v.me ? 's' : ''} half
+            </small>
+          ) : null}
+        </div>
+      ) : null}
       <div className="ip-rollshow-got">
-        {news.got.length ? (
-          news.got.map((g) => (
+        {got.length ? (
+          got.map((g) => (
             <span
               key={g.p}
               className={`ip-gotchip${g.p === v.me ? ' me' : ''}`}
@@ -606,7 +640,7 @@ function RollShow({ v, news }: { v: PlayerView; news: RollNews }) {
               {g.gold ? <em className="gold">+{g.gold} gold to pick</em> : null}
             </span>
           ))
-        ) : seven ? null : (
+        ) : seven || news.got.length ? null : (
           <span className="ip-gotchip none">Nobody got anything</span>
         )}
       </div>
@@ -616,6 +650,41 @@ function RollShow({ v, news }: { v: PlayerView; news: RollNews }) {
 
 interface Moment extends MomentData {
   key: number;
+}
+
+/** Where the big button would be: who the game is waiting for, and what they're doing. */
+function WaitCard({ v, waits, over }: { v: PlayerView; waits: Waiting[]; over: string | null }) {
+  if (over)
+    return (
+      <div className="ip-waiting" data-testid="waiting">
+        <b>{over}</b>
+      </div>
+    );
+  // Others first: what you're waited on for is in your own prompt.
+  const w = waits.find((x) => x.who.some((p) => p !== v.me)) ?? waits[0];
+  if (!w) return <div className="ip-waiting" data-testid="waiting" />;
+  const who = w.who.filter((p) => p !== v.me);
+  const first = who[0] ?? w.who[0]!;
+  const names = andList(who.map((p) => nameOf(v, p)));
+  const more = waits.filter((x) => x !== w).length;
+  return (
+    <div
+      className={`ip-waiting${v.stage === 'main' || v.stage === 'preroll' ? '' : ' urgent'}`}
+      style={pc(v.players[first]!.color)}
+      data-testid="waiting"
+      aria-live="polite"
+    >
+      <Token v={v} p={first} size={30} />
+      <span>
+        <small>Waiting for</small>
+        <b>{names || 'you'}</b>
+        <em data-testid="waiting-what">
+          {w.what}
+          {more ? ` · and ${more} more` : ''}
+        </em>
+      </span>
+    </div>
+  );
 }
 
 /* ---------- The screen ---------- */
@@ -648,7 +717,21 @@ export function IslePlay(props: IsleProps) {
           const did = didOf(after, p, evs);
           if (did.length) next[p] = { text: andList(did), k: Date.now() };
         });
-        if (Object.keys(next).length) setBubbles((b) => ({ ...b, ...next }));
+        if (!Object.keys(next).length) return;
+        setBubbles((b) => ({ ...b, ...next }));
+        // Each goes 4½ s after it came, on its own: one timer for all of them, restarted by
+        // every new one, kept old ones up for as long as the game kept moving.
+        for (const [p, x] of Object.entries(next))
+          window.setTimeout(
+            () =>
+              setBubbles((b) => {
+                if (b[Number(p)] !== x) return b;
+                const rest = { ...b };
+                delete rest[Number(p)];
+                return rest;
+              }),
+            4500,
+          );
       }),
     [],
   );
@@ -657,36 +740,39 @@ export function IslePlay(props: IsleProps) {
     const t = window.setTimeout(() => setShow(null), reduced() ? 2000 : 2600);
     return () => window.clearTimeout(t);
   }, [show?.k]);
+  // Quicker when several wait.
+  const momentLife = moments.length > 2 ? 1800 : 2800;
   useEffect(() => {
     if (!moments.length || show) return;
-    const t = window.setTimeout(() => setMoments((x) => x.slice(1)), moments.length > 2 ? 1800 : 2800);
+    const t = window.setTimeout(() => setMoments((x) => x.slice(1)), momentLife);
     return () => window.clearTimeout(t);
   }, [moments[0]?.key, !!show]);
-  const bubbleKey = Object.values(bubbles)
-    .map((b) => b.k)
-    .join(',');
-  useEffect(() => {
-    if (!bubbleKey) return;
-    const t = window.setTimeout(() => {
-      const now = Date.now();
-      setBubbles((b) => Object.fromEntries(Object.entries(b).filter(([, x]) => now - x.k < 4500)));
-    }, 4600);
-    return () => window.clearTimeout(t);
-  }, [bubbleKey]);
 
-  // Your turn: "Your turn!" across the middle, the recap opens; the tab's title says so.
+  // What each other player did since your last turn, on a bubble by their seat until their next
+  // turn (the user's pick over a separate list: docs/isle.md 7).
+  const since = useMemo(() => sinceYourTurn(log, v), [log, v]);
+  // Who the game is waiting on: shown on their seat and in the corner, so nobody thinks it's stuck.
+  const waits = waitingFor(v);
+  const special = (p: Seat) =>
+    v.stage === 'main' || v.stage === 'preroll' || v.stage === 'setup'
+      ? (waits.find((w) => w.who.includes(p) && w.what.startsWith('answering')) ??
+        waits.find((w) => w.who.includes(p) && w.what.startsWith('deciding')))
+      : waits.find((w) => w.who.includes(p));
+  // Your turn: "Your turn!" across the middle; the tab's title says so.
   const myTurnKey = mine && v.stage !== 'setup' ? v.turnN : null;
   const [splash, setSplash] = useState(false);
-  const [recapOpen, setRecapOpen] = useState(mine);
   const seenTurn = useRef<number | null>(myTurnKey);
   useEffect(() => {
     if (myTurnKey == null || seenTurn.current === myTurnKey) return;
     seenTurn.current = myTurnKey;
     setSplash(true);
-    setRecapOpen(true);
+  }, [myTurnKey]);
+  // It waits for the roll that started your turn to be shown, then has the middle to itself.
+  useEffect(() => {
+    if (!splash || show) return;
     const t = window.setTimeout(() => setSplash(false), reduced() ? 1200 : 1700);
     return () => window.clearTimeout(t);
-  }, [myTurnKey]);
+  }, [splash, !!show]);
   useEffect(() => {
     const base = 'Settlers';
     document.title = mine ? `● Your turn · ${base}` : base;
@@ -724,163 +810,167 @@ export function IslePlay(props: IsleProps) {
     </button>
   );
 
+  const emblemOf = (p: Seat) =>
+    room.seats.find((x) => x.pid === v.players[p]?.pid)?.emblem ?? EMBLEMS[p % EMBLEMS.length]!;
   return (
-    <div className={`isle-play${mine ? ' mine' : ''}`} style={pc(cur.color)} data-testid="isle-play">
-      <div className="ip-frame" aria-hidden="true" />
-      <header className="ip-top">
-        <button type="button" className="ip-menu" onClick={props.onMenu} title="Room menu" aria-label="Menu">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-          </svg>
-          <span>
-            <small>Room</small>
-            {room.code}
-          </span>
-        </button>
-        <RaceTrack v={v} />
-        <AwardShelf v={v} log={log} />
-        <div className="ip-tools">
-          {v.ck ? <BarbarianChip v={v} /> : null}
-          <span
-            className={`sync ${props.status === 'live' ? (busy ? 'busy' : 'live') : props.status === 'offline' ? 'off' : 'busy'}`}
-            title={props.status}
-            data-testid="sync"
-          />
-          <MusicButton onOpen={props.onMusic} />
-          {props.dice ? (
-            <button type="button" className="ip-tool" onClick={props.onDice} data-testid="open-dice">
-              Dice stats
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      <aside className="ip-seats" aria-label="Players">
-        {v.players.map((_, p) => (
-          <SeatCard
-            key={p}
-            v={v}
-            p={p}
-            connected={props.connected(p)}
-            level={props.cpuLevel(p)}
-            bubble={bubbles[p]?.text ?? null}
-          />
-        ))}
-      </aside>
-
-      <main className="ip-main">
-        <div className="ip-banners">{props.banners}</div>
-        {props.board}
-        <div className={`ip-prompt${pm.mine ? ' mine' : ''}`} data-testid="prompt" aria-live="polite">
-          {props.gains ? (
-            <div className="ip-gains" key={props.gains.n} data-testid="gain-flash">
-              You got
-              {Object.entries(props.gains.cards).map(([k, n]) => (
-                <em key={k} style={{ ['--c' as string]: CARD_COLOR[k as keyof typeof CARD_COLOR] }}>
-                  +{n} {CARD_LABEL[k as keyof typeof CARD_LABEL]}
-                </em>
-              ))}
-            </div>
-          ) : null}
-          <div className="ip-prompt-text">
-            <strong>{pm.title}</strong>
-            {pm.sub ? <span>{pm.sub}</span> : null}
-          </div>
-          {rest.length ? <div className="ip-prompt-acts">{rest.map((b) => btn(b))}</div> : null}
-        </div>
-        {show ? <RollShow key={show.k} v={v} news={show.news} /> : null}
-        {!show && moments[0] ? (
-          <div
-            className="ip-moment"
-            key={moments[0].key}
-            style={moments[0].seat != null ? pc(v.players[moments[0].seat]!.color) : undefined}
-            data-testid="moment"
+    <Emblems.Provider value={emblemOf}>
+      <div className={`isle-play${mine ? ' mine' : ''}`} style={pc(cur.color)} data-testid="isle-play">
+        <div className="ip-frame" aria-hidden="true" />
+        <header className="ip-top">
+          <button
+            type="button"
+            className="ip-menu"
+            onClick={props.onMenu}
+            title="Room menu"
+            aria-label="Menu"
           >
-            {moments[0].seat != null ? <Token v={v} p={moments[0].seat} size={34} /> : null}
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 7h16M4 12h16M4 17h16"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              />
+            </svg>
             <span>
-              <b>{moments[0].title}</b>
-              {moments[0].detail ? <small>{moments[0].detail}</small> : null}
+              <small>Room</small>
+              {room.code}
             </span>
-          </div>
-        ) : null}
-        {splash ? (
-          <div className="ip-splash" data-testid="your-turn" aria-live="assertive">
-            Your turn!
-          </div>
-        ) : null}
-      </main>
-
-      <aside className="ip-side">
-        <LastRolls v={v} log={log} />
-        <Recap v={v} log={log} open={recapOpen} setOpen={setRecapOpen} />
-        <section className="ip-card ip-talk">{props.talk}</section>
-      </aside>
-
-      <footer className="ip-tray" aria-label="Your hand">
-        <div className="ip-offers">{props.offers}</div>
-        {props.boxes ? (
-          <>
-            <div className="ip-hand">{props.boxes.hand}</div>
-            {trade.length ? (
-              <div className="ip-trade" aria-label="Trade">
-                {trade.map((b) => btn(b, ` trade ${b.testid}`))}
-              </div>
+          </button>
+          <RaceTrack v={v} />
+          <AwardShelf v={v} log={log} />
+          <div className="ip-tools">
+            {v.ck ? <BarbarianChip v={v} /> : null}
+            <span
+              className={`sync ${props.status === 'live' ? (busy ? 'busy' : 'live') : props.status === 'offline' ? 'off' : 'busy'}`}
+              title={props.status}
+              data-testid="sync"
+            />
+            <MusicButton onOpen={props.onMusic} />
+            {props.dice ? (
+              <button type="button" className="ip-tool" onClick={props.onDice} data-testid="open-dice">
+                Dice stats
+              </button>
             ) : null}
-            <div className="ip-build">{props.boxes.build}</div>
-            {props.boxes.improve ? <div className="ip-improve">{props.boxes.improve}</div> : null}
-            <div className="ip-cards">{props.boxes.play}</div>
-          </>
-        ) : (
-          <div className="ip-watch">You’re watching.</div>
-        )}
-        <div className="ip-go">
-          <RollDice
-            dice={v.dice}
-            {...(v.ck ? { event: v.ck.event } : {})}
-            canRoll={props.canRoll}
-            onRoll={() => client.act({ type: 'roll' })}
-            sound={settingOn(my, 'gameSounds')}
-            rollRef={props.rollRef}
-          />
-          {big ? (
-            <button
-              className={`ip-big${big.testid === 'end' ? ' end' : ''}`}
-              disabled={busy || big.off != null}
-              title={big.off ?? big.warn}
-              onClick={big.on}
-              data-testid={big.testid}
-            >
-              {big.label}
-              {big.warn ? (
-                <span
-                  className="ip-warn"
-                  title={big.warn}
-                  data-testid={`${big.testid}-warn`}
-                  aria-label={big.warn}
-                >
-                  ⚠
-                </span>
-              ) : null}
-            </button>
-          ) : (
-            <div className="ip-waiting" style={pc(cur.color)} data-testid="waiting">
-              {v.phase === 'over' ? (
-                <b>{pm.title}</b>
-              ) : (
-                <>
-                  <Token v={v} p={v.turn} size={30} />
-                  <span>
-                    <b>{mine ? 'Your turn' : `${cur.nick} is playing`}</b>
-                    <small>{DOING[v.stage]}</small>
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </footer>
+          </div>
+        </header>
 
-      {props.sheets}
-    </div>
+        <aside className="ip-seats" aria-label="Players">
+          {v.players.map((_, p) => (
+            <SeatCard
+              key={p}
+              v={v}
+              p={p}
+              connected={props.connected(p)}
+              level={props.cpuLevel(p)}
+              // Whoever's playing: their turn so far. Others: what they just did off their turn (a
+              // discard, an answer) for a moment, else their last turn.
+              bubble={(p === v.turn ? since[p] : undefined) ?? bubbles[p]?.text ?? since[p] ?? null}
+              waiting={special(p)?.what ?? null}
+            />
+          ))}
+        </aside>
+
+        <main className="ip-main">
+          <div className="ip-banners">{props.banners}</div>
+          {props.board}
+          <div
+            className={`ip-prompt${pm.mine ? ' mine' : ''}${show ? ' waiting' : ''}`}
+            data-testid="prompt"
+            aria-live="polite"
+          >
+            <div className="ip-prompt-text">
+              <strong>{pm.title}</strong>
+              {pm.sub ? <span>{pm.sub}</span> : null}
+            </div>
+            {rest.length ? <div className="ip-prompt-acts">{rest.map((b) => btn(b))}</div> : null}
+          </div>
+          {show ? <RollShow key={show.k} v={v} news={show.news} /> : null}
+          {!show && moments[0] ? (
+            <div
+              className="ip-moment"
+              key={moments[0].key}
+              style={{
+                ...(moments[0].seat != null ? pc(v.players[moments[0].seat]!.color) : {}),
+                ['--life' as string]: `${momentLife}ms`,
+              }}
+              data-testid="moment"
+            >
+              {moments[0].seat != null ? <Token v={v} p={moments[0].seat} size={34} /> : null}
+              <span>
+                <b>{moments[0].title}</b>
+                {moments[0].detail ? <small>{moments[0].detail}</small> : null}
+              </span>
+            </div>
+          ) : null}
+          {splash && !show ? (
+            <div className="ip-splash" data-testid="your-turn" aria-live="assertive">
+              Your turn!
+            </div>
+          ) : null}
+        </main>
+
+        <aside className="ip-side">
+          <LastRolls v={v} log={log} showing={show?.news.seq ?? null} />
+          <div className="ip-side-rest">
+            <section className="ip-card ip-talk">{props.talk}</section>
+          </div>
+        </aside>
+
+        <footer className="ip-tray" aria-label="Your hand">
+          <div className="ip-offers">{props.offers}</div>
+          {props.boxes ? (
+            <>
+              <div className="ip-hand">{props.boxes.hand}</div>
+              {trade.length ? (
+                <div className="ip-trade" aria-label="Trade">
+                  {trade.map((b) => btn(b, ` trade ${b.testid}`))}
+                </div>
+              ) : null}
+              <div className="ip-build">{props.boxes.build}</div>
+              {props.boxes.improve ? <div className="ip-improve">{props.boxes.improve}</div> : null}
+              <div className="ip-cards">{props.boxes.play}</div>
+            </>
+          ) : (
+            <div className="ip-watch">You’re watching.</div>
+          )}
+          <div className="ip-go">
+            <RollDice
+              dice={v.dice}
+              {...(v.ck ? { event: v.ck.event } : {})}
+              canRoll={props.canRoll}
+              onRoll={() => client.act({ type: 'roll' })}
+              sound={settingOn(my, 'gameSounds')}
+              rollRef={props.rollRef}
+            />
+            {big ? (
+              <button
+                className={`ip-big${big.testid === 'end' ? ' end' : ''}`}
+                disabled={busy || big.off != null}
+                title={big.off ?? big.warn}
+                onClick={big.on}
+                data-testid={big.testid}
+              >
+                {big.label}
+                {big.warn ? (
+                  <span
+                    className="ip-warn"
+                    title={big.warn}
+                    data-testid={`${big.testid}-warn`}
+                    aria-label={big.warn}
+                  >
+                    ⚠
+                  </span>
+                ) : null}
+              </button>
+            ) : (
+              <WaitCard v={v} waits={waits} over={v.phase === 'over' ? pm.title : null} />
+            )}
+          </div>
+        </footer>
+
+        {props.sheets}
+      </div>
+    </Emblems.Provider>
   );
 }

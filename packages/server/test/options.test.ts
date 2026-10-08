@@ -178,11 +178,17 @@ describe('room options', () => {
     expect(state(code).config.map?.id).toBe('heading-for-new-shores');
   });
 
-  it('a room made from the home page starts on the Full game, kept through a restart', () => {
+  it('a room made from the home page starts on the Full game with an unlimited bank, kept through a restart', () => {
     const host = new FakeConn();
     send(host, { t: 'create', full: true });
     const code = host.last('sync').room.code;
-    const full = { scenario: 'heading-for-new-shores', ck: true, winVP: 17, houseRules: {} };
+    const full = {
+      scenario: 'heading-for-new-shores',
+      ck: true,
+      winVP: 17,
+      bank: 'unlimited',
+      houseRules: {},
+    };
     expect(rooms.getRoom(code)!.options).toEqual(full);
     expect(host.last('sync').room.options).toEqual(full);
     store.close();

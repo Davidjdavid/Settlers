@@ -35,6 +35,8 @@ import { deviceOf, resolve, withLayout, type Layout } from './layout';
 import { LayoutView } from './layoutview';
 import { handRisk, tradeRisk, type TradeRisk } from './handrisk';
 import { IslePlay } from './isle/Play';
+import { GainShow } from './gainshow';
+import { HouseRules } from './houserules';
 import {
   BOARD_OWES, BarbarianBox, BarbarianChip, CardFace, CardParamSheet, EventDie, ImproveRow, KnightSheet, OweSheet, PlayerCK, ProgressRow,
   myOwe, owePrompt, paramOf,
@@ -510,9 +512,11 @@ export function Game({
   const my = room.mySettings;
   // Your own layout (SPEC 11): none saved for this kind of screen means the standard screen.
   const device = deviceOf(layoutW);
-  // The new screen (docs/isle.md 15) is for laptops and monitors; narrower screens keep this one.
+  // The other screen (docs/isle.md 15) is for laptops and monitors; narrower screens keep this
+  // one.
   const wide = layoutW >= 1100;
-  const isle = wide && my?.screen === 'new';
+  const screen = (wide && my?.screen) || 'standard';
+  const isle = screen === 'new';
   const [editing, setEditing] = useState(false);
   const savedLay = my?.layout?.[device];
   const lay = editing || savedLay ? resolve(savedLay, device) : null;
@@ -1189,7 +1193,7 @@ export function Game({
       }),
     [],
   );
-  // The cards a roll just gave you, flashed above the dice for a moment.
+  // The cards a roll just gave you: dealt from the bank over the board, then into your hand.
   const [gains, setGains] = useState<{ n: number; cards: Cards } | null>(null);
   useEffect(
     () =>
@@ -1211,9 +1215,10 @@ export function Game({
       }),
     [],
   );
+  // The show says when it's done; this is only in case it never got drawn.
   useEffect(() => {
     if (!gains) return;
-    const t = window.setTimeout(() => setGains(null), 3200);
+    const t = window.setTimeout(() => setGains(null), 8000);
     return () => window.clearTimeout(t);
   }, [gains?.n]);
   // Sounds for what just happened (SPEC 9.4), each by this player's own switches and volumes;
@@ -1391,6 +1396,12 @@ export function Game({
       {raid && !(me != null && raid.attack.losers.includes(me) && !raid.lost.some((l) => l.p === me)) ? (
         <RaidNotice v={v} raid={raid} onClose={() => setRaid(null)} />
       ) : null}
+      <HouseRules v={v} my={my} />
+      <GainShow
+        gains={gains}
+        color={me != null ? PCOL[v.players[me]!.color] : undefined}
+        onDone={() => setGains(null)}
+      />
       {my?.dicePin && !phone ? <DicePin v={v} dice={dice ?? null} pin={my.dicePin} /> : null}
       {settingOn(my, 'diceCorner') ? (
         <RollDice
@@ -1417,20 +1428,6 @@ export function Game({
   );
   const promptEl = (
     <div className={`prompt${pm.mine ? ' mine' : ''}`} aria-live="polite" data-testid="prompt">
-      {gains ? (
-        <div className="gainflash" key={gains.n} data-testid="gain-flash" aria-live="polite">
-          <span className="gf-you">You got</span>
-          {Object.entries(gains.cards).map(([k, n]) => (
-            <span
-              key={k}
-              className="gf-card"
-              style={{ ['--c' as string]: CARD_COLOR[k as keyof typeof CARD_COLOR] }}
-            >
-              +{n} {CARD_LABEL[k as keyof typeof CARD_LABEL]}
-            </span>
-          ))}
-        </div>
-      ) : null}
       <RollDice
         dice={v.dice}
         {...(v.ck ? { event: v.ck.event } : {})}
@@ -1818,14 +1815,14 @@ export function Game({
           onRules={() => setSheet({ k: 'rules' })}
           onQuit={me != null && v.phase === 'play' ? () => setSheet({ k: 'quit' }) : undefined}
           onLayout={
-            me != null && !isle
+            me != null && screen === 'standard'
               ? () => {
                   setSheet(null);
                   setEditing(true);
                 }
               : undefined
           }
-          screen={me != null && wide ? (isle ? 'new' : 'standard') : undefined}
+          screen={me != null && wide ? screen : undefined}
           onScreen={(x) => {
             setSheet(null);
             client.saveSettings({ ...(client.state.room?.mySettings ?? {}), screen: x });

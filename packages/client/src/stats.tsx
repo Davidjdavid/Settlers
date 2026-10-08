@@ -470,9 +470,6 @@ export function GameStatsView({
             {row('Trades with players', (i) => P[i]!.trades.players)}
             {row('Trades with the bank', (i) => P[i]!.trades.bank)}
             {row('Rolls', (i) => P[i]!.rolls)}
-            {row('Dice luck', (i) => (
-              <Luck got={P[i]!.luck.got} expected={P[i]!.luck.expected} />
-            ))}
             {row('Best tile', (i) => {
               const b = bestTile(P[i]!);
               if (!b || !hexes) return b ? `${b[1]} cards` : '—';
@@ -510,17 +507,6 @@ function CardsCell({ c }: { c: Record<string, number | undefined> }) {
     </span>
   ) : (
     <span className="muted">0</span>
-  );
-}
-
-export function Luck({ got, expected }: { got: number; expected: number }) {
-  if (!expected) return <span className="muted">—</span>;
-  const pct = Math.round((100 * (got - expected)) / expected);
-  return (
-    <span title={`received ${got}, expected ${expected.toFixed(1)}`}>
-      {got} vs {expected.toFixed(0)} ({pct >= 0 ? '+' : ''}
-      {pct}%)
-    </span>
   );
 }
 
@@ -566,6 +552,7 @@ export function StatsPage() {
   const r = rec?.record;
   const pct = (w: number, g: number) => (g ? `${Math.round((100 * w) / g)}%` : '—');
   const people = st.profiles ?? [];
+  const starred = !!people.find((p) => p.id === who)?.starred;
   return (
     <div className="center statspage">
       <div className="card wide" data-testid="stats-page">
@@ -585,9 +572,15 @@ export function StatsPage() {
               onClick={() => setWho(p.id)}
               data-testid="stats-who"
               data-name={p.name}
+              data-starred={p.starred ? '' : undefined}
             >
               <span className="dot" style={{ background: PCOL[p.color] }} />
               {p.name}
+              {p.starred ? (
+                <span className="star" aria-label="starred">
+                  ★
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -596,9 +589,28 @@ export function StatsPage() {
         {r ? (
           <div data-testid="record">
             <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn small ghost" data-testid="delete-profile" onClick={() => setDel(true)}>
-                Delete {rec!.name}
+              <button
+                className={`btn small${starred ? ' starred' : ' ghost'}`}
+                data-testid="star-profile"
+                aria-pressed={starred}
+                onClick={() => client.starProfile(rec!.who, !starred)}
+                title={
+                  starred
+                    ? `Take the star off ${rec!.name}`
+                    : `Star ${rec!.name}: they can’t be deleted or merged away until the star comes off`
+                }
+              >
+                {starred ? '★ Starred' : `☆ Star ${rec!.name}`}
               </button>
+              {starred ? (
+                <span className="hint" data-testid="star-note">
+                  Starred, so {rec!.name} can’t be deleted.
+                </span>
+              ) : (
+                <button className="btn small ghost" data-testid="delete-profile" onClick={() => setDel(true)}>
+                  Delete {rec!.name}
+                </button>
+              )}
             </div>
             <h3>
               {rec!.name}: {r.wins} {r.wins === 1 ? 'win' : 'wins'}, {r.games - r.wins}{' '}
@@ -623,12 +635,6 @@ export function StatsPage() {
                 <span className="eyebrow">Robberies</span>
                 <b>
                   robbed {r.robs} · was robbed {r.robbed}
-                </b>
-              </div>
-              <div>
-                <span className="eyebrow">Dice luck</span>
-                <b>
-                  <Luck got={r.luck.got} expected={r.luck.expected} />
                 </b>
               </div>
             </div>
@@ -724,8 +730,9 @@ export function StatsPage() {
             >
               <option value="">Merge…</option>
               {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+                // Merging makes this name disappear, so a starred one can't be picked.
+                <option key={p.id} value={p.id} disabled={p.starred}>
+                  {p.starred ? `${p.name} ★ (starred)` : p.name}
                 </option>
               ))}
             </select>
@@ -746,7 +753,7 @@ export function StatsPage() {
         </details>
       </div>
       {st.gameStats ? <PastGame info={st.gameStats} onClose={() => client.closeGameStats()} /> : null}
-      {del && rec ? (
+      {del && rec && !starred ? (
         <ConfirmTwice
           title={`Delete ${rec.name}?`}
           first={`${rec.name} comes off the list and their stats go. Games they played keep their name. Tables they left behind let them go: a seat at a table that hasn’t started is taken away, and a seat in a game stays as just a name anyone can take over.`}

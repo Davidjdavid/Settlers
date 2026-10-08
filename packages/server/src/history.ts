@@ -148,7 +148,6 @@ export class History {
       lost: {},
       robs: 0,
       robbed: 0,
-      luck: { got: 0, expected: 0 },
       dice: new Array<number>(13).fill(0),
       events: {},
       streak: { current: 0, best: 0 },
@@ -186,8 +185,6 @@ export class History {
           rec.got[`card:${r}`] = (rec.got[`card:${r}`] ?? 0) + (n ?? 0);
       rec.robs += ps.robs;
       rec.robbed += ps.robbed;
-      rec.luck.got += ps.luck.got;
-      rec.luck.expected += ps.luck.expected;
       // Head to head: against everyone else at the table.
       g.who.forEach((other, i) => {
         if (i === seat) return;

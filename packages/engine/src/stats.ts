@@ -49,8 +49,6 @@ export interface PlayerStats {
   trades: { players: number; bank: number };
   /** Production by tile (hex index → cards). */
   tiles: Record<number, number>;
-  /** Cards produced, and the average the dice would have given (SPEC 5.4 luck). */
-  luck: { got: number; expected: number };
   rolls: number;
   points: VPPart[];
   /** Cards that changed hands with no event to explain it. Always 0 (checked by the simulator). */
@@ -93,8 +91,6 @@ export interface GameStats {
   overtime?: { p: Seat; vp: number; target: number; turn: number }[];
 }
 
-const odds = (t: number) => (6 - Math.abs(t - 7)) / 36;
-
 function emptyPlayer(n: number): PlayerStats {
   const rec = <K extends string>(keys: readonly K[]) =>
     Object.fromEntries(keys.map((k) => [k, {}])) as Record<K, Cards>;
@@ -110,7 +106,6 @@ function emptyPlayer(n: number): PlayerStats {
     longestRoad: 0,
     trades: { players: 0, bank: 0 },
     tiles: {},
-    luck: { got: 0, expected: 0 },
     rolls: 0,
     points: [],
     unexplained: 0,
@@ -272,12 +267,6 @@ export class StatsFold {
         if (chosen) r.set = true;
         (st.rollList ??= []).push(r);
       }
-      // Luck: what these buildings would have produced, on average, from this roll.
-      if (!chosen)
-        for (let t = 2; t <= 12; t++) {
-          if (t === 7) continue;
-          for (const x of payouts(prev, t)) P[x.p]!.luck.expected += odds(t) * x.n;
-        }
     }
 
     for (const e of events) {
@@ -290,10 +279,7 @@ export class StatsFold {
         case 'produce':
         case 'commodities': {
           const gains = e.gains as Record<number, Cards>;
-          for (const [q, cards] of Object.entries(gains)) {
-            gain(Number(q), 'production', cards);
-            P[Number(q)]!.luck.got += Object.values(cards).reduce((x, y) => x + (y ?? 0), 0);
-          }
+          for (const [q, cards] of Object.entries(gains)) gain(Number(q), 'production', cards);
           this.tiles(next, rollSum, gains, e.k === 'produce' ? 'resource' : 'commodity');
           break;
         }
@@ -319,7 +305,6 @@ export class StatsFold {
             const k = Math.min(left, x.n);
             srcOf.push({ src: x.src, n: k });
             if (x.h != null) P[e.p]!.tiles[x.h] = (P[e.p]!.tiles[x.h] ?? 0) + k;
-            if (x.src === 'production') P[e.p]!.luck.got += k;
             left -= k;
           }
           if (left) srcOf.push({ src: 'production', n: left });

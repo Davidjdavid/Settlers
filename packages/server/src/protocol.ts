@@ -31,6 +31,13 @@ const COLOR = z.enum([
   'red', 'blue', 'white', 'orange', 'purple', 'black', 'pink', 'yellow', 'gray',
   'teal', 'cyan', 'brown', 'magenta', 'lavender', 'mint',
 ]); // prettier-ignore
+/** The emblems a person can pick to mark them on screen (docs/isle.md 9); one per table. */
+export const EMBLEMS = [
+  'anchor', 'wheat', 'crown', 'star', 'shield', 'sword', 'tower', 'sail',
+  'sun', 'moon', 'leaf', 'flame', 'key', 'bird', 'mountain', 'gem',
+] as const; // prettier-ignore
+export type Emblem = (typeof EMBLEMS)[number];
+const EMBLEM = z.enum(EMBLEMS);
 const count = z.number().int().min(0).max(95);
 /** Card counts. Commodities only mean something in Cities & Knights; the engine checks. */
 const cards = z.strictObject({
@@ -214,6 +221,8 @@ export const SettingsSchema = z.strictObject({
   confirmTrade: z.boolean().optional(),
   /** Warn before a trade that puts you over your hand limit, and ask again (on unless false). */
   tradeLimit: z.boolean().optional(),
+  /** A house rule running out (no 7s in the first round…) waits for your OK (on unless false). */
+  ruleOk: z.boolean().optional(),
   /** SPEC 5.9: the sound when you need to act, other game sounds, a browser notification (off unless true). */
   turnSound: z.boolean().optional(),
   gameSounds: z.boolean().optional(),
@@ -237,7 +246,10 @@ export const SettingsSchema = z.strictObject({
       'pikmin',
     ])
     .optional(),
-  /** The game screen (docs/isle.md 15): the standard one, or the new one on laptops and monitors. */
+  /**
+   * The game screen, on laptops and monitors: the standard one, or 'new', the first build of
+   * docs/isle.md (the "Toy" screen in the menu).
+   */
   screen: z.enum(['standard', 'new']).optional(),
   /** Turn down every trade a CPU offers you, at once (off unless true). */
   noCpuTrades: z.boolean().optional(),
@@ -267,11 +279,15 @@ export const SettingsSchema = z.strictObject({
 export type PlayerSettings = z.infer<typeof SettingsSchema>;
 export type RoomOptions = z.infer<typeof OptionsSchema>;
 export const DEFAULT_OPTIONS: RoomOptions = { scenario: 'classic', winVP: 10, houseRules: {} };
-/** New rooms made from the home page start on the Full game (3 October): Seafarers and C&K. */
+/**
+ * New rooms made from the home page start on the Full game (3 October): Seafarers and C&K, with
+ * the bank's cards unlimited (10 October).
+ */
 export const FULL_GAME_OPTIONS: RoomOptions = {
   scenario: 'heading-for-new-shores',
   ck: true,
   winVP: 17,
+  bank: 'unlimited',
   houseRules: {},
 };
 
@@ -487,6 +503,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   z.strictObject({ t: z.literal('mergeProfiles'), from: z.string().max(60), into: z.string().max(60) }),
   /** Delete a profile from the list (the Stats page). Not while it's playing; it leaves its old tables. */
   z.strictObject({ t: z.literal('deleteProfile'), id: z.string().max(60) }),
+  /** Star a profile (the Stats page): it can't be deleted or merged away until the star comes off. */
+  z.strictObject({ t: z.literal('starProfile'), id: z.string().max(60), on: z.boolean() }),
   /** Saved games (SPEC 5.7). */
   z.strictObject({ t: z.literal('saved') }),
   z.strictObject({ t: z.literal('resume'), game: z.string().max(60) }),
@@ -528,6 +546,8 @@ export const ClientMsgSchema = z.discriminatedUnion('t', [
   /** The pre-game table: board, seating, Ready and who goes first (docs/pregame.md). Lobby only. */
   z.strictObject({ t: z.literal('table'), op: TableOpSchema }),
   z.strictObject({ t: z.literal('setColor'), color: COLOR }),
+  /** Your emblem (docs/isle.md 9), any time you're seated; kept on your profile. One per table. */
+  z.strictObject({ t: z.literal('setEmblem'), emblem: EMBLEM }),
   z.strictObject({ t: z.literal('leave') }),
   z.strictObject({ t: z.literal('start') }),
   /** Lobby only: add a CPU player (any seated player), rename/recolour or remove one (anyone). */
@@ -572,6 +592,10 @@ export interface SeatInfo {
   pid: string;
   nick: string;
   color: Color;
+  /** Their emblem: their own pick unless someone earlier at the table has it, else the first free. */
+  emblem: Emblem;
+  /** The emblem is their own pick (not one given by default), so nobody else can pick it. */
+  emblemOwn?: boolean;
   connected: boolean;
   /** A CPU player, and how good it is: a built-in level or a custom CPU's id, and its name. */
   cpu?: boolean;
@@ -587,6 +611,9 @@ export interface ProfileInfo {
   color: Color;
   /** Someone is connected with it right now. */
   inUse: boolean;
+  /** Starred: it can't be deleted or merged away until the star comes off. */
+  starred?: boolean;
+  emblem?: Emblem;
 }
 
 /** Dice so far this game (SPEC 5.4), public. */
@@ -627,7 +654,6 @@ export interface PlayerRecord {
   lost: Record<string, number>;
   robs: number;
   robbed: number;
-  luck: { got: number; expected: number };
   dice: number[];
   events: Record<string, number>;
   streak: { current: number; best: number };

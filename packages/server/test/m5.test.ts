@@ -133,6 +133,106 @@ describe('profiles (SPEC 5.1)', () => {
     expect(c.last('error').text).toBe('No such player');
   });
 
+  it('a starred profile can’t be deleted or merged away until the star comes off, across a restart', () => {
+    const c = new FakeConn();
+    send(c, { t: 'newProfile', name: 'Ann', color: 'red' });
+    const ann = c.last('profile').profile;
+    send(c, { t: 'newProfile', name: 'Bob', color: 'blue' });
+    const bob = c.last('profile').profile;
+    expect(c.last('profiles').list.find((p) => p.id === ann.id)!.starred).toBeUndefined();
+    send(c, { t: 'starProfile', id: ann.id, on: true });
+    expect(c.last('profiles').list.find((p) => p.id === ann.id)!.starred).toBe(true);
+    expect(c.last('profiles').list.find((p) => p.id === bob.id)!.starred).toBeUndefined();
+    restart();
+    send(c, { t: 'profiles' });
+    expect(c.last('profiles').list.find((p) => p.id === ann.id)!.starred).toBe(true);
+    send(c, { t: 'deleteProfile', id: ann.id });
+    expect(c.last('error').text).toBe('Ann has a star. Take it off first');
+    // Merging makes the first name disappear: refused too. Into a starred name is fine.
+    send(c, { t: 'mergeProfiles', from: ann.id, into: bob.id });
+    expect(c.last('error').text).toBe('Ann has a star. Take it off first');
+    send(c, { t: 'profiles' });
+    expect(c.last('profiles').list.map((p) => p.name)).toEqual(['Ann', 'Bob']);
+    send(c, { t: 'starProfile', id: ann.id, on: false });
+    expect(c.last('profiles').list.find((p) => p.id === ann.id)!.starred).toBeUndefined();
+    send(c, { t: 'deleteProfile', id: ann.id });
+    expect(c.last('notice').text).toBe('Ann was deleted');
+    send(c, { t: 'starProfile', id: ann.id, on: true });
+    expect(c.last('error').text).toBe('No such player');
+    send(c, { t: 'newProfile', name: 'Bbo', color: 'blue' });
+    const typo = c.last('profile').profile;
+    send(c, { t: 'starProfile', id: bob.id, on: true });
+    send(c, { t: 'mergeProfiles', from: typo.id, into: bob.id });
+    expect(c.last('notice').text).toBe('Bbo is now part of Bob');
+  });
+
+  it('emblems: your pick at every table and across a restart, one per table, else the first free', () => {
+    const { code, conns } = table(['Ann', 'Bob']);
+    const [ann, bob] = conns as [FakeConn, FakeConn];
+    const shown = (c = code) => rooms.roomInfo(rooms.getRoom(c)!, ann).seats.map((s) => s.emblem);
+    const own = (c = code) => rooms.roomInfo(rooms.getRoom(c)!, ann).seats.map((s) => !!s.emblemOwn);
+    // Nobody has picked: the first ones free, in seat order.
+    expect(shown()).toEqual(['anchor', 'wheat']);
+    expect(own()).toEqual([false, false]);
+    // Before the game, one shown by default isn't taken: Ann's moves aside.
+    send(bob, { t: 'setEmblem', emblem: 'anchor' });
+    expect(shown()).toEqual(['wheat', 'anchor']);
+    expect(own()).toEqual([false, true]);
+    expect(bob.last('update').room.seats.map((s) => s.emblem)).toEqual(['wheat', 'anchor']);
+    expect(store.profileByName('Bob')!.emblem).toBe('anchor');
+    // Someone's own pick is.
+    send(ann, { t: 'setEmblem', emblem: 'anchor' });
+    expect(ann.last('error').text).toBe('That emblem is taken');
+    send(ann, { t: 'setEmblem', emblem: 'star' });
+    // A CPU (no pick) takes the first one nobody here picked.
+    send(ann, { t: 'addCpu' });
+    expect(shown()).toEqual(['star', 'anchor', 'wheat']);
+    send(ann, { t: 'profiles' });
+    expect(ann.last('profiles').list.find((p) => p.name === 'Bob')!.emblem).toBe('anchor');
+    // Picks are kept across a restart.
+    restart();
+    expect(shown()).toEqual(['star', 'anchor', 'wheat']);
+    // At another table, whoever sat first with a pick keeps it; the clash takes the first free.
+    const other = table(['Cat']);
+    send(other.conns[0]!, { t: 'setEmblem', emblem: 'anchor' });
+    const bob2 = new FakeConn();
+    send(bob2, { t: 'hello', room: other.code });
+    rooms.disconnect(bob);
+    send(bob2, joinAs(store, 'Bob', 'blue'));
+    expect(shown(other.code)).toEqual(['anchor', 'wheat']);
+    // Watching, not seated: no emblem to pick.
+    const watcher = new FakeConn();
+    send(watcher, { t: 'hello', room: other.code });
+    send(watcher, { t: 'setEmblem', emblem: 'sun' });
+    expect(watcher.last('error').text).toBe('Take a seat first');
+    // During a game, any emblem on screen is taken: nobody's mark changes mid-game.
+    const g = table(['Eve', 'Fay'], 1);
+    send(g.conns[0]!, { t: 'start' });
+    expect(rooms.getRoom(g.code)!.game).toBeTruthy();
+    expect(shown(g.code)).toEqual(['anchor', 'wheat', 'crown']);
+    // Fay steps away and picks another at a new table: this game's marks stay as they started.
+    rooms.disconnect(g.conns[1]!);
+    const elsewhere = table(['Fay']);
+    send(elsewhere.conns[0]!, { t: 'setEmblem', emblem: 'moon' });
+    expect(shown(elsewhere.code)).toEqual(['moon']);
+    expect(shown(g.code)).toEqual(['anchor', 'wheat', 'crown']);
+    rooms.disconnect(elsewhere.conns[0]!);
+    g.conns[1] = new FakeConn();
+    send(g.conns[1], { t: 'hello', room: g.code });
+    send(g.conns[1], joinAs(store, 'Fay', 'blue'));
+    send(g.conns[1]!, { t: 'setEmblem', emblem: 'anchor' });
+    expect(g.conns[1]!.last('error').text).toBe('That emblem is taken');
+    // Fay's own changes; nobody else's, not even the CPU's, which had the first one free.
+    send(g.conns[1]!, { t: 'setEmblem', emblem: 'sun' });
+    expect(shown(g.code)).toEqual(['anchor', 'sun', 'crown']);
+    expect(own(g.code)).toEqual([false, true, false]);
+    // Eve's own can change too (to one nobody shows); the others stay.
+    send(g.conns[0]!, { t: 'setEmblem', emblem: 'wheat' });
+    expect(shown(g.code)).toEqual(['wheat', 'sun', 'crown']);
+    restart();
+    expect(shown(g.code)).toEqual(['wheat', 'sun', 'crown']);
+  });
+
   it('a person who left tables behind can still be deleted: lobby seats go, game seats stay as names', () => {
     const c = new FakeConn();
     // Ann sits at a table that never started and plays a game she left half done.

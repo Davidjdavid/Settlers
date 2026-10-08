@@ -94,14 +94,18 @@ test('Milestone 8: bank, labels, trade buttons, the log, the Smith and keep play
     await a.click('[data-testid=mode-knights]');
     for (let i = 0; i < 5; i++) await a.click('[aria-label="Fewer points"]');
     await expect(c.getByTestId('win-vp')).toHaveText('8');
+    // Unlimited by default in a room made from the home page (10 October).
     for (const p of pages)
-      await expect(p.getByTestId('bank-limited')).toHaveAttribute('aria-checked', 'true');
-    await a.getByTestId('bank-unlimited').click();
-    for (const p of [b, c])
       await expect(p.getByTestId('bank-unlimited')).toHaveAttribute('aria-checked', 'true');
+    await a.getByTestId('bank-limited').click();
+    for (const p of [b, c])
+      await expect(p.getByTestId('bank-limited')).toHaveAttribute('aria-checked', 'true');
     // Anyone at the table may change it back; everyone sees it.
-    await b.getByTestId('bank-limited').click();
+    await b.getByTestId('bank-unlimited').click();
     for (const p of [a, c])
+      await expect(p.getByTestId('bank-unlimited')).toHaveAttribute('aria-checked', 'true');
+    await c.getByTestId('bank-limited').click();
+    for (const p of [a, b])
       await expect(p.getByTestId('bank-limited')).toHaveAttribute('aria-checked', 'true');
     await shot(c, 'lobby-phone', true);
     await a.click('[data-testid=start]');

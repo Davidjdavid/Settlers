@@ -16,6 +16,7 @@ export const SETTING_LABEL: Record<SettingKey, string> = {
   confirmCard: 'Confirm before playing a card',
   confirmTrade: 'Confirm before accepting a trade',
   tradeLimit: 'Warn me when a trade would put me over the hand limit',
+  ruleOk: 'Ask me to OK it when a house rule runs out',
   turnSound: 'Sound when it’s my turn or I need to act',
   gameSounds: 'Other game sounds',
   browserNotify: 'Notify me when the tab is in the background',
@@ -37,6 +38,8 @@ export const SETTING_HELP: Record<SettingKey, string> = {
     'Shows the trade and asks before you accept someone’s offer, or before you complete a trade someone accepted from you. Bank trades are not affected.',
   tradeLimit:
     'When a trade would leave you holding more cards than your hand limit (7, plus 2 for each city wall in Cities & Knights), the trade window and the offer say so, and agreeing to that trade asks once more if you’re sure. Bank trades never add cards, so they never ask.',
+  ruleOk:
+    'House rules that only last a while (no 7s in the first round, nothing before the first barbarian attack, the barbarians waiting) show in the corner of the board while they’re on. When one runs out, everyone is told what changes; with this on, the notice stays until you press OK. When off, it goes by itself after a few seconds.',
   turnSound:
     'A short chime, only for you, when your turn starts or the game is waiting on you: a starting placement, a discard, a trade offered to you, gold or a Cities & Knights choice, or someone asking for the dice back or an undo.',
   gameSounds:

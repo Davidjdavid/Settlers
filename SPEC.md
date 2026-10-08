@@ -300,6 +300,8 @@ Reliability still comes first. In particular, every number on a stats screen is 
   - Everything of the merged profile moves to the kept one: games, stats, settings stay those of the kept one.
   - Refused if both profiles sat in the same game, since that game would have two seats for one person.
   - Recorded, so stats stay rebuildable.
+- **Deleting a profile** (from the Stats page, two confirmations): it comes off the list and its stats go; its games keep its name. Not while it's at a table.
+- **Starring a profile** (from the Stats page, 10 October): a starred profile can't be deleted, or merged into another name (merging makes it disappear), until the star comes off. Its name shows a ★ in the Stats list, and its Delete button is replaced by "Starred, so Ann can't be deleted." The star is saved on the server, so it's the same on every screen.
 - **Existing games:** a profile is created for every nickname already in the database, so your games so far count in the stats.
 
 ### 5.2 CPU records
@@ -347,9 +349,6 @@ Reliability still comes first. In particular, every number on a stats screen is 
 **All-time,** on the Stats page (finished games with two or more people, **D2**):
 
 - **The same charts** across every game.
-- **Each player's luck:** cards produced by the dice compared with what was expected.
-  - Expected means: on each roll, the average production over all 36 outcomes, given that player's buildings, the robber and the bank at that moment.
-  - Shown like "received 412, expected 389 (+6%)".
 
 ### 5.5 Per-game stats
 
@@ -392,7 +391,6 @@ Reached from the start screen. Pick a name (a profile, or a CPU difficulty) to s
 - **Points:** average points per game.
 - **Head-to-head records** against each other player.
 - **All-time totals:** resources received and lost by type, robberies done and suffered.
-- **Dice luck** (5.4).
 - **Streaks:** current and longest winning streak.
 - **Past games:** date, mode, players, winner. Each opens that game's stats (5.5).
 
@@ -553,7 +551,7 @@ This replaces bot.md D6 ("the CPU never talks").
 
 1. **D1** Today's CPU is **Easy**. Records and chatter are built for Easy, Medium and Hard. Medium and Hard themselves come in the next milestone, with their rules agreed first in docs/bot.md.
 2. **D2** **Stats history only holds finished games with two or more people.**
-   - What counts: all-time totals, dice charts, luck, wins and losses, head-to-heads, streaks, CPU records, and the past-games list.
+   - What counts: all-time totals, dice charts, wins and losses, head-to-heads, streaks, CPU records, and the past-games list.
    - What doesn't count: unfinished games, and games with one person against CPUs.
    - Those games still show their own end-screen stats, and unfinished ones can still be saved and resumed.
    - Deleting a saved (unfinished) game removes it from the Saved Games list. It was never part of the history.
@@ -623,8 +621,8 @@ The full design is in **[docs/bot-medium-hard.md](docs/bot-medium-hard.md)**:
 **One pre-game setting, "Bank cards: Limited / Unlimited":**
 
 - It's shown with the other options on the pre-game screen, locked when the game starts, and saved with the game.
-- **Limited** is the default, with the official supply: 19 of each resource and 12 each of paper, cloth and coin.
-- **Unlimited:** the bank never runs out of anything.
+- **Limited:** the official supply, 19 of each resource and 12 each of paper, cloth and coin.
+- **Unlimited:** the bank never runs out of anything. **The default** in a room made from the start page (10 October; before, Limited was).
 - Development and progress decks are the same in both modes.
 
 **Shortages (Limited):**
@@ -1202,13 +1200,15 @@ The lobby showed everything at once, and the group didn't know what to do next. 
 Board styles (3 October) change only the board. The first try at whole-screen looks (8 October) recoloured the original screen and kept its tiles; the group said no: they want a whole new UI, as if Nintendo were making their own Settlers, with the UI itself (what it shows, how loudly, the animations) mattering more than the art.
 
 - The design is in `docs/isle.md` ("Isle"): the screen always answers, loudest first, whether it's your turn (the whole screen changes), what just happened (rolls and moves animated where they happen), who's winning (a race track to the target) and what you can do (one big button that never moves).
+- **10 October**: the first build turned out a toy look, which isn't what "Nintendo" meant (simple, clean, impossible to read two ways: what Nintendo is praised for). It stays as the **Toy** screen; the next looks start as image mock-ups (docs/isle.md 9, 16).
 - **Mock-up first**: an interactive page with made-up data from a real Full game, on a laptop and a phone, with concept art sent along the way; built once the group likes it.
 - The other looks (Universe, Game Night, Live Broadcast) are on hold.
-- **Playable on the current art (9 October, docs/isle.md 14–15)**: "Try the new screen" in the menu (saved on your profile, only your screen) gives laptops and monitors the new layout around the same board and art styles: the race track and the awards shelf across the top, the seats in turn order on the left (progress cards counted by deck), the last rolls, "Since your last turn" and the log on the right, and your hand in one strip along the bottom (cards, then the trade buttons, then building, then your cards to play, then the big Roll / End turn button). Your turn puts a glowing frame round the screen and says so across the middle; every roll is announced on every screen; awards and metropolises changing hands get a moment and stay on the shelf. Windows narrower than a laptop keep the standard screen. "Back to the standard screen" in the menu switches back.
+- **Playable on the current art (9–10 October, docs/isle.md 14–15)**: Screen · Standard / **Toy** in the room menu (saved on your profile, only your screen) gives laptops and monitors the new layout around the same board and art styles: the race track and the awards shelf across the top, the seats in turn order on the left (progress cards counted by deck), the last rolls and the log on the right, and your hand in one strip along the bottom (cards, then the trade buttons, then building, then your cards to play, then the big Roll / End turn button). Your turn puts a glowing frame round the screen and says so across the middle; every roll is announced on every screen; awards and metropolises changing hands get a moment and stay on the shelf; beside each seat, what they did since your last turn; what the game is waiting for, and on whom. Windows narrower than a laptop keep the standard screen.
+- **Emblems (10 October)**: players are marked by an emblem they pick in the lobby (16: anchor, wheat, crown…), in a disc of their colour, never by a letter (people at the table share first letters). It's kept on their profile. One per table: before the game a pick only gives way to someone else's own pick (a seat showing one by default moves aside); when the game starts everyone's is fixed, so a pick mid-game changes only your own. The lobby's seats show them too.
 
 ### 13.7 Rolls you can't miss
 
-_Built in the new screen (13.6, 9 October): the roll announcement, the last five rolls and "Since your last turn". The standard screen doesn't have them._
+_Built in the Toy screen (13.6, 9 October): the roll announcement and the last five rolls. "Since your last turn" was built as a card, then replaced (10 October, the group's pick) by a callout beside each seat with what they did since your last turn, which stays until their next turn. The cards a roll gives you are dealt big out of a bank deck over the board, under "You got 2 Wheat and 1 Ore", then fly into their spots in your hand, on both screens (the old little "You got" flash is gone)._
 
 A roll flashed by in a corner, and anyone who looked away didn't know what had been rolled, or what the last few rolls were when their turn came.
 
