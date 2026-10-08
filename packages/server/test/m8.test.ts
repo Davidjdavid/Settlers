@@ -220,6 +220,13 @@ describe('Log notes (SPEC 8.10)', () => {
 
   it('everyone sees what the robber blocked, and the notes come back after a restart', () => {
     const { code, conns } = table(['Ann', 'Bob', 'Cat']);
+    // A long game, so the robber surely blocks twice before anyone wins (the dice are random:
+    // to 10 points about 1 game in 30 ended first).
+    send(conns[0]!, {
+      t: 'setOptions',
+      options: { ...rooms.getRoom(code)!.options, winVP: 20 },
+    });
+    expect(rooms.getRoom(code)!.options.winVP).toBe(20);
     send(conns[0]!, { t: 'start' });
     play(code, conns, () => notes(conns[0]!.msgs).length >= 2);
     const seen = notes(conns[0]!.msgs);
