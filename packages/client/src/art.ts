@@ -104,7 +104,8 @@ export const COM_GLYPH: Record<Commodity, string> = {
     '<rect x="-7" y="-9" width="14" height="18" rx="1.5" fill="#fbf4dc" stroke="#6b5a2e" stroke-width="1.2"/><path d="M-4-4h8M-4 0h8M-4 4h5" stroke="#6b5a2e" stroke-width="1.3" stroke-linecap="round"/>',
   cloth:
     '<path d="M-9-6c3-2 6 2 9 0s6-2 9 0v12c-3-2-6 2-9 0s-6-2-9 0z" fill="#e9c7ee" stroke="#5c2a63" stroke-width="1.2"/><path d="M-9-1c3-2 6 2 9 0s6-2 9 0" fill="none" stroke="#5c2a63" stroke-width="1" opacity=".6"/>',
-  coin: '<circle r="8.5" fill="#ffd54a" stroke="#6b4a00" stroke-width="1.4"/><circle r="5.5" fill="none" stroke="#6b4a00" stroke-width="1" opacity=".7"/><path d="M0-3v6M-2 0h4" stroke="#6b4a00" stroke-width="1.4" stroke-linecap="round"/>',
+  // Silver (SPEC 13.2), with a bright rim and a shine so it doesn't pass for ore.
+  coin: '<circle r="8.5" fill="#e4e9ee" stroke="#3f4954" stroke-width="1.4"/><circle r="5.5" fill="none" stroke="#5d6873" stroke-width="1" opacity=".8"/><path d="M-5-4.5a6.5 6.5 0 0 1 4-2.4" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/><path d="M0-3v6M-2 0h4" stroke="#3f4954" stroke-width="1.4" stroke-linecap="round"/>',
 };
 export const CARD_LABEL: Record<Card, string> = {
   ...RES_LABEL,
@@ -120,7 +121,7 @@ export const CARD_COLOR: Record<Card, string> = {
   ore: TILE_COLOR.ore,
   paper: '#d8c58f',
   cloth: '#a35aa8',
-  coin: '#c79a1c',
+  coin: '#c9d0d8',
 };
 export const cardIcon = (c: Card) =>
   `<svg viewBox="-12 -12 24 24" aria-hidden="true">${c in COM_GLYPH ? COM_GLYPH[c as Commodity] : GLYPH[c as Resource]}</svg>`;

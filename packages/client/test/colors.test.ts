@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COLORS, CVD_COLORS } from '@settlers/engine';
-import { PCOL, TILE_COLOR } from '../src/art';
+import { CARD_COLOR, PCOL, TILE_COLOR } from '../src/art';
 import { VISIONS, diff } from '../src/colorcheck';
 import { GROUNDS as STYLE_GROUNDS, STYLES, THEMES } from '../src/themes';
 
@@ -70,5 +70,15 @@ describe('piece colours (SPEC 4.2)', () => {
               bad.push(`${s}: ${c} on ${t} (${v}): colour ${fill.toFixed(1)}, outline ${edge.toFixed(1)}`);
           }
     expect(bad).toEqual([]);
+  });
+});
+
+describe('card colours (SPEC 13.2)', () => {
+  const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const sat = (h: string) => Math.max(...rgb(h)) - Math.min(...rgb(h));
+  it('the coin is silver: grey, and plainly different from ore beside it', () => {
+    expect(sat(CARD_COLOR.coin)).toBeLessThan(0.12);
+    for (const vision of VISIONS)
+      expect(diff(CARD_COLOR.coin, CARD_COLOR.ore, vision), vision).toBeGreaterThan(20);
   });
 });
