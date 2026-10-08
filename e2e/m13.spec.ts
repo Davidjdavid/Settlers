@@ -84,6 +84,20 @@ test('undo a whole turn, the bank basket, and arranging your cards', async ({ br
       await expect(p.getByTestId('log')).toContainText('turn was undone, back to just after the roll');
     }
 
+    // Big moments (SPEC 13.4): a rule changed mid-game shows on the others' boards with what it
+    // means; the scoreboard shows everyone's place.
+    for (const p of t.pages) await expect(p.getByTestId('place')).toHaveCount(3);
+    await m.getByRole('button', { name: 'Menu', exact: true }).click();
+    await m.getByTestId('menu-rules').click();
+    await m.getByTestId('tablerule-bank3to1').click();
+    await m.getByTestId('rules-close').click();
+    for (const p of others) {
+      const moment = p.locator('[data-testid=moment][data-kind=rule]');
+      await expect(moment).toContainText(`${moverName} turned on “3:1 bank trades for everyone”`);
+      await expect(moment).toContainText('Everyone trades with the bank at 3:1');
+    }
+    if (SHOTS) await others[0]!.screenshot({ path: `${SHOTS}/m13-moment.png` });
+
     // The dice panel (SPEC 13.3): what stands out first, then every roll (newest first), then the
     // numbers as before.
     const d = a;
@@ -121,6 +135,7 @@ test('undo a whole turn, the bank basket, and arranging your cards', async ({ br
     staged.offers = [];
     staged.hand.res = { wood: 0, brick: 0, sheep: 8, wheat: 4, ore: 0 };
     staged.board.ports = [];
+    delete staged.rules.houseRules.bank3to1; // turned on above: 4:1 here
     await b.evaluate((v) => (window as any).__settlers.stage(v), staged);
     await b.getByTestId('trade-bank').click();
     const basket = b.getByTestId('bank-basket');

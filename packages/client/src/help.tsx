@@ -6,7 +6,7 @@ import type { PlayerSettings } from '@settlers/server/protocol';
 /** The on/off switches (sounds and the pinned dice have their own pages). */
 export type SettingKey = Exclude<
   keyof PlayerSettings,
-  'sounds' | 'dicePin' | 'layout' | 'eventDieText' | 'talk' | 'artStyle' | 'music' | 'handOrder'
+  'sounds' | 'dicePin' | 'layout' | 'eventDieText' | 'talk' | 'artStyle' | 'music' | 'handOrder' | 'moments'
 >;
 
 export const SETTING_LABEL: Record<SettingKey, string> = {

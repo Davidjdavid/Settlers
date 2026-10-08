@@ -1145,6 +1145,25 @@ One player rolled four 7s in a row, and the dice panel's numbers ("no 5 in 14 ro
 - **The numbers**, at the bottom: the chart of totals against two dice, rolls per player, the event die, as before.
 - Rolls are public, so the list is sent to everyone. The server keeps it in the game's stats, worked out from the saved moves like every other stat (`rollList`). Games from before have no list, and the panel shows only the numbers.
 
+### 13.4 Big moments, the scoreboard and the round recap
+
+Players missed what happened: Longest Road changing hands, points racking up, a house rule changed mid-game. Now the screen says so.
+
+- **Moments.** Something notable shows as a big, short card across the top of the board. It comes in, stays about 2½ seconds, then goes by itself. Clicks go through it to the board. Several at once queue up and go faster. With reduced motion they fade in and out instead of sliding.
+  - **Big** (shown unless switched off):
+    - Longest Road or Largest Army taken, and from whom.
+    - Points: someone builds a settlement or city, or gets points another way, with their new total ("Ann built a city · 7 points").
+    - Someone takes the lead. Someone is 2 points or less from winning (public points only).
+    - A house rule changed, with what it means in one sentence.
+    - A development or progress card played (Monopoly says what it took).
+    - A steal you're part of.
+    - Fog uncovered, a treasure found, a turn undone.
+  - **Everything** adds: 7s, steals between others, trades, bank trades, cards bought.
+  - **A setting** in My settings: Moments: Everything / Big moments (default) / Off. Saved on your profile, like other settings. Wins and the barbarians keep their own scenes.
+- **The scoreboard.** Each player in the players box shows their place (1st, 2nd…), ties sharing a place. When points change, the place badge pulses. When a place changes, an arrow shows which way for a few seconds.
+- **The round recap.** When a round of turns ends, a moment sums it up: each player's points gained that round and any award that changed hands ("Round 6: Ann +2, Bob +1, Longest Road to Bob"). It's skipped when nothing changed. It's a big moment.
+- All of this comes from the events and views every screen already gets, so it shows nothing secret: your own hidden points count only on your own screen.
+
 ## Later milestones (design for these now, don't build them)
 - More Seafarers scenarios: The Four Islands, Through the Desert, New World, then The Forgotten Tribe, Cloth for Catan, The Pirate Islands, The Wonders of Catan (The Fog Islands is Milestone 10).
 - Options for a more competent CPU player.

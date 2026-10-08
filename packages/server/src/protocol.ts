@@ -243,6 +243,8 @@ export const SettingsSchema = z.strictObject({
   dicePin: z
     .strictObject({ corner: z.enum(['tl', 'tr', 'bl', 'br']), small: z.boolean().optional() })
     .optional(),
+  /** SPEC 13.4: which moments show across the board; big ones unless set. */
+  moments: z.enum(['all', 'big', 'off']).optional(),
   /** Knights: the event die's colour with a roll, "9 blue" (default), "blue 9" or left out. */
   eventDieText: z.enum(['after', 'before', 'off']).optional(),
   /** Table music (SPEC 12): your own volume (0–100) and mute. */
