@@ -28,11 +28,12 @@ Run all commands from the repo root.
 | Unit tests (all packages) | `npm test` |
 | Simulator (1,000 each of classic, Heading for New Shores, C&K, C&K + Seafarers, and the Fog Islands in Seafarers and Full game mode, 1,000 on a treasure test map in Seafarers and 400 in Full game mode, 200 each on Four Islands (close and far apart), Treasure Fog and Classic and the Isles (and 100 on Treasure Fog in Full game mode), 500 on the 3-player Heading for New Shores, 200 fog-test games, and 1,100 games with CPU players; on all CPU cores; ~40 min) | `npm run sim` |
 | Simulator, one scenario / more games / fixed seed | `npm run sim -- --scenario ck --games 5000 --seed x` (scenarios: `classic`, `heading-for-new-shores`, `heading-for-new-shores-3`, `fog-test`, `fog-islands`, `fog-islands-ck`, `treasures`, `treasures-ck`, `four-islands`, `four-islands-far`, `treasure-fog`, `treasure-fog-ck`, `classic-isles`, `classic-isles-far`, `archipelago`, `the-crossing`, `atoll`, `ck`, `ck-sea`, and `cpu-` + `classic`, `heading-for-new-shores`, `ck`, `ck-sea` or `treasures-ck`) |
+| Simulator, one share of the games (CI plays them on three machines: `--shard 1/3`, `2/3`, `3/3`) | `npm run sim -- --shard 1/3` |
 | Replay a failing game (the seed encodes scenario, players and house rules) | `npm run sim -- --replay <seed>` |
 | Map generator check (10,000 boards per preset through the separate checker, docs/maps.md 6; ~3 min) | `npm run maps` (one preset / fewer boards: `-- --preset "Our rules" --boards 500`) |
 | CPU tournaments (4-player CPU-only games: 1 Hard + 3 Medium, 1 Medium + 3 Easy, 2 Hard + 2 Medium, in every mode; not part of `check`; ~1 h for 1,000 each) | `npm run tournament -- --games 1000` (one mode / mix: `--mode ck --mix hm`) |
 | End-to-end (3 browsers, real server build: classic, Seafarers, Cities & Knights, CPU, table polish, Milestone 5, maps, the pre-game table, Milestones 8, 9, 10 and 11, moving a seat, board styles, the 3 October options, table music, Milestone 13, the Toy screen) | `npm run test:e2e` (builds first; needs Chromium: `npx playwright install chromium` once) |
-| **Everything CI runs** | `npm run check` |
+| **Everything CI runs** (CI runs the same steps split over four machines at once) | `npm run check` |
 | Build (client to `packages/client/dist`, server bundle to `packages/server/dist`) | `npm run build` |
 | Deploy | GitHub → Actions → Deploy → Run workflow, or `npm run deploy` (see `deploy/README.md`) |
 

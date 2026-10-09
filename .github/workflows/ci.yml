@@ -3,11 +3,14 @@ on:
   push:
   pull_request:
 
+# The same checks as `npm run check`, split so they run side by side: one job for everything but
+# the simulator, and the simulator's games shared out over three more machines (`--shard`). In one
+# job the full check had grown past two hours on GitHub's runners (the simulator alone ~80 minutes,
+# the end-to-end tests ~40); split, the run takes about 50 minutes. Deploy waits for the whole run.
 jobs:
   check:
     runs-on: ubuntu-24.04
-    # The full check takes about an hour on GitHub's runners (the simulator alone ~30 minutes).
-    timeout-minutes: 110
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -16,10 +19,30 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run check
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run maps
+      - run: npm run test:e2e
       - if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+
+  sim:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run sim -- --shard ${{ matrix.shard }}/3

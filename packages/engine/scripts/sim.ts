@@ -1,6 +1,6 @@
 /*
  * npm run sim -- [--games N] [--scenario classic|heading-for-new-shores|fog-test|ck|ck-sea|cpu-*|all] [--seed S]
- *                [--replay SEED] [--workers N]
+ *                [--replay SEED] [--workers N] [--shard I/N]
  *
  * Plays N random games per scenario (players and house rules vary by game) across worker
  * threads, and exits non-zero on any failure. Every game's seed encodes how it was set up, so
@@ -9,6 +9,9 @@
  * The cpu-* scenarios seat 1 or more CPU players against the test bot, cycling through Easy
  * (docs/bot.md), Medium, Hard and a custom CPU (docs/bot-medium-hard.md), and check every CPU
  * move against its rules.
+ *
+ * `--shard I/N` plays every Nth game starting from the Ith (1-based), so N machines running
+ * shards 1/N to N/N between them play exactly the games one run would (CI does this).
  */
 
 import { availableParallelism } from 'node:os';
@@ -314,10 +317,18 @@ if (!isMainThread) {
   const which = arg('scenario') ?? 'all';
   const scenarios = which === 'all' ? Object.keys(DEFAULT_GAMES) : [which];
   const base = arg('seed') ?? 'sim';
-  const seeds = scenarios.flatMap((sc) => {
+  const all = scenarios.flatMap((sc) => {
     const n = Number(arg('games') ?? DEFAULT_GAMES[sc] ?? 1000);
     return Array.from({ length: n }, (_, i) => makeSeed(base, sc, i));
   });
+  const shard = arg('shard');
+  const [shardI, shardN] = (shard ?? '1/1').split('/').map(Number) as [number, number];
+  const shardOk = Number.isInteger(shardI) && Number.isInteger(shardN) && shardI >= 1 && shardI <= shardN;
+  if (!shardOk) {
+    console.error(`--shard must be I/N with 1 <= I <= N, not ${shard}`);
+    process.exit(2);
+  }
+  const seeds = all.filter((_, i) => i % shardN === shardI - 1);
   const workers = Math.max(1, Math.min(Number(arg('workers') ?? availableParallelism()), seeds.length));
   const t0 = Date.now();
   const results: Summary[] = [];
@@ -355,6 +366,9 @@ if (!isMainThread) {
     console.error(`only ${results.length} of ${seeds.length} games reported back`);
     failed++;
   }
-  console.log(`${results.length} games on ${workers} workers in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(
+    `${results.length} games on ${workers} workers in ${((Date.now() - t0) / 1000).toFixed(1)}s` +
+      (shard ? ` (shard ${shardI} of ${shardN})` : ''),
+  );
   process.exit(failed ? 1 : 0);
 }
